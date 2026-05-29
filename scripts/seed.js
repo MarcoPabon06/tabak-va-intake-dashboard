@@ -4,7 +4,12 @@ const bcrypt = require('bcryptjs')
 const path = require('path')
 const fs = require('fs')
 
-const DB_PATH = path.join(__dirname, '..', 'tabak.db')
+// Use DATABASE_PATH env var (Railway volume) or fall back to local
+const DB_PATH = process.env.DATABASE_PATH
+  ? path.resolve(process.env.DATABASE_PATH)
+  : path.join(__dirname, '..', 'tabak.db')
+
+// Seed JSON is only available locally — skip on cloud deployments
 const SEED_DATA_PATH = path.join(__dirname, '..', '..', 'acumulado_seed.json')
 
 console.log('🌱 Seeding database:', DB_PATH)
