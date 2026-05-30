@@ -1,25 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { format } from 'date-fns'
 
-const CURRENT_AGENTS = [
-  'Daniel Castillo',
-  'Adriana Soto',
-  'Oliver Ortega',
-  'Alejandra NicoleReyes',
-  'Omar Soto',
+// Colors assigned by index — no hardcoding needed
+const COLOR_PALETTE = [
+  '#6366f1', '#ec4899', '#10b981', '#f59e0b',
+  '#3b82f6', '#06b6d4', '#8b5cf6', '#f97316',
+  '#14b8a6', '#e11d48',
 ]
-
-const AGENT_COLORS: Record<string, string> = {
-  'Daniel Castillo': '#6366f1',
-  'Adriana Soto': '#ec4899',
-  'Oliver Ortega': '#10b981',
-  'Alejandra NicoleReyes': '#f59e0b',
-  'Omar Soto': '#3b82f6',
-}
 
 interface AgentEntry {
   agent_name: string
@@ -53,10 +44,35 @@ export default function EntryPage() {
   const router = useRouter()
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
-  const [entries, setEntries] = useState<AgentEntry[]>(CURRENT_AGENTS.map(emptyEntry))
+  const [agentNames, setAgentNames] = useState<string[]>([])
+  const [entries, setEntries] = useState<AgentEntry[]>([])
+  const [loadingAgents, setLoadingAgents] = useState(true)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  // Fetch active regular users on mount — these are the agents shown in the form
+  useEffect(() => {
+    async function fetchAgents() {
+      setLoadingAgents(true)
+      try {
+        const res = await fetch('/api/users')
+        const users: any[] = await res.json()
+        // Only show active Regular users in the daily entry form
+        const activeAgents = users
+          .filter((u) => u.role === 'regular' && u.active === 1)
+          .map((u) => u.display_name || u.username)
+          .sort()
+        setAgentNames(activeAgents)
+        setEntries(activeAgents.map(emptyEntry))
+      } catch {
+        setError('Could not load agent list. Please refresh.')
+      } finally {
+        setLoadingAgents(false)
+      }
+    }
+    fetchAgents()
+  }, [])
 
   function update(agentIdx: number, field: keyof AgentEntry, value: any) {
     setEntries((prev) => {
@@ -100,7 +116,7 @@ export default function EntryPage() {
   }
 
   function resetForm() {
-    setEntries(CURRENT_AGENTS.map(emptyEntry))
+    setEntries(agentNames.map(emptyEntry))
     setDate(today)
     setError('')
     setSuccess(false)
@@ -125,7 +141,14 @@ export default function EntryPage() {
           {/* Header */}
           <div style={{ marginBottom: 28 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Daily Entry</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Log today's performance metrics for all agents</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              Log today's performance metrics for all active agents
+              {!loadingAgents && agentNames.length > 0 && (
+                <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>
+                  · {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''} active
+                </span>
+              )}
+            </p>
           </div>
 
           {/* Date picker */}
@@ -158,102 +181,122 @@ export default function EntryPage() {
             </div>
           )}
 
-          {/* Entry form */}
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {entries.map((entry, idx) => {
-                const color = AGENT_COLORS[entry.agent_name] || '#6366f1'
-                const rate = getRate(entry)
-                const total = getTotal(entry)
-                return (
-                  <div key={entry.agent_name} className="glass-card" style={{ padding: '16px 20px' }}>
-                    {/* Agent header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
-                        <span style={{ fontWeight: 700, fontSize: 15 }}>{entry.agent_name}</span>
+          {/* Loading agents */}
+          {loadingAgents ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
+              <span style={{ width: 20, height: 20, border: '2px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+              Loading active agents…
+            </div>
+          ) : agentNames.length === 0 ? (
+            <div className="glass-card" style={{ padding: 40, textAlign: 'center' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>No active agents found</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
+                Add users with the <strong>Regular</strong> role in User Management — they'll appear here automatically.
+              </p>
+              <button className="btn-primary" onClick={() => router.push('/users')}>
+                Go to User Management →
+              </button>
+            </div>
+          ) : (
+            /* Entry form */
+            <form onSubmit={handleSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {entries.map((entry, idx) => {
+                  const color = COLOR_PALETTE[idx % COLOR_PALETTE.length]
+                  const rate = getRate(entry)
+                  const total = getTotal(entry)
+                  return (
+                    <div key={entry.agent_name} className="glass-card" style={{ padding: '16px 20px' }}>
+                      {/* Agent header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
+                          <span style={{ fontWeight: 700, fontSize: 15 }}>{entry.agent_name}</span>
+                        </div>
+
+                        {/* Presence toggle */}
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+                          {['SI', 'NO', 'TARDY'].map((p) => (
+                            <button
+                              key={p}
+                              type="button"
+                              id={`present-${idx}-${p}`}
+                              style={{
+                                padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                                border: '1px solid',
+                                borderRadius: 8, cursor: 'pointer',
+                                transition: 'all 0.15s',
+                                background: entry.present === p
+                                  ? p === 'SI' ? 'rgba(16,185,129,0.2)' : p === 'TARDY' ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'
+                                  : 'rgba(255,255,255,0.04)',
+                                borderColor: entry.present === p
+                                  ? p === 'SI' ? '#10b981' : p === 'TARDY' ? '#f59e0b' : '#ef4444'
+                                  : 'var(--border)',
+                                color: entry.present === p
+                                  ? p === 'SI' ? '#10b981' : p === 'TARDY' ? '#f59e0b' : '#ef4444'
+                                  : 'var(--text-muted)',
+                              }}
+                              onClick={() => update(idx, 'present', p)}
+                            >
+                              {p === 'SI' ? 'Present' : p === 'NO' ? 'Absent' : 'Tardy'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Live rate */}
+                        {total > 0 && (
+                          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                            Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
+                            {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
+                            {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Presence toggle */}
-                      <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                        {['SI', 'NO', 'TARDY'].map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            id={`present-${idx}-${p}`}
-                            style={{
-                              padding: '4px 12px', fontSize: 12, fontWeight: 600,
-                              border: '1px solid',
-                              borderRadius: 8, cursor: 'pointer',
-                              transition: 'all 0.15s',
-                              background: entry.present === p
-                                ? p === 'SI' ? 'rgba(16,185,129,0.2)' : p === 'TARDY' ? 'rgba(245,158,11,0.2)' : 'rgba(239,68,68,0.2)'
-                                : 'rgba(255,255,255,0.04)',
-                              borderColor: entry.present === p
-                                ? p === 'SI' ? '#10b981' : p === 'TARDY' ? '#f59e0b' : '#ef4444'
-                                : 'var(--border)',
-                              color: entry.present === p
-                                ? p === 'SI' ? '#10b981' : p === 'TARDY' ? '#f59e0b' : '#ef4444'
-                                : 'var(--text-muted)',
-                            }}
-                            onClick={() => update(idx, 'present', p)}
-                          >
-                            {p === 'SI' ? 'Present' : p === 'NO' ? 'Absent' : 'Tardy'}
-                          </button>
+                      {/* Number fields */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
+                        {numFields.map(({ key, label, hint }) => (
+                          <div key={key}>
+                            <label className="field-label" title={hint}>{label}</label>
+                            <input
+                              id={`entry-${idx}-${key}`}
+                              type="number"
+                              min={0}
+                              className="input-field"
+                              value={entry[key] === 0 ? '' : entry[key]}
+                              placeholder="0"
+                              onChange={(e) => update(idx, key, parseInt(e.target.value) || 0)}
+                              disabled={entry.present === 'NO'}
+                            />
+                          </div>
                         ))}
                       </div>
-
-                      {/* Live rate */}
-                      {total > 0 && (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                          Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
-                          {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
-                          {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
-                        </div>
-                      )}
                     </div>
+                  )
+                })}
+              </div>
 
-                    {/* Number fields */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
-                      {numFields.map(({ key, label, hint }) => (
-                        <div key={key}>
-                          <label className="field-label" title={hint}>{label}</label>
-                          <input
-                            id={`entry-${idx}-${key}`}
-                            type="number"
-                            min={0}
-                            className="input-field"
-                            value={entry[key] === 0 ? '' : entry[key]}
-                            placeholder="0"
-                            onChange={(e) => update(idx, key, parseInt(e.target.value) || 0)}
-                            disabled={entry.present === 'NO'}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Submit */}
-            <div style={{ marginTop: 20, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <button
-                id="btn-submit-entry"
-                type="submit"
-                className="btn-primary"
-                disabled={loading}
-                style={{ padding: '12px 28px', fontSize: 15 }}
-              >
-                {loading ? 'Saving…' : `Save Entry for ${date}`}
-              </button>
-              <button type="button" className="btn-secondary" onClick={() => router.push('/dashboard')}>
-                View Dashboard
-              </button>
-            </div>
-          </form>
+              {/* Submit */}
+              <div style={{ marginTop: 20, display: 'flex', gap: 12, alignItems: 'center' }}>
+                <button
+                  id="btn-submit-entry"
+                  type="submit"
+                  className="btn-primary"
+                  disabled={loading}
+                  style={{ padding: '12px 28px', fontSize: 15 }}
+                >
+                  {loading ? 'Saving…' : `Save Entry for ${date}`}
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => router.push('/dashboard')}>
+                  View Dashboard
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </main>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
