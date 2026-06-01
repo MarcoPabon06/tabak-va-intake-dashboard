@@ -91,16 +91,15 @@ export default function BadgeShelf({ badges }: Props) {
                       <div style={{
                         position: 'absolute',
                         bottom: '110%',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                        left: 0,
                         background: 'rgba(10,22,40,0.97)',
                         border: '1px solid rgba(99,102,241,0.3)',
                         borderRadius: 10,
                         padding: '10px 14px',
                         whiteSpace: 'nowrap',
-                        zIndex: 100,
+                        zIndex: 200,
                         pointerEvents: 'none',
-                        minWidth: 180,
+                        minWidth: 200,
                       }}>
                         <div style={{ fontWeight: 700, fontSize: 13, color: '#f8fafc', marginBottom: 4 }}>
                           {badge.icon} {badge.name}
@@ -135,8 +134,8 @@ export default function BadgeShelf({ badges }: Props) {
                         <div style={{
                           position: 'absolute',
                           bottom: -6,
-                          left: '50%',
-                          transform: 'translateX(-50%) rotate(45deg)',
+                          left: 20,
+                          transform: 'rotate(45deg)',
                           width: 10, height: 10,
                           background: 'rgba(10,22,40,0.97)',
                           borderRight: '1px solid rgba(99,102,241,0.3)',
