@@ -13,27 +13,35 @@ interface Props {
   data: Row[]
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const WEEKDAYS = [
+  { idx: 1, label: 'Mon' },
+  { idx: 2, label: 'Tue' },
+  { idx: 3, label: 'Wed' },
+  { idx: 4, label: 'Thu' },
+  { idx: 5, label: 'Fri' },
+]
 
 export default function WeekdayHeatmap({ data }: Props) {
-  // Calculate avg signed retainers per weekday
+  // Calculate avg signed retainers per weekday (Mon–Fri only)
   const dayTotals: Record<number, { signed: number; days: Set<string> }> = {}
-  for (let d = 0; d < 7; d++) dayTotals[d] = { signed: 0, days: new Set() }
+  for (const wd of WEEKDAYS) dayTotals[wd.idx] = { signed: 0, days: new Set() }
 
   for (const row of data) {
     try {
       const d = new Date(row.date)
-      const day = d.getDay()
+      const day = d.getUTCDay()
+      // Skip weekends (0 = Sun, 6 = Sat)
+      if (day === 0 || day === 6) continue
       dayTotals[day].signed += row.signed_retainers || 0
       dayTotals[day].days.add(row.date)
     } catch {}
   }
 
-  const chartData = DAYS.map((name, i) => {
-    const t = dayTotals[i]
+  const chartData = WEEKDAYS.map(({ idx, label }) => {
+    const t = dayTotals[idx]
     const dayCount = t.days.size || 1
     return {
-      day: name,
+      day: label,
       avg_signed: parseFloat((t.signed / dayCount).toFixed(2)),
       total: t.signed,
       dayCount,
