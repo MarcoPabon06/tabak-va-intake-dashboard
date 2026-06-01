@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
+import PersonalDashboard from '@/components/PersonalDashboard'
 import SummaryCards from '@/components/SummaryCards'
 import Leaderboard from '@/components/Leaderboard'
 import PerformanceLineChart from '@/components/charts/PerformanceLineChart'
@@ -18,11 +20,15 @@ const PRESETS = [
 ]
 
 export default function DashboardPage() {
+  const { data: session } = useSession()
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [activePreset, setActivePreset] = useState('This month')
+
+  const userRole = (session?.user as any)?.role || 'regular'
+  const userName = session?.user?.name || ''
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -46,6 +52,8 @@ export default function DashboardPage() {
     setActivePreset(preset.label)
   }
 
+  const isRegular = userRole === 'regular'
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
@@ -60,7 +68,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-            Team Performance
+            {isRegular ? 'My Dashboard' : 'Team Performance'}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
             Veterans Benefits Division · Tabak LLC
@@ -119,7 +127,23 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* KPI Cards */}
+            {/* ── Personal Dashboard (Regular users) ── */}
+            {isRegular && userName && (
+              <PersonalDashboard allData={data} agentName={userName} />
+            )}
+
+            {/* ── Section divider for regular users ── */}
+            {isRegular && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '8px 0 20px' }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Team Overview
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+            )}
+
+            {/* ── Team Dashboard (always shown) ── */}
             <SummaryCards data={data} />
 
             {/* Charts Row 1 */}
