@@ -4,6 +4,8 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
+import { computeBadges } from '@/lib/badges'
+import BadgeShelf from '@/components/BadgeShelf'
 
 export interface GoalSettings {
   goal_signed_retainers: number
@@ -180,6 +182,9 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
           </div>
         </div>
       </div>
+
+      {/* Achievement Badges */}
+      <BadgeShelf badges={computeBadges(allData, agentName)} />
 
       {/* Goal Progress Bars */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
