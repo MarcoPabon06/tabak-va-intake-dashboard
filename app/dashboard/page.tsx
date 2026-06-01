@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
-import PersonalDashboard from '@/components/PersonalDashboard'
+import PersonalDashboard, { GoalSettings } from '@/components/PersonalDashboard'
 import SummaryCards from '@/components/SummaryCards'
 import Leaderboard from '@/components/Leaderboard'
 import PerformanceLineChart from '@/components/charts/PerformanceLineChart'
@@ -22,6 +22,7 @@ const PRESETS = [
 export default function DashboardPage() {
   const { data: session } = useSession()
   const [data, setData] = useState<any[]>([])
+  const [goals, setGoals] = useState<GoalSettings | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -44,6 +45,18 @@ export default function DashboardPage() {
   }, [from, to])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Fetch goal settings once
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((s) => setGoals({
+        goal_signed_retainers: parseInt(s.goal_signed_retainers) || 35,
+        goal_conversion_rate: parseInt(s.goal_conversion_rate) || 65,
+        goal_avg_capd: parseInt(s.goal_avg_capd) || 40,
+      }))
+      .catch(() => {})
+  }, [])
 
   function applyPreset(preset: typeof PRESETS[0]) {
     const vals = preset.getValue()
@@ -129,7 +142,7 @@ export default function DashboardPage() {
           <>
             {/* ── Personal Dashboard (Regular users) ── */}
             {isRegular && userName && (
-              <PersonalDashboard allData={data} agentName={userName} />
+              <PersonalDashboard allData={data} agentName={userName} goals={goals} />
             )}
 
             {/* ── Section divider for regular users ── */}

@@ -5,11 +5,16 @@ import {
   ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
 
-// ─── Monthly goals (defaults) ────────────────────────────────────────────
-const GOALS = {
-  signed_retainers: 35,
-  conversion_rate: 65, // percent
-  avg_capd: 40,
+export interface GoalSettings {
+  goal_signed_retainers: number
+  goal_conversion_rate: number
+  goal_avg_capd: number
+}
+
+const DEFAULT_GOALS: GoalSettings = {
+  goal_signed_retainers: 35,
+  goal_conversion_rate: 65,
+  goal_avg_capd: 40,
 }
 
 interface Row {
@@ -27,8 +32,9 @@ interface Row {
 }
 
 interface Props {
-  allData: Row[]    // all agents for the period (for ranking)
-  agentName: string // current user's display_name
+  allData: Row[]          // all agents for the period (for ranking)
+  agentName: string       // current user's display_name
+  goals?: GoalSettings    // admin-configured goals (fetched from API)
 }
 
 // ─── Helper ──────────────────────────────────────────────────────────────
@@ -39,7 +45,8 @@ function progressColor(pct: number) {
   return '#ef4444'
 }
 
-export default function PersonalDashboard({ allData, agentName }: Props) {
+export default function PersonalDashboard({ allData, agentName, goals }: Props) {
+  const g = goals || DEFAULT_GOALS
   const myData = allData.filter((r) => r.agent_name === agentName)
 
   // ── Totals ──
@@ -56,9 +63,9 @@ export default function PersonalDashboard({ allData, agentName }: Props) {
   const daysWorked = new Set(myData.map((r) => r.date)).size
 
   // ── Goals ──
-  const signedPct = Math.min(Math.round((totalSigned / GOALS.signed_retainers) * 100), 150)
-  const convPct = Math.min(Math.round((convRate / GOALS.conversion_rate) * 100), 150)
-  const capdPct = Math.min(Math.round((avgCapd / GOALS.avg_capd) * 100), 150)
+  const signedPct = Math.min(Math.round((totalSigned / (g.goal_signed_retainers || 35)) * 100), 150)
+  const convPct = Math.min(Math.round((convRate / (g.goal_conversion_rate || 65)) * 100), 150)
+  const capdPct = Math.min(Math.round((avgCapd / (g.goal_avg_capd || 40)) * 100), 150)
 
   // ── Ranking ──
   const agentTotals: Record<string, number> = {}
@@ -177,9 +184,9 @@ export default function PersonalDashboard({ allData, agentName }: Props) {
       {/* Goal Progress Bars */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
         {[
-          { label: 'Signed Retainers', value: totalSigned, goal: GOALS.signed_retainers, pct: signedPct, icon: '✅', unit: '' },
-          { label: 'Conversion Rate', value: convRate.toFixed(1), goal: GOALS.conversion_rate, pct: convPct, icon: '📈', unit: '%' },
-          { label: 'Avg CAPD', value: avgCapd, goal: GOALS.avg_capd, pct: capdPct, icon: '📞', unit: '' },
+          { label: 'Signed Retainers', value: totalSigned, goal: g.goal_signed_retainers, pct: signedPct, icon: '✅', unit: '' },
+          { label: 'Conversion Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
+          { label: 'Avg CAPD', value: avgCapd, goal: g.goal_avg_capd, pct: capdPct, icon: '📞', unit: '' },
         ].map((g) => (
           <div key={g.label} className="glass-card fade-in" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -218,7 +225,7 @@ export default function PersonalDashboard({ allData, agentName }: Props) {
           { label: 'Total Signed', value: totalSigned, color: '#10b981', icon: '✅' },
           { label: 'Total Unsigned', value: totalUnsigned, color: '#f59e0b', icon: '⏳' },
           { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
-          { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= 40 ? '#10b981' : '#f59e0b', icon: '📞' },
+          { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
           { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
           { label: 'Rejected', value: totalRejected, color: '#94a3b8', icon: '❌' },
         ].map((c) => (
@@ -272,7 +279,7 @@ export default function PersonalDashboard({ allData, agentName }: Props) {
               />
               <Bar dataKey="capd" radius={[4, 4, 0, 0]} name="CAPD">
                 {trendData.map((entry, i) => (
-                  <Cell key={i} fill={entry.capd >= 40 ? '#10b981' : '#f59e0b'} fillOpacity={0.8} />
+                  <Cell key={i} fill={entry.capd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b'} fillOpacity={0.8} />
                 ))}
               </Bar>
             </BarChart>

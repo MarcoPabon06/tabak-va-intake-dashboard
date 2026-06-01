@@ -59,7 +59,22 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_perf_date ON daily_performance(date);
     CREATE INDEX IF NOT EXISTS idx_perf_agent ON daily_performance(agent_name);
     CREATE INDEX IF NOT EXISTS idx_perf_date_agent ON daily_performance(date, agent_name);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `)
+
+  // Seed default settings if empty
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM settings').get() as any
+  if (count.cnt === 0) {
+    const defaults = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
+    defaults.run('goal_signed_retainers', '35')
+    defaults.run('goal_conversion_rate', '65')
+    defaults.run('goal_avg_capd', '40')
+  }
 }
 
 export default getDb

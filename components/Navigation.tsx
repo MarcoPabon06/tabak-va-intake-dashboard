@@ -19,6 +19,7 @@ const navLinks = [
   { href: '/entry', label: 'Daily Entry', icon: '✏️', masterOnly: true },
   { href: '/import', label: 'Import Excel', icon: '📥', masterOnly: true },
   { href: '/users', label: 'User Management', icon: '👥', masterOnly: true },
+  { href: '/settings', label: 'Settings', icon: '⚙️', masterOnly: true },
 ]
 
 export default function Navigation() {
