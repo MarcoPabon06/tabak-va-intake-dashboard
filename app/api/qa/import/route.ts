@@ -72,6 +72,9 @@ export async function POST(req: Request) {
           AND eval_date = ?
       `)
 
+      const insertAgentStmt = db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)')
+      const activateAgentStmt = db.prepare('UPDATE agents SET active = 1 WHERE name = ?')
+
       for (let i = 0; i < data.length; i++) {
         const row = data[i]
         // Row needs to have at least an agent name at index 8 and overall score at index 6
@@ -107,6 +110,10 @@ export async function POST(req: Request) {
           // Skip duplicate
           continue
         }
+
+        // Ensure agent exists and is active in agents table
+        insertAgentStmt.run(agentName)
+        activateAgentStmt.run(agentName)
 
         // Extract category scores
         const scoreIntro = Math.round(Number(row[0] || 0) * 100) / 100
@@ -268,6 +275,10 @@ export async function POST(req: Request) {
       const feedback = feedbackParts.join('\n\n')
 
       const tier = getTier(overallScore)
+
+      // Ensure agent exists and is active in agents table
+      db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(agentName)
+      db.prepare('UPDATE agents SET active = 1 WHERE name = ?').run(agentName)
 
       const stmt = db.prepare(`
         INSERT INTO qa_evaluations (

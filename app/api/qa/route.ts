@@ -10,15 +10,22 @@ export async function GET(req: Request) {
     const to = searchParams.get('to') || '2099-12-31'
 
     const db = getDb()
-    let query = 'SELECT * FROM qa_evaluations WHERE eval_date >= ? AND eval_date <= ?'
+    let query = `
+      SELECT q.* 
+      FROM qa_evaluations q
+      INNER JOIN agents a ON q.agent_name = a.name
+      WHERE a.active = 1
+        AND q.eval_date >= ? 
+        AND q.eval_date <= ?
+    `
     const params: any[] = [from, to]
 
     if (agent) {
-      query += ' AND agent_name = ?'
+      query += ' AND q.agent_name = ?'
       params.push(agent)
     }
 
-    query += ' ORDER BY eval_date DESC'
+    query += ' ORDER BY q.eval_date DESC'
     const rows = db.prepare(query).all(...params)
     return NextResponse.json(rows)
   } catch (err: any) {
@@ -51,6 +58,10 @@ export async function POST(req: Request) {
     }
 
     const tier = getTier(overall)
+
+    // Ensure agent exists and is active in agents table
+    db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(body.agent_name)
+    db.prepare('UPDATE agents SET active = 1 WHERE name = ?').run(body.agent_name)
 
     const stmt = db.prepare(`
       INSERT INTO qa_evaluations (
