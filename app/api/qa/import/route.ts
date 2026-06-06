@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { sendNotification } from '@/lib/notifications'
 
 function getTier(score: number): string {
   if (score >= 90) return 'Top Performer'
@@ -172,6 +173,17 @@ export async function POST(req: Request) {
           tier
         )
 
+        // Find matching username and send notification
+        const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(agentName) as { username: string } | undefined
+        const recipientUsername = user?.username || agentName.toLowerCase().replace(/\s+/g, '')
+
+        sendNotification({
+          username: recipientUsername,
+          title: 'New QA Evaluation 📋',
+          message: `Your evaluation for Call ID ${callId || 'None'} on ${evalDate} has been uploaded with a score of ${overallScore}%.`,
+          link: '/qa'
+        })
+
         importedCount++
         details.push({
           agent: agentName,
@@ -308,6 +320,17 @@ export async function POST(req: Request) {
         feedback || null,
         tier
       )
+
+      // Find matching username and send notification
+      const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(agentName) as { username: string } | undefined
+      const recipientUsername = user?.username || agentName.toLowerCase().replace(/\s+/g, '')
+
+      sendNotification({
+        username: recipientUsername,
+        title: 'New QA Evaluation 📋',
+        message: `Your evaluation for Call ID ${callId || 'None'} on ${evalDate} has been uploaded with a score of ${overallScore}%.`,
+        link: '/qa'
+      })
 
       importedCount++
       details.push({

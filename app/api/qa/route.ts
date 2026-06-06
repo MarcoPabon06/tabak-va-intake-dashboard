@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import getDb from '@/lib/db'
+import { sendNotification } from '@/lib/notifications'
 
 // GET /api/qa?agent=Name&from=2025-01-01&to=2025-12-31
 export async function GET(req: Request) {
@@ -91,6 +92,17 @@ export async function POST(req: Request) {
       body.feedback || null,
       tier
     )
+
+    // Find matching user username in database to send notification
+    const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(body.agent_name) as { username: string } | undefined
+    const recipientUsername = user?.username || body.agent_name.toLowerCase().replace(/\s+/g, '')
+
+    sendNotification({
+      username: recipientUsername,
+      title: 'New QA Evaluation 📋',
+      message: `You received a new QA score of ${overall}% from ${body.evaluator_name || 'QA Admin'}.`,
+      link: '/qa'
+    })
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
+import NotificationBell from '@/components/NotificationBell'
 
 const AGENT_COLORS: Record<string, string> = {
   'Daniel Castillo': '#6366f1',
@@ -89,23 +90,26 @@ export default function Navigation() {
 
       {/* User info */}
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 12px' }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6366f1, #ec4899)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, flexShrink: 0,
-          }}>
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
-            <div style={{ fontSize: 11 }}>
-              <span className={`badge ${isMaster ? 'badge-accent' : 'badge-success'}`} style={{ padding: '1px 7px', fontSize: 10 }}>
-                {isMaster ? 'Master' : 'Viewer'}
-              </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 8px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #6366f1, #ec4899)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 700, flexShrink: 0,
+            }}>
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
+              <div style={{ fontSize: 11 }}>
+                <span className={`badge ${isMaster ? 'badge-accent' : 'badge-success'}`} style={{ padding: '1px 7px', fontSize: 10 }}>
+                  {isMaster ? 'Master' : 'Viewer'}
+                </span>
+              </div>
             </div>
           </div>
+          <NotificationBell />
         </div>
         <button
           id="btn-signout"

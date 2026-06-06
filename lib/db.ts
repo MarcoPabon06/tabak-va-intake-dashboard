@@ -89,6 +89,18 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_qa_agent ON qa_evaluations(agent_name);
     CREATE INDEX IF NOT EXISTS idx_qa_date ON qa_evaluations(eval_date);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      link TEXT,
+      read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username);
+    CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
   `)
 
   // Seed default settings if empty
