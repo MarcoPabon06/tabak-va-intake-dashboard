@@ -65,6 +65,30 @@ function initSchema(db: Database.Database) {
       value TEXT NOT NULL,
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS qa_evaluations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_name TEXT NOT NULL,
+      evaluator_name TEXT,
+      call_id TEXT,
+      eval_date TEXT NOT NULL,
+      overall_score REAL NOT NULL,
+      score_introduction REAL DEFAULT 0,
+      score_pk_policies REAL DEFAULT 0,
+      score_eligibility REAL DEFAULT 0,
+      score_deadline REAL DEFAULT 0,
+      score_documentation REAL DEFAULT 0,
+      score_objection REAL DEFAULT 0,
+      zt_attorney_escalation INTEGER DEFAULT 0,
+      zt_legal_misrepresentation INTEGER DEFAULT 0,
+      zt_undocumented INTEGER DEFAULT 0,
+      feedback TEXT,
+      tier TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_qa_agent ON qa_evaluations(agent_name);
+    CREATE INDEX IF NOT EXISTS idx_qa_date ON qa_evaluations(eval_date);
   `)
 
   // Seed default settings if empty

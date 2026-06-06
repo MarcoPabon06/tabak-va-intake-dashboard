@@ -17,6 +17,8 @@ export { AGENT_COLORS }
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/entry', label: 'Daily Entry', icon: '✏️', masterOnly: true },
+  { href: '/qa-entry', label: 'QA Entry', icon: '📋', masterOnly: true },
+  { href: '/qa', label: 'QA Scores', icon: '🏅' },
   { href: '/import', label: 'Import Excel', icon: '📥', masterOnly: true },
   { href: '/users', label: 'User Management', icon: '👥', masterOnly: true },
   { href: '/settings', label: 'Settings', icon: '⚙️', masterOnly: true },

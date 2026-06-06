@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { computeBadges } from '@/lib/badges'
 import BadgeShelf from '@/components/BadgeShelf'
+import PersonalQA from '@/components/PersonalQA'
 
 export interface GoalSettings {
   goal_signed_retainers: number
@@ -185,6 +186,9 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
 
       {/* Achievement Badges */}
       <BadgeShelf badges={computeBadges(allData, agentName)} />
+
+      {/* QA Score Summary */}
+      <PersonalQA agentName={agentName} />
 
       {/* Goal Progress Bars */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>

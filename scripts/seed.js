@@ -58,6 +58,30 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_perf_date ON daily_performance(date);
   CREATE INDEX IF NOT EXISTS idx_perf_agent ON daily_performance(agent_name);
+
+  CREATE TABLE IF NOT EXISTS qa_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name TEXT NOT NULL,
+    evaluator_name TEXT,
+    call_id TEXT,
+    eval_date TEXT NOT NULL,
+    overall_score REAL NOT NULL,
+    score_introduction REAL DEFAULT 0,
+    score_pk_policies REAL DEFAULT 0,
+    score_eligibility REAL DEFAULT 0,
+    score_deadline REAL DEFAULT 0,
+    score_documentation REAL DEFAULT 0,
+    score_objection REAL DEFAULT 0,
+    zt_attorney_escalation INTEGER DEFAULT 0,
+    zt_legal_misrepresentation INTEGER DEFAULT 0,
+    zt_undocumented INTEGER DEFAULT 0,
+    feedback TEXT,
+    tier TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_qa_agent ON qa_evaluations(agent_name);
+  CREATE INDEX IF NOT EXISTS idx_qa_date ON qa_evaluations(eval_date);
 `)
 
 console.log('✅ Schema ready')
@@ -65,6 +89,7 @@ console.log('✅ Schema ready')
 // ─── Users ───────────────────────────────────────────────────────────────────
 const USERS = [
   { username: 'admin',      password: 'admin123',  role: 'master',   display_name: 'Administrator' },
+  { username: 'brayan',     password: 'tabak2025', role: 'master',   display_name: 'Brayan Requena' },
   { username: 'daniel',     password: 'tabak2025', role: 'regular',  display_name: 'Daniel Castillo' },
   { username: 'adriana',    password: 'tabak2025', role: 'regular',  display_name: 'Adriana Soto' },
   { username: 'oliver',     password: 'tabak2025', role: 'regular',  display_name: 'Oliver Ortega' },
@@ -164,6 +189,6 @@ console.log(`   Total performance records: ${total.cnt}`)
 console.log(`   Agents with data: ${agentList.map(a => a.agent_name).join(', ')}`)
 console.log(`\n🚀 Seed complete! Run "npm run dev" to start the server.`)
 console.log(`   Login: admin / admin123`)
-console.log(`   Agent logins: daniel/adriana/oliver/alejandra/omar — password: tabak2025`)
+console.log(`   Agent logins: brayan (master), daniel/adriana/oliver/alejandra/omar — password: tabak2025`)
 
 db.close()
