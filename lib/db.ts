@@ -109,6 +109,29 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
   `)
 
+  // Run self-healing schema migrations for new columns
+  const alterColumns = [
+    { table: 'users', column: 'display_name', definition: 'TEXT' },
+    { table: 'users', column: 'active', definition: 'INTEGER DEFAULT 1' },
+    { table: 'qa_evaluations', column: 'status', definition: "TEXT DEFAULT 'Pending Acknowledgement'" },
+    { table: 'qa_evaluations', column: 'acknowledged_at', definition: 'TEXT' },
+    { table: 'qa_evaluations', column: 'dispute_reason', definition: 'TEXT' },
+    { table: 'qa_evaluations', column: 'disputed_at', definition: 'TEXT' },
+    { table: 'qa_evaluations', column: 'resolution_notes', definition: 'TEXT' },
+    { table: 'qa_evaluations', column: 'resolved_at', definition: 'TEXT' },
+  ]
+
+  for (const alter of alterColumns) {
+    try {
+      db.prepare(`ALTER TABLE ${alter.table} ADD COLUMN ${alter.column} ${alter.definition}`).run()
+    } catch (e: any) {
+      // Silently ignore if column already exists
+      if (!e.message.includes('duplicate column name') && !e.message.includes('already exists')) {
+        console.error(`Failed to alter table ${alter.table} add ${alter.column}:`, e.message)
+      }
+    }
+  }
+
   // Seed default settings if empty
   const count = db.prepare('SELECT COUNT(*) as cnt FROM settings').get() as any
   if (count.cnt === 0) {
