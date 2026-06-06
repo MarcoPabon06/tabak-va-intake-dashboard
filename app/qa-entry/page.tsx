@@ -21,9 +21,9 @@ const CATEGORIES = [
 ]
 
 const ZERO_TOLERANCE = [
-  { key: 'zt_unauthorized_attorney', label: 'Unauthorized attorney escalation' },
+  { key: 'zt_attorney_escalation', label: 'Unauthorized attorney escalation' },
   { key: 'zt_legal_misrepresentation', label: 'Legal outcome misrepresentation' },
-  { key: 'zt_undocumented_interaction', label: 'Interaction left undocumented' },
+  { key: 'zt_undocumented', label: 'Interaction left undocumented' },
 ]
 
 export default function QAEntryPage() {
@@ -62,9 +62,10 @@ export default function QAEntryPage() {
   }, [])
 
   // ── Computed score ──
-  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0)
+  const hasZeroTolerance = Object.values(zeroTolerance).some((v) => v)
+  const totalScore = hasZeroTolerance ? 0 : Object.values(scores).reduce((a, b) => a + b, 0)
   const maxScore = CATEGORIES.reduce((a, c) => a + c.max, 0)
-  const pct = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0
+  const pct = hasZeroTolerance ? 0 : (maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0)
 
   function getScoreColor(p: number) {
     if (p >= 90) return '#10b981'

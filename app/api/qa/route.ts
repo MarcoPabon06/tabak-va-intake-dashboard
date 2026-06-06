@@ -41,7 +41,15 @@ export async function POST(req: Request) {
       return 'Immediate Coaching Required'
     }
 
-    const overall = body.overall_score || 0
+    const ztAttorney = body.zt_attorney_escalation ? 1 : 0
+    const ztLegal = body.zt_legal_misrepresentation ? 1 : 0
+    const ztUndocumented = body.zt_undocumented ? 1 : 0
+
+    let overall = body.overall_score || 0
+    if (ztAttorney === 1 || ztLegal === 1 || ztUndocumented === 1) {
+      overall = 0
+    }
+
     const tier = getTier(overall)
 
     const stmt = db.prepare(`

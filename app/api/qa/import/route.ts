@@ -116,10 +116,6 @@ export async function POST(req: Request) {
         const scoreDoc = Math.round(Number(row[4] || 0) * 100) / 100
         const scoreObj = Math.round(Number(row[5] || 0) * 100) / 100
 
-        // Parse overall score (e.g. 0.875 -> 87.5)
-        const rawOverall = Number(row[6] || 0)
-        const overallScore = Math.round((rawOverall <= 1 ? rawOverall * 100 : rawOverall) * 100) / 100
-
         // Written feedback
         const feedback = row[7] ? row[7].toString().trim() : null
 
@@ -137,6 +133,15 @@ export async function POST(req: Request) {
         }
         if (feedbackLower.includes('misrepresentation') || feedbackLower.includes('outcome misrepresent')) {
           ztLegal = 1
+        }
+
+        // Parse overall score (e.g. 0.875 -> 87.5)
+        const rawOverall = Number(row[6] || 0)
+        let overallScore = Math.round((rawOverall <= 1 ? rawOverall * 100 : rawOverall) * 100) / 100
+        
+        // Zero Tolerance overrides score to 0%
+        if (ztAttorney === 1 || ztLegal === 1 || ztUndocumented === 1) {
+          overallScore = 0
         }
 
         const tier = getTier(overallScore)
@@ -237,6 +242,10 @@ export async function POST(req: Request) {
       const scoreDoc = (doc.met / doc.total) * 15
       const scoreObj = (objection.met / objection.total) * 10
 
+      const ztAttorney = (data[11]?.[8] || '').toString().trim().toLowerCase() === 'yes'
+      const ztLegal = (data[12]?.[8] || '').toString().trim().toLowerCase() === 'yes'
+      const ztUndocumented = (data[13]?.[8] || '').toString().trim().toLowerCase() === 'yes'
+
       let overallScore = 0
       const rawOverall = data[15]?.[1]
       if (typeof rawOverall === 'number') {
@@ -246,9 +255,10 @@ export async function POST(req: Request) {
       }
       overallScore = Math.round(overallScore * 100) / 100
 
-      const ztAttorney = (data[11]?.[8] || '').toString().trim().toLowerCase() === 'yes'
-      const ztLegal = (data[12]?.[8] || '').toString().trim().toLowerCase() === 'yes'
-      const ztUndocumented = (data[13]?.[8] || '').toString().trim().toLowerCase() === 'yes'
+      // Zero Tolerance overrides score to 0%
+      if (ztAttorney || ztLegal || ztUndocumented) {
+        overallScore = 0
+      }
 
       const feedbackParts: string[] = []
       for (let r = 1; r < Math.min(data.length, 20); r++) {
