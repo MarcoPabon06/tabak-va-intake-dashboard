@@ -123,6 +123,22 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY(linked_evaluation_id) REFERENCES qa_evaluations(id)
     );
     CREATE INDEX IF NOT EXISTS idx_coaching_agent ON coaching_sessions(agent_name);
+
+    CREATE TABLE IF NOT EXISTS pip_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_name TEXT NOT NULL,
+      creator_name TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      target_score REAL NOT NULL,
+      current_avg_score REAL,
+      status TEXT DEFAULT 'Active',
+      check_in_frequency TEXT,
+      attachment_path TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_pip_agent ON pip_plans(agent_name);
   `)
 
   // Run self-healing schema migrations for new columns
