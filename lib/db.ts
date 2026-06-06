@@ -107,6 +107,22 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username);
     CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+
+    CREATE TABLE IF NOT EXISTS coaching_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_name TEXT NOT NULL,
+      coach_name TEXT NOT NULL,
+      session_date TEXT NOT NULL,
+      focus_areas TEXT NOT NULL,
+      linked_evaluation_id INTEGER,
+      discussion_notes TEXT,
+      commitments_agent TEXT,
+      commitments_coach TEXT,
+      follow_up_date TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(linked_evaluation_id) REFERENCES qa_evaluations(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_coaching_agent ON coaching_sessions(agent_name);
   `)
 
   // Run self-healing schema migrations for new columns
