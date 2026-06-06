@@ -84,6 +84,12 @@ function initSchema(db: Database.Database) {
       zt_undocumented INTEGER DEFAULT 0,
       feedback TEXT,
       tier TEXT,
+      status TEXT DEFAULT 'Pending Acknowledgement',
+      acknowledged_at TEXT,
+      dispute_reason TEXT,
+      disputed_at TEXT,
+      resolution_notes TEXT,
+      resolved_at TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 // GET /api/qa?agent=Name&from=2025-01-01&to=2025-12-31
 export async function GET(req: Request) {
@@ -105,6 +107,169 @@ export async function POST(req: Request) {
     })
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
+// PATCH /api/qa — acknowledge, dispute, or resolve an evaluation
+export async function PATCH(req: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await req.json()
+    const { action, id } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing evaluation id' }, { status: 400 })
+    }
+
+    const db = getDb()
+    const evaluation = db.prepare('SELECT * FROM qa_evaluations WHERE id = ?').get(id) as any
+    if (!evaluation) {
+      return NextResponse.json({ error: 'Evaluation not found' }, { status: 404 })
+    }
+
+    const isMaster = (session.user as any)?.role === 'master'
+    const isOwner = evaluation.agent_name === session.user?.name
+
+    if (action === 'acknowledge') {
+      if (!isMaster && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      db.prepare(`
+        UPDATE qa_evaluations
+        SET status = 'Acknowledged',
+            acknowledged_at = datetime('now')
+        WHERE id = ?
+      `).run(id)
+
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'dispute') {
+      if (!isMaster && !isOwner) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const { dispute_reason } = body
+      if (!dispute_reason) {
+        return NextResponse.json({ error: 'Missing dispute reason' }, { status: 400 })
+      }
+
+      db.prepare(`
+        UPDATE qa_evaluations
+        SET status = 'Disputed',
+            disputed_at = datetime('now'),
+            dispute_reason = ?
+        WHERE id = ?
+      `).run(dispute_reason, id)
+
+      // Notify all master administrators
+      const masters = db.prepare("SELECT username FROM users WHERE role = 'master' AND active = 1").all() as { username: string }[]
+      for (const master of masters) {
+        sendNotification({
+          username: master.username,
+          title: 'Disputed Evaluation ⚠️',
+          message: `${evaluation.agent_name} has disputed an evaluation.`,
+          link: '/qa'
+        })
+      }
+
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'resolve') {
+      if (!isMaster) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const { resolutionStatus, resolutionNotes } = body
+      if (!resolutionStatus || !['Resolved - Revised', 'Resolved - No Change'].includes(resolutionStatus)) {
+        return NextResponse.json({ error: 'Invalid or missing resolution status' }, { status: 400 })
+      }
+
+      function getTier(score: number): string {
+        if (score >= 90) return 'Top Performer'
+        if (score >= 81) return 'Strong Performer'
+        if (score >= 70) return 'Developing Performer'
+        if (score >= 60) return 'Performance Risk'
+        return 'Immediate Coaching Required'
+      }
+
+      const ztAttorney = evaluation.zt_attorney_escalation
+      const ztLegal = evaluation.zt_legal_misrepresentation
+      const ztUndocumented = evaluation.zt_undocumented
+
+      let overall = evaluation.overall_score
+
+      if (resolutionStatus === 'Resolved - Revised') {
+        const intro = body.score_introduction !== undefined ? Number(body.score_introduction) : evaluation.score_introduction
+        const pk = body.score_pk_policies !== undefined ? Number(body.score_pk_policies) : evaluation.score_pk_policies
+        const elig = body.score_eligibility !== undefined ? Number(body.score_eligibility) : evaluation.score_eligibility
+        const dead = body.score_deadline !== undefined ? Number(body.score_deadline) : evaluation.score_deadline
+        const doc = body.score_documentation !== undefined ? Number(body.score_documentation) : evaluation.score_documentation
+        const obj = body.score_objection !== undefined ? Number(body.score_objection) : evaluation.score_objection
+
+        overall = intro + pk + elig + dead + doc + obj
+        if (ztAttorney === 1 || ztLegal === 1 || ztUndocumented === 1) {
+          overall = 0
+        }
+        const tier = getTier(overall)
+
+        db.prepare(`
+          UPDATE qa_evaluations
+          SET status = ?,
+              resolved_at = datetime('now'),
+              resolution_notes = ?,
+              score_introduction = ?,
+              score_pk_policies = ?,
+              score_eligibility = ?,
+              score_deadline = ?,
+              score_documentation = ?,
+              score_objection = ?,
+              overall_score = ?,
+              tier = ?
+          WHERE id = ?
+        `).run(
+          resolutionStatus,
+          resolutionNotes || null,
+          intro,
+          pk,
+          elig,
+          dead,
+          doc,
+          obj,
+          overall,
+          tier,
+          id
+        )
+      } else {
+        db.prepare(`
+          UPDATE qa_evaluations
+          SET status = ?,
+              resolved_at = datetime('now'),
+              resolution_notes = ?
+          WHERE id = ?
+        `).run(resolutionStatus, resolutionNotes || null, id)
+      }
+
+      // Notify the agent
+      const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(evaluation.agent_name) as { username: string } | undefined
+      const recipientUsername = user?.username || evaluation.agent_name.toLowerCase().replace(/\s+/g, '')
+
+      sendNotification({
+        username: recipientUsername,
+        title: 'QA Dispute Resolved 📢',
+        message: `Your dispute has been resolved: ${resolutionStatus}. Notes: ${resolutionNotes || 'None'}`,
+        link: '/qa'
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
