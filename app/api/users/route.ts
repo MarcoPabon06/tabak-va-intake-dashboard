@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
       )
       .run(username, hash, role, display_name || username)
 
+    // Sync to agents table: auto-add as active agent
+    const actualDisplayName = (display_name || username).trim()
+    db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(actualDisplayName)
+
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (e: any) {
     if (e.message?.includes('UNIQUE')) {
@@ -73,14 +77,39 @@ export async function PATCH(req: NextRequest) {
     const hash = await bcrypt.hash(password, 10)
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id)
   }
+
+  // Get display name of the user being modified
+  const user = db.prepare('SELECT display_name FROM users WHERE id = ?').get(id) as { display_name?: string } | undefined
+
   if (active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(active ? 1 : 0, id)
+
+    // Sync to agents table if display_name exists
+    if (user?.display_name) {
+      const displayName = user.display_name.trim()
+      if (active) {
+        // Reactivate matching agent, or create if not exists
+        const result = db.prepare('UPDATE agents SET active = 1 WHERE name = ?').run(displayName)
+        if (result.changes === 0) {
+          db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(displayName)
+        }
+      } else {
+        // Deactivate matching agent
+        db.prepare('UPDATE agents SET active = 0 WHERE name = ?').run(displayName)
+      }
+    }
   }
+
   if (role) {
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id)
   }
+
   if (display_name) {
     db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(display_name, id)
+    // Sync to agents table name change
+    if (user?.display_name) {
+      db.prepare('UPDATE agents SET name = ? WHERE name = ?').run(display_name.trim(), user.display_name.trim())
+    }
   }
 
   return NextResponse.json({ success: true })
