@@ -19,20 +19,25 @@ export async function GET(req: NextRequest) {
     const isMaster = (session.user as any)?.role === 'master'
     const userName = session.user?.name || ''
 
-    let query = 'SELECT * FROM pip_plans'
+    let query = `
+      SELECT p.*
+      FROM pip_plans p
+      INNER JOIN agents a ON p.agent_name = a.name
+      WHERE a.active = 1
+    `
     const params: any[] = []
 
     if (!isMaster) {
       // Regular users can only see their own PIP plans
-      query += ' WHERE agent_name = ?'
+      query += ' AND p.agent_name = ?'
       params.push(userName)
     } else if (agent) {
       // Admins can filter by agent
-      query += ' WHERE agent_name = ?'
+      query += ' AND p.agent_name = ?'
       params.push(agent)
     }
 
-    query += ' ORDER BY start_date DESC'
+    query += ' ORDER BY p.start_date DESC'
     const rows = db.prepare(query).all(...params) as any[]
 
     // Enrich each PIP plan with dynamically computed current average QA score and list of evaluations in the PIP date range

@@ -22,17 +22,19 @@ export async function GET(req: NextRequest) {
     let query = `
       SELECT c.*, q.eval_date as linked_eval_date, q.overall_score as linked_eval_score, q.call_id as linked_eval_call_id
       FROM coaching_sessions c
+      INNER JOIN agents a ON c.agent_name = a.name
       LEFT JOIN qa_evaluations q ON c.linked_evaluation_id = q.id
+      WHERE a.active = 1
     `
     const params: any[] = []
 
     if (!isMaster) {
       // Regular user can only view their own coaching sessions
-      query += ' WHERE c.agent_name = ?'
+      query += ' AND c.agent_name = ?'
       params.push(userName)
     } else if (agent) {
       // Admin can filter by agent
-      query += ' WHERE c.agent_name = ?'
+      query += ' AND c.agent_name = ?'
       params.push(agent)
     }
 
