@@ -112,7 +112,7 @@ export default function QAEntryPage() {
       const body = {
         agent_name: selectedAgent,
         call_id: callId,
-        evaluation_date: evalDate,
+        eval_date: evalDate,
         evaluator_name: evaluatorName,
         ...scores,
         overall_score: totalScore,
