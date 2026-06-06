@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { format } from 'date-fns'
 
-interface UserOption {
+interface AgentOption {
   id: number
   name: string
-  role: string
   active: number
 }
 
@@ -37,7 +36,7 @@ export default function QAEntryPage() {
   const [dragging, setDragging] = useState(false)
 
   // ── Manual form state ──
-  const [agents, setAgents] = useState<UserOption[]>([])
+  const [agents, setAgents] = useState<AgentOption[]>([])
   const [selectedAgent, setSelectedAgent] = useState('')
   const [callId, setCallId] = useState('')
   const [evalDate, setEvalDate] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -54,10 +53,10 @@ export default function QAEntryPage() {
 
   // Fetch agents
   useEffect(() => {
-    fetch('/api/users')
+    fetch('/api/agents')
       .then((r) => r.json())
-      .then((users: UserOption[]) => {
-        setAgents(users.filter((u) => u.role === 'regular' && u.active === 1))
+      .then((data: AgentOption[]) => {
+        setAgents(data.filter((a) => a.active === 1))
       })
       .catch(() => {})
   }, [])
