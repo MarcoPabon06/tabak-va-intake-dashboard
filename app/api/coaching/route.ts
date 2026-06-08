@@ -41,8 +41,9 @@ export async function GET(req: NextRequest) {
     query += ' ORDER BY c.session_date DESC'
     const rows = db.prepare(query).all(...params)
 
-    // Fail-safe filtering for allowed agents
-    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    // Fail-safe filtering for allowed agents (must exist in users table)
+    const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+    const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const filteredRows = rows.filter((r: any) => {
       const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()
       return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
@@ -78,15 +79,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Restrict to allowed VA Intake Reps only
-    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    // Restrict to allowed VA Intake Reps only (must exist in users table)
+    const db = getDb()
+    const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+    const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const agentNameNormalized = agent_name.trim().replace(/\s+/g, '').toLowerCase()
     const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)
     if (!isAllowed) {
-      return NextResponse.json({ error: `Agent "${agent_name}" is not a VA Intake Rep.` }, { status: 400 })
+      return NextResponse.json({ error: `Agent "${agent_name}" is not a registered user.` }, { status: 400 })
     }
-
-    const db = getDb()
     const focusString = Array.isArray(focus_areas) ? focus_areas.join(', ') : focus_areas
 
     const stmt = db.prepare(`

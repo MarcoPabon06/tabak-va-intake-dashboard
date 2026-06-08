@@ -173,14 +173,17 @@ function initSchema(db: Database.Database) {
     defaults.run('goal_avg_capd', '40')
   }
 
-  // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the allowed list of VA Intake Reps
-  const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
-  const placeholders = allowedAgents.map(() => '?').join(',')
+  // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered user list
+  const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+  const allowedAgents = users.map(u => u.display_name?.trim()).filter(Boolean)
   
-  db.prepare(`DELETE FROM qa_evaluations WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
-  db.prepare(`DELETE FROM coaching_sessions WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
-  db.prepare(`DELETE FROM pip_plans WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
-  db.prepare(`DELETE FROM agents WHERE name NOT IN (${placeholders})`).run(...allowedAgents)
+  if (allowedAgents.length > 0) {
+    const placeholders = allowedAgents.map(() => '?').join(',')
+    db.prepare(`DELETE FROM qa_evaluations WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+    db.prepare(`DELETE FROM coaching_sessions WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+    db.prepare(`DELETE FROM pip_plans WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+    db.prepare(`DELETE FROM agents WHERE name NOT IN (${placeholders})`).run(...allowedAgents)
+  }
 }
 
 export default getDb
