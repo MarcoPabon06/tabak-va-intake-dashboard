@@ -75,7 +75,7 @@ const MONTH_NAMES = [
 
 export default function CoachingPage() {
   const { data: session } = useSession()
-  const [hubTab, setHubTab] = useState<'coaching' | 'pip'>('coaching')
+  const [hubTab, setHubTab] = useState<'coaching' | 'pip' | 'requests'>('coaching')
   const [sessions, setSessions] = useState<CoachingSession[]>([])
   const [pipPlans, setPipPlans] = useState<PipPlan[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,6 +83,14 @@ export default function CoachingPage() {
   const [agents, setAgents] = useState<AgentOption[]>([])
   const [evals, setEvals] = useState<EvaluationOption[]>([])
   
+  // ── Requests Tracker State ──
+  const [requests, setRequests] = useState<any[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(true)
+  const [coachingRequestId, setCoachingRequestId] = useState<number | null>(null)
+  const [declineRequestId, setDeclineRequestId] = useState<number | null>(null)
+  const [declineNotes, setDeclineNotes] = useState('')
+  const [submittingDecline, setSubmittingDecline] = useState(false)
+
   // ── Toggle Forms ──
   const [showForm, setShowForm] = useState(false)
   const [showPipForm, setShowPipForm] = useState(false)
@@ -138,10 +146,19 @@ export default function CoachingPage() {
       .finally(() => setPipLoading(false))
   }
 
+  const fetchRequests = () => {
+    fetch('/api/coaching/requests')
+      .then((r) => r.json())
+      .then((data) => setRequests(Array.isArray(data) ? data : []))
+      .catch(() => setRequests([]))
+      .finally(() => setRequestsLoading(false))
+  }
+
   useEffect(() => {
     if (session) {
       fetchSessions()
       fetchPipPlans()
+      fetchRequests()
 
       if (isMaster) {
         // Fetch active agents
@@ -188,6 +205,7 @@ export default function CoachingPage() {
           commitments_agent: commitmentsAgent,
           commitments_coach: commitmentsCoach,
           follow_up_date: followUpDate || null,
+          coaching_request_id: coachingRequestId,
         }),
       })
 
@@ -202,9 +220,11 @@ export default function CoachingPage() {
       setCommitmentsAgent('')
       setCommitmentsCoach('')
       setFollowUpDate('')
+      setCoachingRequestId(null)
       setShowForm(false)
 
       fetchSessions()
+      fetchRequests()
     } catch (err: any) {
       setFormError(err.message)
     } finally {
@@ -326,6 +346,43 @@ export default function CoachingPage() {
     }
   }
 
+  const handleScheduleRequestClick = (request: any) => {
+    setSelectedAgent(request.agent_name)
+    setSessionDate(request.preferred_date || new Date().toISOString().split('T')[0])
+    setLinkedEvalId(request.linked_evaluation_id ? String(request.linked_evaluation_id) : '')
+    setSelectedFocus([]) 
+    setDiscussionNotes(`Feedback request session. Agent notes: "${request.agent_notes}"`)
+    setCoachingRequestId(request.id)
+    setShowForm(true)
+    setHubTab('coaching')
+  }
+
+  const handleDeclineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (declineRequestId === null || !declineNotes.trim()) return
+    setSubmittingDecline(true)
+    try {
+      const res = await fetch('/api/coaching/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: declineRequestId,
+          status: 'Declined',
+          coach_notes: declineNotes.trim(),
+        }),
+      })
+      if (res.ok) {
+        setDeclineRequestId(null)
+        setDeclineNotes('')
+        fetchRequests()
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSubmittingDecline(false)
+    }
+  }
+
   // Pre-calculate PIP Date ranges
   const setPipPreset = (days: number) => {
     const start = new Date(pipStartDate || new Date())
@@ -368,6 +425,17 @@ export default function CoachingPage() {
         followUpSessionsMap[s.follow_up_date] = []
       }
       followUpSessionsMap[s.follow_up_date].push(s)
+    }
+  })
+
+  // Get pending feedback requests mapped by preferred date
+  const pendingRequestsMap: Record<string, any[]> = {}
+  requests.forEach((r) => {
+    if (r.status === 'Pending' && r.preferred_date) {
+      if (!pendingRequestsMap[r.preferred_date]) {
+        pendingRequestsMap[r.preferred_date] = []
+      }
+      pendingRequestsMap[r.preferred_date].push(r)
     }
   })
 
@@ -467,6 +535,44 @@ export default function CoachingPage() {
             >
               📈 PIP Plans Pipeline
             </button>
+            {isMaster && (
+              <button
+                onClick={() => setHubTab('requests')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: hubTab === 'requests' ? '#f59e0b' : '#64748b',
+                  fontSize: 15,
+                  fontWeight: 800,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  borderBottom: hubTab === 'requests' ? '2px solid #f59e0b' : 'none',
+                  transition: 'color 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <span>🙋‍♂️ Feedback Requests</span>
+                {requests.filter(r => r.status === 'Pending').length > 0 && (
+                  <span style={{
+                    background: '#f59e0b',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    borderRadius: '50%',
+                    minWidth: 18,
+                    height: 18,
+                    padding: '0 4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {requests.filter(r => r.status === 'Pending').length}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Action button corresponding to active tab */}
@@ -487,7 +593,7 @@ export default function CoachingPage() {
               >
                 {showForm ? '✕ Close Form' : '✏️ Log Coaching Check-in'}
               </button>
-            ) : (
+            ) : hubTab === 'pip' ? (
               <button
                 onClick={() => setShowPipForm(!showPipForm)}
                 style={{
@@ -503,7 +609,7 @@ export default function CoachingPage() {
               >
                 {showPipForm ? '✕ Close Form' : ' Initiate PIP Plan'}
               </button>
-            )
+            ) : null
           )}
         </div>
 
@@ -688,6 +794,65 @@ export default function CoachingPage() {
                   )}
                 </div>
 
+                {selectedCalendarDate && pendingRequestsMap[selectedCalendarDate]?.length > 0 && (
+                  <div className="glass-card fade-in" style={{ padding: '16px 20px', marginBottom: 20, borderColor: 'rgba(245, 158, 11, 0.35)', background: 'rgba(245, 158, 11, 0.02)' }}>
+                    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>🙋‍♂️ Feedback Requests for {selectedCalendarDate}</span>
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {pendingRequestsMap[selectedCalendarDate].map((req: any) => (
+                        <div key={req.id} style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)', padding: 12, borderRadius: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>{req.agent_name}</span>
+                            {req.linked_eval_score && (
+                              <span style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+                                QA Score: {req.linked_eval_score}%
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ color: '#94a3b8', fontSize: 12, marginBottom: 8, fontStyle: 'italic' }}>
+                            "{req.agent_notes}"
+                          </p>
+                          {isMaster && (
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => setDeclineRequestId(req.id)}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  color: '#ef4444',
+                                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                                  padding: '4px 10px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Decline
+                              </button>
+                              <button
+                                onClick={() => handleScheduleRequestClick(req)}
+                                style={{
+                                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                                  color: '#fff',
+                                  border: 'none',
+                                  padding: '4px 12px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Schedule Session
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {loading ? (
                   <div style={{ textAlign: 'center', padding: 60, color: '#64748b' }}>Loading coaching sessions...</div>
                 ) : displayedSessions.length === 0 ? (
@@ -813,24 +978,30 @@ export default function CoachingPage() {
                       const cellDateString = getCellDateString(dayVal)
                       const dayFollowUps = followUpSessionsMap[cellDateString] || []
                       const hasFollowUp = dayFollowUps.length > 0
+                      const dayPendingRequests = pendingRequestsMap[cellDateString] || []
+                      const hasPendingRequest = dayPendingRequests.length > 0
+                      const isClickable = hasFollowUp || hasPendingRequest
                       const isSelected = selectedCalendarDate === cellDateString
                       return (
                         <div
                           key={`curr-${dayVal}`}
-                          onClick={() => hasFollowUp && setSelectedCalendarDate(isSelected ? null : cellDateString)}
+                          onClick={() => isClickable && setSelectedCalendarDate(isSelected ? null : cellDateString)}
                           style={{
                             height: 34, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11,
-                            fontWeight: hasFollowUp ? 700 : 500, color: isSelected ? '#fff' : hasFollowUp ? '#6366f1' : '#cbd5e1',
-                            background: isSelected ? 'rgba(99,102,241,0.25)' : hasFollowUp ? 'rgba(99,102,241,0.08)' : 'transparent',
-                            border: isSelected ? '1px solid #6366f1' : hasFollowUp ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
-                            borderRadius: 6, cursor: hasFollowUp ? 'pointer' : 'default', transition: 'background 0.2s, border 0.2s'
+                            fontWeight: isClickable ? 700 : 500, color: isSelected ? '#fff' : hasFollowUp ? '#6366f1' : hasPendingRequest ? '#f59e0b' : '#cbd5e1',
+                            background: isSelected ? 'rgba(99,102,241,0.25)' : hasFollowUp ? 'rgba(99,102,241,0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent',
+                            border: isSelected ? '1px solid #6366f1' : hasPendingRequest ? '1px solid rgba(245,158,11,0.3)' : hasFollowUp ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+                            borderRadius: 6, cursor: isClickable ? 'pointer' : 'default', transition: 'background 0.2s, border 0.2s'
                           }}
-                          onMouseOver={(e) => hasFollowUp && !isSelected && (e.currentTarget.style.background = 'rgba(99,102,241,0.15)')}
-                          onMouseOut={(e) => hasFollowUp && !isSelected && (e.currentTarget.style.background = 'rgba(99,102,241,0.08)')}
+                          onMouseOver={(e) => isClickable && !isSelected && (e.currentTarget.style.background = 'rgba(99,102,241,0.15)')}
+                          onMouseOut={(e) => isClickable && !isSelected && (e.currentTarget.style.background = hasFollowUp ? 'rgba(99,102,241,0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent')}
                         >
                           <span>{dayVal}</span>
                           {hasFollowUp && (
                             <span style={{ position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: '50%', background: '#6366f1', boxShadow: '0 0 6px #6366f1' }} />
+                          )}
+                          {hasPendingRequest && (
+                            <span style={{ position: 'absolute', top: 4, right: 4, width: 4, height: 4, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b' }} title={`${dayPendingRequests.length} pending request(s)`} />
                           )}
                         </div>
                       )
@@ -1252,7 +1423,248 @@ export default function CoachingPage() {
             )}
           </>
         )}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* 💡 VIEW 3: FEEDBACK REQUESTS                     */}
+        {/* ═══════════════════════════════════════════════ */}
+        {hubTab === 'requests' && isMaster && (
+          <div className="fade-in">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Agent Feedback Requests</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Manage requests for feedback sessions submitted by agents from their QA evaluations.
+                </p>
+              </div>
+            </div>
+
+            {requestsLoading ? (
+              <div style={{ textAlign: 'center', padding: 60, color: '#64748b' }}>Loading feedback requests...</div>
+            ) : requests.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: 50, color: '#64748b' }}>
+                <span style={{ fontSize: 32 }}>🙋‍♂️</span>
+                <p style={{ marginTop: 10, fontSize: 13 }}>No feedback requests submitted yet.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {requests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="glass-card fade-in"
+                    style={{
+                      padding: '20px 24px',
+                      borderLeft: `4px solid ${
+                        request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'
+                      }`,
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{request.agent_name}</span>
+                      <span style={{ fontSize: 11, color: '#64748b' }}>·</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Requested: {new Date(request.requested_at).toLocaleDateString()}
+                      </span>
+                      {request.preferred_date && (
+                        <>
+                          <span style={{ fontSize: 11, color: '#64748b' }}>·</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: '#a78bfa' }}>
+                            Preferred Date: {request.preferred_date}
+                          </span>
+                        </>
+                      )}
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b',
+                        background: `${request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
+                        padding: '2px 8px',
+                        borderRadius: 4,
+                        marginLeft: 'auto'
+                      }}>
+                        {request.status.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {request.linked_evaluation_id && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#cbd5e1', marginBottom: 12 }}>
+                        <span>📋 Linked Evaluation:</span>
+                        <span style={{ fontWeight: 800, color: '#6366f1' }}>{request.linked_eval_score}%</span>
+                        <span style={{ color: '#64748b' }}>({request.linked_eval_date})</span>
+                        {request.linked_eval_call_id && <span style={{ color: '#94a3b8' }}>Call: {request.linked_eval_call_id}</span>}
+                      </div>
+                    )}
+
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Agent Request Notes</div>
+                      <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        "{request.agent_notes}"
+                      </div>
+                    </div>
+
+                    {request.coach_notes && (
+                      <div style={{
+                        marginBottom: 14,
+                        padding: '10px 14px',
+                        background: request.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(99, 102, 241, 0.05)',
+                        border: '1px solid ' + (request.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
+                        borderRadius: 8,
+                        fontSize: 12,
+                        color: request.status === 'Declined' ? '#fca5a5' : '#a5b4fc',
+                      }}>
+                        <strong>Coach Response:</strong> "{request.coach_notes}"
+                      </div>
+                    )}
+
+                    {request.status === 'Pending' && (
+                      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
+                        <button
+                          onClick={() => setDeclineRequestId(request.id)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#ef4444',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            padding: '6px 14px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ❌ Decline Request
+                        </button>
+                        <button
+                          onClick={() => handleScheduleRequestClick(request)}
+                          style={{
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '6px 14px',
+                            borderRadius: 6,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          📅 Schedule Session
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
+
+      {declineRequestId !== null && (
+        <div
+          onClick={() => setDeclineRequestId(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(5, 11, 24, 0.8)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="glass-card"
+            style={{
+              padding: '24px 28px',
+              maxWidth: 480,
+              width: '90%',
+              borderColor: 'rgba(239, 68, 68, 0.25)',
+              background: 'rgba(10, 22, 40, 0.95)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#e2e8f0' }}>❌ Decline Feedback Request</h3>
+              <button
+                onClick={() => setDeclineRequestId(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  fontSize: 16,
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleDeclineSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+                  Decline Reason / Notes for Agent *
+                </label>
+                <textarea
+                  required
+                  value={declineNotes}
+                  onChange={(e) => setDeclineNotes(e.target.value)}
+                  placeholder="Explain to the agent why this request is being declined (e.g. feedback already covered, scheduled elsewhere, etc.). This will be sent to the agent."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 6,
+                    color: '#fff',
+                    fontSize: 13,
+                    outline: 'none',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setDeclineRequestId(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingDecline || !declineNotes.trim()}
+                  style={{
+                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '8px 20px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    opacity: submittingDecline || !declineNotes.trim() ? 0.6 : 1,
+                  }}
+                >
+                  {submittingDecline ? 'Declining...' : 'Decline Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

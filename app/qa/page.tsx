@@ -247,6 +247,8 @@ function EvaluationDetails({
   setDisputeReasonText,
   handleAcknowledge,
   handleDispute,
+  requests,
+  onRequestFeedback,
 }: {
   ev: Evaluation
   isMaster: boolean
@@ -256,7 +258,11 @@ function EvaluationDetails({
   setDisputeReasonText: (text: string) => void
   handleAcknowledge: (id: number) => Promise<void>
   handleDispute: (id: number) => Promise<void>
+  requests: any[]
+  onRequestFeedback: (evalId: number) => void
 }) {
+  const requestForEval = requests.find((r) => r.linked_evaluation_id === ev.id)
+
   return (
     <div style={{ marginTop: 12 }}>
       {/* Category scores */}
@@ -288,60 +294,119 @@ function EvaluationDetails({
       )}
 
       {/* Status & Actions Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
-        <span style={{ fontSize: 11, color: '#64748b' }}>Acknowledgement Status:</span>
-        <span style={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: statusColor(ev.status),
-          background: `${statusColor(ev.status)}20`,
-          padding: '2px 8px',
-          borderRadius: 4,
-        }}>
-          {ev.status || 'Pending Acknowledgement'}
-        </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Acknowledgement Status:</span>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: statusColor(ev.status),
+            background: `${statusColor(ev.status)}20`,
+            padding: '2px 8px',
+            borderRadius: 4,
+          }}>
+            {ev.status || 'Pending Acknowledgement'}
+          </span>
+        </div>
+
+        {requestForEval && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: '#64748b' }}>Feedback Request:</span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#6366f1' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b',
+              background: `${requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#6366f1' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
+              padding: '2px 8px',
+              borderRadius: 4,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}>
+              {requestForEval.status === 'Pending' ? '⏳ Pending Review' : requestForEval.status === 'Scheduled' ? '📅 Session Scheduled' : requestForEval.status === 'Declined' ? '❌ Request Declined' : '✅ Session Completed'}
+            </span>
+          </div>
+        )}
       </div>
 
+      {requestForEval && requestForEval.coach_notes && (
+        <div style={{
+          marginTop: 10,
+          padding: '8px 12px',
+          background: requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(99, 102, 241, 0.05)',
+          border: '1px solid ' + (requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
+          borderRadius: 8,
+          fontSize: 11,
+          color: requestForEval.status === 'Declined' ? '#fca5a5' : '#a5b4fc',
+        }}>
+          <strong>Coach Response:</strong> "{requestForEval.coach_notes}"
+        </div>
+      )}
+
       {/* Action Buttons for Regular Agent */}
-      {!isMaster && (!ev.status || ev.status === 'Pending Acknowledgement') && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button
-            onClick={async (e) => {
-              e.stopPropagation()
-              await handleAcknowledge(ev.id)
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              color: '#fff',
-              border: 'none',
-              padding: '6px 14px',
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Acknowledge Feedback
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
-              setDisputeReasonText('')
-            }}
-            style={{
-              background: 'rgba(255, 255, 255, 0.08)',
-              color: '#cbd5e1',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              padding: '5px 13px',
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Dispute Score
-          </button>
+      {!isMaster && (
+        <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {(!ev.status || ev.status === 'Pending Acknowledgement') && (
+            <>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  await handleAcknowledge(ev.id)
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Acknowledge Feedback
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
+                  setDisputeReasonText('')
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '5px 13px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Dispute Score
+              </button>
+            </>
+          )}
+
+          {!requestForEval && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRequestFeedback(ev.id)
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                color: '#fff',
+                border: 'none',
+                padding: '6px 14px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🙋‍♂️ Request Feedback Session
+            </button>
+          )}
         </div>
       )}
 
@@ -441,6 +506,174 @@ function EvaluationDetails({
   )
 }
 
+interface RequestFeedbackModalProps {
+  evalId: number
+  onClose: () => void
+  submitting: boolean
+  error: string
+  onSubmit: (notes: string, date: string) => Promise<void>
+}
+
+function RequestFeedbackModal({
+  evalId,
+  onClose,
+  submitting,
+  error,
+  onSubmit,
+}: RequestFeedbackModalProps) {
+  const [notes, setNotes] = useState('')
+  const [preferredDate, setPreferredDate] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onSubmit(notes, preferredDate)
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(5, 11, 24, 0.8)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 1000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="glass-card"
+        style={{
+          padding: '24px 28px',
+          maxWidth: 480,
+          width: '90%',
+          borderColor: 'rgba(99, 102, 241, 0.25)',
+          background: 'rgba(10, 22, 40, 0.95)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: '#e2e8f0' }}>🙋‍♂️ Request Feedback Session</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: 16,
+              cursor: 'pointer',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 8,
+            padding: '10px 14px',
+            marginBottom: 16,
+            color: '#ef4444',
+            fontSize: 12,
+            fontWeight: 600
+          }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+              Preferred Date (Optional)
+            </label>
+            <input
+              type="date"
+              value={preferredDate}
+              onChange={(e) => setPreferredDate(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6,
+                color: '#fff',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+              Notes & Specific Questions *
+            </label>
+            <textarea
+              required
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Tell the coach what questions you have or which part of the call you would like to review..."
+              rows={4}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6,
+                color: '#fff',
+                fontSize: 13,
+                outline: 'none',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#94a3b8',
+                fontSize: 12,
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || !notes.trim()}
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 20px',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                opacity: submitting || !notes.trim() ? 0.6 : 1,
+              }}
+            >
+              {submitting ? 'Submitting...' : 'Submit Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function QAPage() {
   const { data: session } = useSession()
   const [evals, setEvals] = useState<Evaluation[]>([])
@@ -452,9 +685,21 @@ export default function QAPage() {
   const [disputingEvalId, setDisputingEvalId] = useState<number | null>(null)
   const [disputeReasonText, setDisputeReasonText] = useState('')
 
+  const [requests, setRequests] = useState<any[]>([])
+  const [requestModalEvalId, setRequestModalEvalId] = useState<number | null>(null)
+  const [submittingRequest, setSubmittingRequest] = useState(false)
+  const [requestError, setRequestError] = useState('')
+
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
   const isMaster = userRole === 'master'
+
+  const fetchRequests = () => {
+    fetch('/api/coaching/requests')
+      .then((r) => r.json())
+      .then((data) => setRequests(Array.isArray(data) ? data : []))
+      .catch(() => setRequests([]))
+  }
 
   const fetchEvals = () => {
     const url = isMaster ? '/api/qa' : `/api/qa?agent=${encodeURIComponent(userName)}`
@@ -467,6 +712,7 @@ export default function QAPage() {
 
   useEffect(() => {
     fetchEvals()
+    fetchRequests()
   }, [isMaster, userName])
 
   const handleAcknowledge = async (id: number) => {
@@ -478,6 +724,7 @@ export default function QAPage() {
       })
       if (res.ok) {
         fetchEvals()
+        fetchRequests()
       }
     } catch (err) {
       console.error(err)
@@ -496,6 +743,7 @@ export default function QAPage() {
         setDisputingEvalId(null)
         setDisputeReasonText('')
         fetchEvals()
+        fetchRequests()
       }
     } catch (err) {
       console.error(err)
@@ -776,6 +1024,8 @@ export default function QAPage() {
                                           setDisputeReasonText={setDisputeReasonText}
                                           handleAcknowledge={handleAcknowledge}
                                           handleDispute={handleDispute}
+                                          requests={requests}
+                                          onRequestFeedback={setRequestModalEvalId}
                                         />
                                       )}
                                     </div>
@@ -898,6 +1148,8 @@ export default function QAPage() {
                         setDisputeReasonText={setDisputeReasonText}
                         handleAcknowledge={handleAcknowledge}
                         handleDispute={handleDispute}
+                        requests={requests}
+                        onRequestFeedback={setRequestModalEvalId}
                       />
                     )}
                   </div>
@@ -907,6 +1159,41 @@ export default function QAPage() {
           </>
         )}
       </main>
+
+      {requestModalEvalId !== null && (
+        <RequestFeedbackModal
+          evalId={requestModalEvalId}
+          onClose={() => {
+            setRequestModalEvalId(null)
+            setRequestError('')
+          }}
+          submitting={submittingRequest}
+          error={requestError}
+          onSubmit={async (notes, date) => {
+            setSubmittingRequest(true)
+            setRequestError('')
+            try {
+              const res = await fetch('/api/coaching/requests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  linked_evaluation_id: requestModalEvalId,
+                  preferred_date: date,
+                  agent_notes: notes,
+                }),
+              })
+              const json = await res.json()
+              if (!res.ok) throw new Error(json.error || 'Failed to submit request')
+              setRequestModalEvalId(null)
+              fetchRequests()
+            } catch (err: any) {
+              setRequestError(err.message)
+            } finally {
+              setSubmittingRequest(false)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

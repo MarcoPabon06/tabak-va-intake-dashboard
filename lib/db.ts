@@ -139,6 +139,22 @@ function initSchema(db: Database.Database) {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_pip_agent ON pip_plans(agent_name);
+
+    CREATE TABLE IF NOT EXISTS coaching_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_name TEXT NOT NULL,
+      linked_evaluation_id INTEGER,
+      status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Scheduled', 'Declined', 'Completed')),
+      requested_at TEXT DEFAULT (datetime('now')),
+      preferred_date TEXT,
+      agent_notes TEXT,
+      coach_notes TEXT,
+      scheduled_coaching_id INTEGER,
+      FOREIGN KEY(linked_evaluation_id) REFERENCES qa_evaluations(id),
+      FOREIGN KEY(scheduled_coaching_id) REFERENCES coaching_sessions(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_coaching_requests_agent ON coaching_requests(agent_name);
+    CREATE INDEX IF NOT EXISTS idx_coaching_requests_status ON coaching_requests(status);
   `)
 
   // Run self-healing schema migrations for new columns
@@ -182,6 +198,7 @@ function initSchema(db: Database.Database) {
     db.prepare(`DELETE FROM qa_evaluations WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
     db.prepare(`DELETE FROM coaching_sessions WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
     db.prepare(`DELETE FROM pip_plans WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+    db.prepare(`DELETE FROM coaching_requests WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
     db.prepare(`DELETE FROM agents WHERE name NOT IN (${placeholders})`).run(...allowedAgents)
   }
 }

@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       commitments_agent,
       commitments_coach,
       follow_up_date,
+      coaching_request_id,
     } = body
 
     if (!agent_name || !session_date || !focus_areas) {
@@ -109,6 +110,21 @@ export async function POST(req: NextRequest) {
       commitments_coach || null,
       follow_up_date || null
     )
+
+    const coachingSessionId = result.lastInsertRowid
+
+    // If there is an associated coaching_request_id, update its status
+    if (coaching_request_id) {
+      const today = new Date().toISOString().slice(0, 10)
+      const isPast = session_date <= today
+      const requestStatus = isPast ? 'Completed' : 'Scheduled'
+
+      db.prepare(`
+        UPDATE coaching_requests
+        SET status = ?, scheduled_coaching_id = ?
+        WHERE id = ?
+      `).run(requestStatus, coachingSessionId, coaching_request_id)
+    }
 
     // Notify the agent in real-time
     const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(agent_name) as { username: string } | undefined
