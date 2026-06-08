@@ -30,7 +30,15 @@ export async function GET(req: Request) {
 
     query += ' ORDER BY q.eval_date DESC'
     const rows = db.prepare(query).all(...params)
-    return NextResponse.json(rows)
+
+    // Fail-safe filtering for allowed agents
+    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    const filteredRows = rows.filter((r: any) => {
+      const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()
+      return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
+    })
+
+    return NextResponse.json(filteredRows)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

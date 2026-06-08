@@ -10,7 +10,15 @@ export async function GET(req: NextRequest) {
 
   const db = getDb()
   const agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
-  return NextResponse.json(agents)
+
+  // Fail-safe filtering for allowed agents
+  const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+  const filteredAgents = agents.filter((a: any) => {
+    const normalized = a.name.trim().replace(/\s+/g, '').toLowerCase()
+    return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
+  })
+
+  return NextResponse.json(filteredAgents)
 }
 
 // POST /api/agents — add/update agent (master only)

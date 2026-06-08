@@ -40,8 +40,15 @@ export async function GET(req: NextRequest) {
     query += ' ORDER BY p.start_date DESC'
     const rows = db.prepare(query).all(...params) as any[]
 
+    // Fail-safe filtering for allowed agents
+    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    const filteredRows = rows.filter((r: any) => {
+      const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()
+      return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
+    })
+
     // Enrich each PIP plan with dynamically computed current average QA score and list of evaluations in the PIP date range
-    const enrichedRows = rows.map((row) => {
+    const enrichedRows = filteredRows.map((row) => {
       const currentAvg = db.prepare(`
         SELECT AVG(overall_score) as avg
         FROM qa_evaluations
