@@ -31,8 +31,8 @@ export async function GET(req: Request) {
     query += ' ORDER BY q.eval_date DESC'
     const rows = db.prepare(query).all(...params)
 
-    // Fail-safe filtering for allowed agents (must exist in users table)
-    const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+    // Fail-safe filtering for allowed agents (must exist as regular user in users table)
+    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
     const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const filteredRows = rows.filter((r: any) => {
       const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()
@@ -53,9 +53,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing agent_name' }, { status: 400 })
     }
 
-    // Restrict to allowed VA Intake Reps only (must exist in users table)
+    // Restrict to allowed VA Intake Reps only (must exist as regular user in users table)
     const db = getDb()
-    const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
     const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const agentNameNormalized = body.agent_name.trim().replace(/\s+/g, '').toLowerCase()
     const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)

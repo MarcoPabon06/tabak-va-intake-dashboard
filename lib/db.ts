@@ -173,8 +173,8 @@ function initSchema(db: Database.Database) {
     defaults.run('goal_avg_capd', '40')
   }
 
-  // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered user list
-  const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+  // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
+  const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
   const allowedAgents = users.map(u => u.display_name?.trim()).filter(Boolean)
   
   if (allowedAgents.length > 0) {

@@ -44,8 +44,8 @@ export async function POST(req: Request) {
 
     const db = getDb()
     
-    // Fetch all user display names to normalize agent names
-    const users = db.prepare('SELECT display_name FROM users').all() as { display_name: string }[]
+    // Fetch all regular user display names to normalize agent names
+    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
     const dbDisplayNames = users.map(u => u.display_name).filter(Boolean)
 
     let importedCount = 0
