@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // Restrict to allowed VA Intake Reps only
+    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    const agentNameNormalized = agent_name.trim().replace(/\s+/g, '').toLowerCase()
+    const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)
+    if (!isAllowed) {
+      return NextResponse.json({ error: `Agent "${agent_name}" is not a VA Intake Rep.` }, { status: 400 })
+    }
+
     const db = getDb()
     const creatorName = session.user?.name || 'QA Admin'
 

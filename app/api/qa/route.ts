@@ -40,6 +40,18 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
+    if (!body.agent_name) {
+      return NextResponse.json({ error: 'Missing agent_name' }, { status: 400 })
+    }
+
+    // Restrict to allowed VA Intake Reps only
+    const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+    const agentNameNormalized = body.agent_name.trim().replace(/\s+/g, '').toLowerCase()
+    const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)
+    if (!isAllowed) {
+      return NextResponse.json({ error: `Agent "${body.agent_name}" is not a VA Intake Rep.` }, { status: 400 })
+    }
+
     const db = getDb()
 
     // Determine tier based on overall_score

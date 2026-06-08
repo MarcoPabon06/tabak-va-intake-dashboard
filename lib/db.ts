@@ -172,6 +172,15 @@ function initSchema(db: Database.Database) {
     defaults.run('goal_conversion_rate', '65')
     defaults.run('goal_avg_capd', '40')
   }
+
+  // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the allowed list of VA Intake Reps
+  const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+  const placeholders = allowedAgents.map(() => '?').join(',')
+  
+  db.prepare(`DELETE FROM qa_evaluations WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+  db.prepare(`DELETE FROM coaching_sessions WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+  db.prepare(`DELETE FROM pip_plans WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
+  db.prepare(`DELETE FROM agents WHERE name NOT IN (${placeholders})`).run(...allowedAgents)
 }
 
 export default getDb

@@ -85,6 +85,15 @@ export async function POST(req: Request) {
         if (!rawAgentName) continue
 
         const agentName = matchAgentName(rawAgentName, dbDisplayNames)
+
+        // Restrict to allowed VA Intake Reps only
+        const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+        const agentNameNormalized = agentName.trim().replace(/\s+/g, '').toLowerCase()
+        const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)
+        if (!isAllowed) {
+          continue
+        }
+
         const callId = row[9] ? row[9].toString().trim() : null
         
         // Parse date
@@ -208,6 +217,15 @@ export async function POST(req: Request) {
       }
 
       const agentName = matchAgentName(rawAgentName, dbDisplayNames)
+
+      // Restrict to allowed VA Intake Reps only
+      const allowedAgents = ['Omar Soto', 'Alejandra NicoleReyes', 'Alejandra Nicole Reyes', 'Adriana Soto', 'Oliver Ortega', 'Daniel Castillo']
+      const agentNameNormalized = agentName.trim().replace(/\s+/g, '').toLowerCase()
+      const isAllowed = allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === agentNameNormalized)
+      if (!isAllowed) {
+        return NextResponse.json({ error: `Agent "${agentName}" is not a VA Intake Rep.` }, { status: 400 })
+      }
+
       const callId = (data[1]?.[8] || '').toString().trim() || null
 
       let evalDate = ''
