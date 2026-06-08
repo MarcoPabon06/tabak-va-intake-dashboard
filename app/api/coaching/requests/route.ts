@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
     let query = `
       SELECT r.*, q.eval_date as linked_eval_date, q.overall_score as linked_eval_score, q.call_id as linked_eval_call_id
       FROM coaching_requests r
+      INNER JOIN agents a ON r.agent_name = a.name
       LEFT JOIN qa_evaluations q ON r.linked_evaluation_id = q.id
+      WHERE a.active = 1
     `
     const params: any[] = []
 
     if (!isMaster) {
-      query += ' WHERE r.agent_name = ?'
+      query += ' AND r.agent_name = ?'
       params.push(userName)
     }
 
@@ -32,7 +34,7 @@ export async function GET(req: NextRequest) {
     const rows = db.prepare(query).all(...params)
 
     // Fail-safe filtering for allowed agents (must exist as active regular user)
-    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
+    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string }[]
     const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     
     const filteredRows = rows.filter((r: any) => {
