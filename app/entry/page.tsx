@@ -56,6 +56,7 @@ export default function EntryPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  const [viewLob, setViewLob] = useState<string>('All')
 
   // Fetch active regular users on mount — these are the agents shown in the form
   useEffect(() => {
@@ -131,6 +132,7 @@ export default function EntryPage() {
   function resetForm() {
     setEntries(activeAgentsList.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
     setDate(today)
+    setViewLob('All')
     setError('')
     setSuccess(false)
   }
@@ -171,16 +173,19 @@ export default function EntryPage() {
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Daily Entry</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               Log today's performance metrics for all active agents
-              {!loadingAgents && activeAgentsList.length > 0 && (
-                <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>
-                  · {activeAgentsList.length} agent{activeAgentsList.length !== 1 ? 's' : ''} active
-                </span>
-              )}
+              {!loadingAgents && activeAgentsList.length > 0 && (() => {
+                const count = entries.filter((e) => viewLob === 'All' || e.lob === viewLob).length
+                return (
+                  <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>
+                    · {count} agent{count !== 1 ? 's' : ''} shown (of {activeAgentsList.length} active)
+                  </span>
+                )
+              })()}
             </p>
           </div>
 
-          {/* Date picker */}
-          <div className="glass-card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {/* Date picker and LOB filter toggle */}
+          <div className="glass-card" style={{ padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
             <div>
               <label className="field-label">Report Date</label>
               <input
@@ -191,6 +196,28 @@ export default function EntryPage() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
+            </div>
+            <div>
+              <label className="field-label">Line of Business Filter</label>
+              <select
+                id="entry-lob-filter"
+                className="input-field"
+                style={{
+                  width: 200,
+                  marginBottom: 0,
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600
+                }}
+                value={viewLob}
+                onChange={(e) => setViewLob(e.target.value)}
+              >
+                <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All Specialists</option>
+                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Specialists</option>
+                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Specialists</option>
+              </select>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
               <button id="btn-reset" type="button" className="btn-secondary" onClick={resetForm}>Reset</button>
@@ -231,6 +258,7 @@ export default function EntryPage() {
             <form onSubmit={handleSubmit}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {entries.map((entry, idx) => {
+                  if (viewLob !== 'All' && entry.lob !== viewLob) return null
                   const color = COLOR_PALETTE[idx % COLOR_PALETTE.length]
                   const rate = getRate(entry)
                   const total = getTotal(entry)
