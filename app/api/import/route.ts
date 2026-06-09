@@ -59,14 +59,14 @@ export async function POST(req: NextRequest) {
   const iInbound = col('Inbound')
   const iRejected = col('Rejected')
   const iCrh = col('CRH')
-  const iSigned = col('Signed Retainers')
-  const iUnsigned = col('Unsigned')
-  const iConverted = col('Converted')
+  const iSigned = col('Signed') // Matches 'Signed' and 'Signed Retainers'
+  const iUnsigned = col('Unsign') // Matches 'Unsigned' and 'Unsign'
+  const iConverted = col('Transferred') !== -1 ? col('Transferred') : col('Converted') // Matches 'Total Transferred Cases' and 'Converted'
   const iRfc = col('RFC')
-  const iWeek = col('Semana')
-  const iPresent = col('Presente')
+  const iWeek = col('Week') !== -1 ? col('Week') : col('Semana') // Matches 'Week' and 'Semana'
+  const iPresent = col('Present') !== -1 ? col('Present') : col('Presente') // Matches 'Present' and 'Presente'
 
-  // Detect SSD sheet: if Converted or RFC exists
+  // Detect SSD sheet: if Converted/Transferred or RFC exists
   const isSSDSheet = iConverted !== -1 || iRfc !== -1
 
   const db = getDb()
