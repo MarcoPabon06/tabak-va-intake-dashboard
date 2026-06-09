@@ -9,7 +9,15 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = getDb()
-  const agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
+  const userRole = (session.user as any)?.role || 'regular'
+  const userLob = (session.user as any)?.lob || 'VA'
+
+  let agents: any[]
+  if (userRole === 'regular') {
+    agents = db.prepare('SELECT * FROM agents WHERE lob = ? ORDER BY name').all(userLob)
+  } else {
+    agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
+  }
 
   // Fail-safe filtering for allowed agents (must exist as regular user in users table)
   const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]

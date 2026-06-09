@@ -27,7 +27,7 @@ export default function DashboardPage() {
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [activePreset, setActivePreset] = useState('This month')
-  const [selectedLob, setSelectedLob] = useState<string>('VA')
+  const [selectedLob, setSelectedLob] = useState<string>('')
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
@@ -40,7 +40,7 @@ export default function DashboardPage() {
   }, [session])
 
   const fetchData = useCallback(async () => {
-    if (status === 'loading') return
+    if (status === 'loading' || !selectedLob) return
     setLoading(true)
     try {
       const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''

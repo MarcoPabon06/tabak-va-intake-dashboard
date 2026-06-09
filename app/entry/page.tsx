@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
 import { format } from 'date-fns'
 
@@ -47,6 +48,7 @@ function emptyEntry(agent: string, lob: string): AgentEntry {
 }
 
 export default function EntryPage() {
+  const { data: session } = useSession()
   const router = useRouter()
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
@@ -57,6 +59,13 @@ export default function EntryPage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [viewLob, setViewLob] = useState<string>('All')
+
+  useEffect(() => {
+    if (session?.user) {
+      const u = session.user as any
+      setViewLob(u.lob || 'VA')
+    }
+  }, [session])
 
   // Fetch active regular users on mount — these are the agents shown in the form
   useEffect(() => {

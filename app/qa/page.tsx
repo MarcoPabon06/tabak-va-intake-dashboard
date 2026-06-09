@@ -689,7 +689,7 @@ export default function QAPage() {
   const [requestModalEvalId, setRequestModalEvalId] = useState<number | null>(null)
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestError, setRequestError] = useState('')
-  const [selectedLob, setSelectedLob] = useState<string>('VA')
+  const [selectedLob, setSelectedLob] = useState<string>('')
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
@@ -710,7 +710,7 @@ export default function QAPage() {
   }
 
   const fetchEvals = () => {
-    if (status === 'loading') return
+    if (status === 'loading' || (isMaster && !selectedLob)) return
     const lobParam = isMaster ? `?lob=${selectedLob}` : `?agent=${encodeURIComponent(userName)}`
     fetch(`/api/qa${lobParam}`)
       .then((r) => r.json())

@@ -7,6 +7,9 @@ import { authOptions } from '@/lib/auth'
 // GET /api/qa?agent=Name&from=2025-01-01&to=2025-12-31
 export async function GET(req: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { searchParams } = new URL(req.url)
     const agent = searchParams.get('agent')
     const from = searchParams.get('from') || '2000-01-01'
@@ -14,6 +17,9 @@ export async function GET(req: Request) {
     const lob = searchParams.get('lob') || null
 
     const db = getDb()
+    const userRole = (session.user as any)?.role || 'regular'
+    const userName = session.user?.name || ''
+
     let query = `
       SELECT q.*, a.lob 
       FROM qa_evaluations q
@@ -24,14 +30,18 @@ export async function GET(req: Request) {
     `
     const params: any[] = [from, to]
 
-    if (agent) {
+    if (userRole === 'regular') {
       query += ' AND q.agent_name = ?'
-      params.push(agent)
-    }
-
-    if (lob) {
-      query += ' AND a.lob = ?'
-      params.push(lob)
+      params.push(userName)
+    } else {
+      if (agent) {
+        query += ' AND q.agent_name = ?'
+        params.push(agent)
+      }
+      if (lob && lob !== 'All') {
+        query += ' AND a.lob = ?'
+        params.push(lob)
+      }
     }
 
     query += ' ORDER BY q.eval_date DESC'

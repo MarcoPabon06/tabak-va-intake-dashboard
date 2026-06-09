@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { sendNotification } from '@/lib/notifications'
@@ -35,6 +37,11 @@ function matchAgentName(excelName: string, dbUsers: string[]): string {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || (session.user as any)?.role !== 'master') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const formData = await req.formData()
     const file = formData.get('file') as File
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })

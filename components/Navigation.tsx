@@ -62,7 +62,9 @@ export default function Navigation() {
           }}>⚡</div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-0.01em' }}>Tabak LLC</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Veterans Benefits</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+              {isMaster ? 'Intake Management' : ((session?.user as any)?.lob === 'SSD' ? 'SSD Division' : 'Veterans Benefits')}
+            </div>
           </div>
         </div>
       </div>
