@@ -4,6 +4,45 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 
+function parseDateString(str: string): string {
+  str = str.trim()
+  // If it's already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
+
+  // If it has a timestamp, e.g. YYYY-MM-DDTHH:MM:SS...
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+    return str.split('T')[0]
+  }
+
+  // Check for MM/DD/YYYY or DD/MM/YYYY or MM-DD-YYYY or DD-MM-YYYY
+  const match = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/)
+  if (match) {
+    let p1 = match[1].padStart(2, '0')
+    let p2 = match[2].padStart(2, '0')
+    let y = match[3]
+    if (y.length === 2) {
+      y = '20' + y // Convert YY to 20YY
+    }
+    
+    // Usually, spreadsheets use MM/DD/YYYY or DD/MM/YYYY.
+    // If p1 > 12, it must be DD/MM/YYYY.
+    if (parseInt(p1) > 12) {
+      return `${y}-${p2}-${p1}` // YYYY-MM-DD
+    } else {
+      // Default to MM/DD/YYYY (standard US Excel format)
+      return `${y}-${p1}-${p2}` // YYYY-MM-DD
+    }
+  }
+
+  // Fallback to JS Date parsing
+  const parsed = new Date(str)
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0]
+  }
+
+  return str
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'master') {
@@ -156,7 +195,7 @@ export async function POST(req: NextRequest) {
         const d = XLSX.SSF.parse_date_code(dateVal)
         dateStr = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
       } else if (typeof dateVal === 'string') {
-        dateStr = dateVal.split('T')[0]
+        dateStr = parseDateString(dateVal)
       } else {
         skipped++; continue
       }

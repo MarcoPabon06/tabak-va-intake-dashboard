@@ -209,6 +209,9 @@ function initSchema(db: Database.Database) {
     db.prepare(`DELETE FROM coaching_requests WHERE agent_name NOT IN (${placeholders})`).run(...allowedAgents)
     db.prepare(`DELETE FROM agents WHERE name NOT IN (${placeholders})`).run(...allowedAgents)
   }
+
+  // Clean up any daily performance records with invalid date formats (e.g. MM/DD/YYYY)
+  db.exec("DELETE FROM daily_performance WHERE date NOT LIKE '____-__-__'")
 }
 
 export default getDb
