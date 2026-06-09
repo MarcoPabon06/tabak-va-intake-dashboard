@@ -122,13 +122,24 @@ export async function POST(req: NextRequest) {
   const headers: any[] = rows[headerIdx]
   const dataRows = rows.slice(headerIdx + 1)
 
-  // Map column indices with robust candidate matching
+  // Map column indices with robust candidate matching (exact matches prioritized)
   const findColumn = (candidates: string[]) => {
-    return headers.findIndex((h) => {
+    // 1. Try exact matches first (case-insensitive)
+    let idx = headers.findIndex((h) => {
       if (h === null || h === undefined) return false
       const val = h.toString().trim().toLowerCase()
-      return candidates.some(c => val === c || val.includes(c))
+      return candidates.some(c => val === c.toLowerCase())
     })
+    
+    // 2. Fall back to substring matches if exact match is not found
+    if (idx === -1) {
+      idx = headers.findIndex((h) => {
+        if (h === null || h === undefined) return false
+        const val = h.toString().trim().toLowerCase()
+        return candidates.some(c => val.includes(c.toLowerCase()))
+      })
+    }
+    return idx
   }
 
   const iDate = findColumn(['date', 'fecha'])
