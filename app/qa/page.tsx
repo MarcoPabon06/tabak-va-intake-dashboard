@@ -675,7 +675,7 @@ function RequestFeedbackModal({
 }
 
 export default function QAPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const [evals, setEvals] = useState<Evaluation[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
@@ -698,9 +698,7 @@ export default function QAPage() {
   useEffect(() => {
     if (session?.user) {
       const u = session.user as any
-      if (u.role === 'regular') {
-        setSelectedLob(u.lob || 'VA')
-      }
+      setSelectedLob(u.lob || 'VA')
     }
   }, [session])
 
@@ -712,6 +710,7 @@ export default function QAPage() {
   }
 
   const fetchEvals = () => {
+    if (status === 'loading') return
     const lobParam = isMaster ? `?lob=${selectedLob}` : `?agent=${encodeURIComponent(userName)}`
     fetch(`/api/qa${lobParam}`)
       .then((r) => r.json())
@@ -721,9 +720,11 @@ export default function QAPage() {
   }
 
   useEffect(() => {
-    fetchEvals()
-    fetchRequests()
-  }, [isMaster, userName, selectedLob])
+    if (status !== 'loading') {
+      fetchEvals()
+      fetchRequests()
+    }
+  }, [isMaster, userName, selectedLob, status])
 
   const handleAcknowledge = async (id: number) => {
     try {

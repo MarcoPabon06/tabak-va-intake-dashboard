@@ -20,7 +20,7 @@ const PRESETS = [
 ]
 
 export default function DashboardPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const [data, setData] = useState<any[]>([])
   const [goals, setGoals] = useState<GoalSettings | undefined>(undefined)
   const [loading, setLoading] = useState(true)
@@ -35,13 +35,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user) {
       const u = session.user as any
-      if (u.role === 'regular') {
-        setSelectedLob(u.lob || 'VA')
-      }
+      setSelectedLob(u.lob || 'VA')
     }
   }, [session])
 
   const fetchData = useCallback(async () => {
+    if (status === 'loading') return
     setLoading(true)
     try {
       const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
@@ -53,9 +52,13 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [from, to, selectedLob])
+  }, [from, to, selectedLob, status])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    if (status !== 'loading') {
+      fetchData()
+    }
+  }, [fetchData, status])
 
   // Fetch goal settings once
   useEffect(() => {

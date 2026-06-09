@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
   const lob = searchParams.get('lob') || null
 
   const db = getDb()
+  const userRole = (session.user as any)?.role || 'regular'
+  const userLob = (session.user as any)?.lob || 'VA'
 
   let query = `
     SELECT dp.*, a.lob 
@@ -29,7 +31,12 @@ export async function GET(req: NextRequest) {
     params.push(agent)
   }
 
-  if (lob) {
+  // Enforce LOB filter: regular users are locked to their own LOB.
+  // Master admins can request a specific LOB or get all if they request 'All' or no lob parameter.
+  if (userRole === 'regular') {
+    query += ` AND a.lob = ?`
+    params.push(userLob)
+  } else if (lob && lob !== 'All') {
     query += ` AND a.lob = ?`
     params.push(lob)
   }
