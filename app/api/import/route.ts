@@ -35,10 +35,28 @@ export async function POST(req: NextRequest) {
   const ws = workbook.Sheets[sheetName]
   const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 })
 
-  // Find header row (row with 'Agent name')
+  // Find header row (row with agent/specialist and date/performance indicators)
   let headerIdx = -1
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
-    if (rows[i].includes('Agent name') || rows[i].includes('agent_name')) {
+  const agentCandidates = ['agent name', 'agent_name', 'agent', 'rep', 'specialist', 'nombre', 'especialista', 'asesor']
+  const validationCandidates = ['date', 'fecha', 'signed', 'firmado', 'capd', 'present', 'presente', 'week', 'semana', 'transferred', 'converted', 'rfc']
+
+  for (let i = 0; i < Math.min(rows.length, 50); i++) {
+    const row = rows[i]
+    if (!Array.isArray(row)) continue
+
+    const hasAgent = row.some(cell => {
+      if (cell === null || cell === undefined) return false
+      const val = cell.toString().trim().toLowerCase()
+      return agentCandidates.some(c => val === c || val.includes(c))
+    })
+
+    const hasValidation = row.some(cell => {
+      if (cell === null || cell === undefined) return false
+      const val = cell.toString().trim().toLowerCase()
+      return validationCandidates.some(c => val === c || val.includes(c))
+    })
+
+    if (hasAgent && hasValidation) {
       headerIdx = i
       break
     }
@@ -48,23 +66,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Could not find header row in sheet "${sheetName}"` }, { status: 400 })
   }
 
-  const headers: string[] = rows[headerIdx]
+  const headers: any[] = rows[headerIdx]
   const dataRows = rows.slice(headerIdx + 1)
 
-  // Map column indices
-  const col = (name: string) => headers.findIndex((h) => h && h.toString().toLowerCase().includes(name.toLowerCase()))
-  const iDate = col('DATE')
-  const iAgent = col('Agent name')
-  const iCapd = col('CAPD')
-  const iInbound = col('Inbound')
-  const iRejected = col('Rejected')
-  const iCrh = col('CRH')
-  const iSigned = col('Signed') // Matches 'Signed' and 'Signed Retainers'
-  const iUnsigned = col('Unsign') // Matches 'Unsigned' and 'Unsign'
-  const iConverted = col('Transferred') !== -1 ? col('Transferred') : col('Converted') // Matches 'Total Transferred Cases' and 'Converted'
-  const iRfc = col('RFC')
-  const iWeek = col('Week') !== -1 ? col('Week') : col('Semana') // Matches 'Week' and 'Semana'
-  const iPresent = col('Present') !== -1 ? col('Present') : col('Presente') // Matches 'Present' and 'Presente'
+  // Map column indices with robust candidate matching
+  const findColumn = (candidates: string[]) => {
+    return headers.findIndex((h) => {
+      if (h === null || h === undefined) return false
+      const val = h.toString().trim().toLowerCase()
+      return candidates.some(c => val === c || val.includes(c))
+    })
+  }
+
+  const iDate = findColumn(['date', 'fecha'])
+  const iAgent = findColumn(['agent name', 'agent_name', 'agent', 'rep', 'specialist', 'nombre', 'especialista', 'asesor'])
+  const iCapd = findColumn(['capd'])
+  const iInbound = findColumn(['inbound', 'entrante'])
+  const iRejected = findColumn(['rejected', 'reject', 'rechazad'])
+  const iCrh = findColumn(['crh', 'refused'])
+  const iSigned = findColumn(['signed', 'firmado', 'signed retainers'])
+  const iUnsigned = findColumn(['unsigned', 'unsign', 'no firmado'])
+  const iConverted = findColumn(['transferred', 'converted', 'convertido', 'transferido'])
+  const iRfc = findColumn(['rfc'])
+  const iWeek = findColumn(['week', 'semana'])
+  const iPresent = findColumn(['present', 'presente'])
+
+  if (iDate === -1 || iAgent === -1) {
+    return NextResponse.json({ error: `Could not identify required columns (Date and Agent Name) in sheet "${sheetName}"` }, { status: 400 })
+  }
 
   // Detect SSD sheet: if Converted/Transferred or RFC exists
   const isSSDSheet = iConverted !== -1 || iRfc !== -1
