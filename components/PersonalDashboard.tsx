@@ -29,6 +29,8 @@ interface Row {
   crh: number
   signed_retainers: number
   unsigned_retainers: number
+  converted_cases?: number
+  rfc_sent?: number
   total_case_wanted: number
   signed_success_rate: number
   present: string
@@ -38,6 +40,7 @@ interface Props {
   allData: Row[]          // all agents for the period (for ranking)
   agentName: string       // current user's display_name
   goals?: GoalSettings    // admin-configured goals (fetched from API)
+  lob?: string            // active LOB
 }
 
 // ─── Helper ──────────────────────────────────────────────────────────────
@@ -48,15 +51,21 @@ function progressColor(pct: number) {
   return '#ef4444'
 }
 
-export default function PersonalDashboard({ allData, agentName, goals }: Props) {
+export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA' }: Props) {
   const g = goals || DEFAULT_GOALS
   const myData = allData.filter((r) => r.agent_name === agentName)
 
   // ── Totals ──
   const totalSigned = myData.reduce((s, r) => s + (r.signed_retainers || 0), 0)
   const totalUnsigned = myData.reduce((s, r) => s + (r.unsigned_retainers || 0), 0)
+  const totalConverted = myData.reduce((s, r) => s + (r.converted_cases || 0), 0)
+  const totalRfc = myData.reduce((s, r) => s + (r.rfc_sent || 0), 0)
   const totalCases = totalSigned + totalUnsigned
-  const convRate = totalCases > 0 ? (totalSigned / totalCases) * 100 : 0
+  
+  const convRate = lob === 'SSD'
+    ? (totalSigned > 0 ? (totalConverted / totalSigned) * 100 : 0)
+    : (totalCases > 0 ? (totalSigned / totalCases) * 100 : 0)
+
   const totalCrh = myData.reduce((s, r) => s + (r.crh || 0), 0)
   const totalRejected = myData.reduce((s, r) => s + (r.case_rejected || 0), 0)
   const presentRows = myData.filter((r) => r.present === 'SI')
@@ -66,25 +75,28 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
   const daysWorked = new Set(myData.map((r) => r.date)).size
 
   // ── Goals ──
-  const signedPct = Math.min(Math.round((totalSigned / (g.goal_signed_retainers || 35)) * 100), 150)
+  const primaryVolume = lob === 'SSD' ? totalConverted : totalSigned
+  const signedPct = Math.min(Math.round((primaryVolume / (g.goal_signed_retainers || 35)) * 100), 150)
   const convPct = Math.min(Math.round((convRate / (g.goal_conversion_rate || 65)) * 100), 150)
   const capdPct = Math.min(Math.round((avgCapd / (g.goal_avg_capd || 40)) * 100), 150)
 
   // ── Ranking ──
+  const rankingMetric = lob === 'SSD' ? 'converted_cases' : 'signed_retainers'
   const agentTotals: Record<string, number> = {}
   for (const r of allData) {
-    agentTotals[r.agent_name] = (agentTotals[r.agent_name] || 0) + (r.signed_retainers || 0)
+    agentTotals[r.agent_name] = (agentTotals[r.agent_name] || 0) + (r[rankingMetric] || 0)
   }
   const sorted = Object.entries(agentTotals).sort((a, b) => b[1] - a[1])
   const myRank = sorted.findIndex(([n]) => n === agentName) + 1
   const totalAgents = sorted.length
 
   // ── Daily trend (for mini chart) ──
-  const byDate: Record<string, { signed: number; capd: number }> = {}
+  const byDate: Record<string, { signed: number; capd: number; converted: number }> = {}
   for (const r of myData) {
-    if (!byDate[r.date]) byDate[r.date] = { signed: 0, capd: 0 }
+    if (!byDate[r.date]) byDate[r.date] = { signed: 0, capd: 0, converted: 0 }
     byDate[r.date].signed += r.signed_retainers || 0
     byDate[r.date].capd += r.capd || 0
+    byDate[r.date].converted += r.converted_cases || 0
   }
   const trendData = Object.entries(byDate)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -92,6 +104,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
       date: date.slice(5), // MM-DD
       signed: vals.signed,
       capd: vals.capd,
+      converted: vals.converted,
     }))
 
   // ── Weekly comparison ──
@@ -102,16 +115,16 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
   const thisWeekStr = thisWeekStart.toISOString().slice(0, 10)
   const lastWeekStr = lastWeekStart.toISOString().slice(0, 10)
 
-  const thisWeekSigned = myData
+  const thisWeekVal = myData
     .filter((r) => r.date >= thisWeekStr)
-    .reduce((s, r) => s + (r.signed_retainers || 0), 0)
-  const lastWeekSigned = myData
+    .reduce((s, r) => s + (r[rankingMetric] || 0), 0)
+  const lastWeekVal = myData
     .filter((r) => r.date >= lastWeekStr && r.date < thisWeekStr)
-    .reduce((s, r) => s + (r.signed_retainers || 0), 0)
-  const weekDiff = thisWeekSigned - lastWeekSigned
+    .reduce((s, r) => s + (r[rankingMetric] || 0), 0)
+  const weekDiff = thisWeekVal - lastWeekVal
 
   // ── Streak ──
-  const uniqueDates = [...new Set(myData.filter((r) => (r.signed_retainers || 0) > 0).map((r) => r.date))].sort().reverse()
+  const uniqueDates = [...new Set(myData.filter((r) => (r[rankingMetric] || 0) > 0).map((r) => r.date))].sort().reverse()
   let streak = 0
   const today = new Date()
   const checkDate = new Date(today)
@@ -136,6 +149,31 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
     )
   }
 
+  const streakLabel = lob === 'SSD' ? 'conversion streak' : 'signing streak'
+
+  const goalCards = [
+    { label: lob === 'SSD' ? 'Converted Cases' : 'Signed Retainers', value: primaryVolume, goal: g.goal_signed_retainers, pct: signedPct, icon: lob === 'SSD' ? '💼' : '✅', unit: '' },
+    { label: 'Conversion Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
+    { label: 'Avg CAPD', value: avgCapd, goal: g.goal_avg_capd, pct: capdPct, icon: '📞', unit: '' },
+  ]
+
+  const kpiCards = lob === 'SSD' ? [
+    { label: 'Total Converted', value: totalConverted, color: '#10b981', icon: '💼' },
+    { label: 'Total Signed', value: totalSigned, color: '#3b82f6', icon: '✅' },
+    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
+    { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
+    { label: 'RFC Sent', value: totalRfc, color: '#ec4899', icon: '📄' },
+    { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
+    { label: 'Rejected', value: totalRejected, color: '#94a3b8', icon: '❌' },
+  ] : [
+    { label: 'Total Signed', value: totalSigned, color: '#10b981', icon: '✅' },
+    { label: 'Total Unsigned', value: totalUnsigned, color: '#f59e0b', icon: '⏳' },
+    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
+    { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
+    { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
+    { label: 'Rejected', value: totalRejected, color: '#94a3b8', icon: '❌' },
+  ]
+
   return (
     <div style={{ marginBottom: 28 }}>
       {/* Welcome banner */}
@@ -146,7 +184,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
         borderColor: 'rgba(99,102,241,0.25)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div>
+          <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
               Welcome back, {agentName.split(' ')[0]}! 👋
             </h2>
@@ -154,7 +192,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
               {daysWorked} day{daysWorked !== 1 ? 's' : ''} tracked this period
               {streak > 0 && (
                 <span style={{ marginLeft: 12, color: '#f59e0b', fontWeight: 600 }}>
-                  🔥 {streak}-day signing streak
+                  🔥 {streak}-day {streakLabel}
                 </span>
               )}
             </p>
@@ -175,7 +213,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
             {/* Week comparison */}
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 2 }}>This week</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{thisWeekSigned}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>{thisWeekVal}</div>
               <div style={{ fontSize: 11, color: weekDiff >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
                 {weekDiff >= 0 ? '▲' : '▼'} {Math.abs(weekDiff)} vs last week
               </div>
@@ -192,11 +230,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
 
       {/* Goal Progress Bars */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
-        {[
-          { label: 'Signed Retainers', value: totalSigned, goal: g.goal_signed_retainers, pct: signedPct, icon: '✅', unit: '' },
-          { label: 'Conversion Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
-          { label: 'Avg CAPD', value: avgCapd, goal: g.goal_avg_capd, pct: capdPct, icon: '📞', unit: '' },
-        ].map((g) => (
+        {goalCards.map((g) => (
           <div key={g.label} className="glass-card fade-in" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{g.icon} {g.label}</span>
@@ -229,16 +263,15 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
       </div>
 
       {/* Personal KPI Cards Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginBottom: 16 }}>
-        {[
-          { label: 'Total Signed', value: totalSigned, color: '#10b981', icon: '✅' },
-          { label: 'Total Unsigned', value: totalUnsigned, color: '#f59e0b', icon: '⏳' },
-          { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
-          { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
-          { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
-          { label: 'Rejected', value: totalRejected, color: '#94a3b8', icon: '❌' },
-        ].map((c) => (
-          <div key={c.label} className="glass-card fade-in" style={{ padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${kpiCards.length}, 1fr)`,
+        gap: 14,
+        marginBottom: 16,
+        overflowX: 'auto',
+      }}>
+        {kpiCards.map((c) => (
+          <div key={c.label} className="glass-card fade-in" style={{ padding: '14px 16px', position: 'relative', overflow: 'hidden', minWidth: 120 }}>
             <div style={{ position: 'absolute', top: -15, right: -15, width: 60, height: 60, borderRadius: '50%', background: `radial-gradient(circle, ${c.color}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
             <span style={{ fontSize: 18, display: 'block', marginBottom: 8 }}>{c.icon}</span>
             <div style={{ fontSize: 24, fontWeight: 800, color: c.color, lineHeight: 1, marginBottom: 4 }}>{c.value}</div>
@@ -251,14 +284,14 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div className="glass-card" style={{ padding: '20px 16px' }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-            My Signed Retainers Trend
+            My {lob === 'SSD' ? 'Converted Cases' : 'Signed Retainers'} Trend
           </h3>
           <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={trendData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
               <defs>
-                <linearGradient id="signedGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={lob === 'SSD' ? '#10b981' : '#3b82f6'} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={lob === 'SSD' ? '#10b981' : '#3b82f6'} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -268,7 +301,7 @@ export default function PersonalDashboard({ allData, agentName, goals }: Props) 
                 contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, fontSize: 13 }}
                 labelStyle={{ color: '#f8fafc', fontWeight: 700 }}
               />
-              <Area type="monotone" dataKey="signed" stroke="#10b981" fill="url(#signedGrad)" strokeWidth={2} name="Signed" />
+              <Area type="monotone" dataKey={lob === 'SSD' ? 'converted' : 'signed'} stroke={lob === 'SSD' ? '#10b981' : '#3b82f6'} fill="url(#trendGrad)" strokeWidth={2} name={lob === 'SSD' ? 'Converted' : 'Signed'} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

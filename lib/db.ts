@@ -27,13 +27,15 @@ function initSchema(db: Database.Database) {
       role TEXT NOT NULL CHECK(role IN ('master', 'regular')),
       display_name TEXT,
       active INTEGER DEFAULT 1,
+      lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD')),
       created_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS agents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,
-      active INTEGER DEFAULT 1
+      active INTEGER DEFAULT 1,
+      lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD'))
     );
 
     CREATE TABLE IF NOT EXISTS daily_performance (
@@ -46,6 +48,8 @@ function initSchema(db: Database.Database) {
       crh INTEGER DEFAULT 0,
       signed_retainers INTEGER DEFAULT 0,
       unsigned_retainers INTEGER DEFAULT 0,
+      converted_cases INTEGER DEFAULT 0,
+      rfc_sent INTEGER DEFAULT 0,
       total_case_wanted INTEGER DEFAULT 0,
       signed_success_rate REAL DEFAULT 0,
       week_label TEXT DEFAULT '',
@@ -161,6 +165,10 @@ function initSchema(db: Database.Database) {
   const alterColumns = [
     { table: 'users', column: 'display_name', definition: 'TEXT' },
     { table: 'users', column: 'active', definition: 'INTEGER DEFAULT 1' },
+    { table: 'users', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD'))" },
+    { table: 'agents', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD'))" },
+    { table: 'daily_performance', column: 'converted_cases', definition: 'INTEGER DEFAULT 0' },
+    { table: 'daily_performance', column: 'rfc_sent', definition: 'INTEGER DEFAULT 0' },
     { table: 'qa_evaluations', column: 'status', definition: "TEXT DEFAULT 'Pending Acknowledgement'" },
     { table: 'qa_evaluations', column: 'acknowledged_at', definition: 'TEXT' },
     { table: 'qa_evaluations', column: 'dispute_reason', definition: 'TEXT' },

@@ -27,14 +27,25 @@ export default function DashboardPage() {
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [activePreset, setActivePreset] = useState('This month')
+  const [selectedLob, setSelectedLob] = useState<string>('VA')
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
 
+  useEffect(() => {
+    if (session?.user) {
+      const u = session.user as any
+      if (u.role === 'regular') {
+        setSelectedLob(u.lob || 'VA')
+      }
+    }
+  }, [session])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/performance?from=${from}&to=${to}`)
+      const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
+      const res = await fetch(`/api/performance?from=${from}&to=${to}${lobParam}`)
       const json = await res.json()
       setData(Array.isArray(json) ? json : [])
     } catch {
@@ -42,7 +53,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [from, to])
+  }, [from, to, selectedLob])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -78,14 +89,41 @@ export default function DashboardPage() {
         background: 'radial-gradient(ellipse at 70% 0%, rgba(99,102,241,0.06) 0%, transparent 50%), var(--bg-primary)',
         minHeight: '100vh',
       }}>
-        {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-            {isRegular ? 'My Dashboard' : 'Team Performance'}
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            Veterans Benefits Division · Tabak LLC
-          </p>
+        {/* Header & LOB selector */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
+              {isRegular ? 'My Dashboard' : 'Team Performance'}
+            </h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+              {selectedLob === 'SSD' ? 'Social Security Disability Division' : selectedLob === 'VA' ? 'Veterans Benefits Division' : 'Unified Division'} · Tabak LLC
+            </p>
+          </div>
+
+          {!isRegular && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label className="field-label" style={{ marginBottom: 0, whiteSpace: 'nowrap', fontWeight: 600 }}>Filter LOB:</label>
+              <select
+                id="dashboard-lob-select"
+                value={selectedLob}
+                onChange={(e) => setSelectedLob(e.target.value)}
+                className="input-field"
+                style={{
+                  width: 200,
+                  marginBottom: 0,
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600
+                }}
+              >
+                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake Specialists</option>
+                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake Specialists</option>
+                <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All LOBs</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Date filters */}
@@ -142,7 +180,7 @@ export default function DashboardPage() {
           <>
             {/* ── Personal Dashboard (Regular users) ── */}
             {isRegular && userName && (
-              <PersonalDashboard allData={data} agentName={userName} goals={goals} />
+              <PersonalDashboard allData={data} agentName={userName} goals={goals} lob={selectedLob} />
             )}
 
             {/* ── Section divider for regular users ── */}
@@ -157,16 +195,16 @@ export default function DashboardPage() {
             )}
 
             {/* ── Team Dashboard (always shown) ── */}
-            <SummaryCards data={data} />
+            <SummaryCards data={data} lob={selectedLob} />
 
             {/* Charts Row 1 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
               <PerformanceLineChart
                 data={data}
-                metric="signed_retainers"
-                title="Signed Retainers Over Time"
+                metric={selectedLob === 'SSD' ? 'converted_cases' : 'signed_retainers'}
+                title={selectedLob === 'SSD' ? 'Converted Cases Over Time' : 'Signed Retainers Over Time'}
               />
-              <ConversionChart data={data} />
+              <ConversionChart data={data} lob={selectedLob} />
             </div>
 
             {/* Charts Row 2 */}
@@ -177,7 +215,7 @@ export default function DashboardPage() {
 
             {/* Leaderboard */}
             <div style={{ marginTop: 16 }}>
-              <Leaderboard data={data} />
+              <Leaderboard data={data} lob={selectedLob} />
             </div>
           </>
         )}

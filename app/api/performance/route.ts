@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 
-// GET /api/performance?from=YYYY-MM-DD&to=YYYY-MM-DD&agent=name
+// GET /api/performance?from=YYYY-MM-DD&to=YYYY-MM-DD&agent=name&lob=LOB
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -12,18 +12,29 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get('from') || '2020-01-01'
   const to = searchParams.get('to') || '2099-12-31'
   const agent = searchParams.get('agent') || null
+  const lob = searchParams.get('lob') || null
 
   const db = getDb()
 
-  let query = `SELECT * FROM daily_performance WHERE date >= ? AND date <= ?`
+  let query = `
+    SELECT dp.*, a.lob 
+    FROM daily_performance dp
+    INNER JOIN agents a ON dp.agent_name = a.name
+    WHERE dp.date >= ? AND dp.date <= ?
+  `
   const params: any[] = [from, to]
 
   if (agent) {
-    query += ` AND agent_name = ?`
+    query += ` AND dp.agent_name = ?`
     params.push(agent)
   }
 
-  query += ` ORDER BY date ASC, agent_name ASC`
+  if (lob) {
+    query += ` AND a.lob = ?`
+    params.push(lob)
+  }
+
+  query += ` ORDER BY dp.date ASC, dp.agent_name ASC`
 
   const rows = db.prepare(query).all(...params)
   return NextResponse.json(rows)
@@ -48,11 +59,11 @@ export async function POST(req: NextRequest) {
   const insert = db.prepare(`
     INSERT INTO daily_performance (
       date, agent_name, capd, inbound_calls, case_rejected, crh,
-      signed_retainers, unsigned_retainers, total_case_wanted,
+      signed_retainers, unsigned_retainers, converted_cases, rfc_sent, total_case_wanted,
       signed_success_rate, week_label, present, ura, reprocess
     ) VALUES (
       @date, @agent_name, @capd, @inbound_calls, @case_rejected, @crh,
-      @signed_retainers, @unsigned_retainers, @total_case_wanted,
+      @signed_retainers, @unsigned_retainers, @converted_cases, @rfc_sent, @total_case_wanted,
       @signed_success_rate, @week_label, @present, @ura, @reprocess
     )
     ON CONFLICT(date, agent_name) DO UPDATE SET
@@ -62,6 +73,8 @@ export async function POST(req: NextRequest) {
       crh = excluded.crh,
       signed_retainers = excluded.signed_retainers,
       unsigned_retainers = excluded.unsigned_retainers,
+      converted_cases = excluded.converted_cases,
+      rfc_sent = excluded.rfc_sent,
       total_case_wanted = excluded.total_case_wanted,
       signed_success_rate = excluded.signed_success_rate,
       week_label = excluded.week_label,
@@ -72,8 +85,23 @@ export async function POST(req: NextRequest) {
 
   const insertMany = db.transaction((rows: any[]) => {
     for (const row of rows) {
-      const total = (row.signed_retainers || 0) + (row.unsigned_retainers || 0)
-      const rate = total > 0 ? (row.signed_retainers || 0) / total : 0
+      // Query agent LOB from the database dynamically
+      const agentInfo = db.prepare('SELECT lob FROM agents WHERE name = ?').get(row.agent_name) as { lob?: string } | undefined
+      const isSSD = agentInfo?.lob === 'SSD'
+
+      let total = 0
+      let rate = 0
+
+      if (isSSD) {
+        // SSD: Conversion rate = Converted to Case / Signed Retainers
+        total = row.signed_retainers || 0
+        rate = total > 0 ? (row.converted_cases || 0) / total : 0
+      } else {
+        // VA: Conversion rate = Signed Retainers / (Signed + Unsigned)
+        total = (row.signed_retainers || 0) + (row.unsigned_retainers || 0)
+        rate = total > 0 ? (row.signed_retainers || 0) / total : 0
+      }
+
       insert.run({
         date,
         agent_name: row.agent_name,
@@ -83,6 +111,8 @@ export async function POST(req: NextRequest) {
         crh: row.crh || 0,
         signed_retainers: row.signed_retainers || 0,
         unsigned_retainers: row.unsigned_retainers || 0,
+        converted_cases: row.converted_cases || 0,
+        rfc_sent: row.rfc_sent || 0,
         total_case_wanted: total,
         signed_success_rate: rate,
         week_label: row.week_label || '',

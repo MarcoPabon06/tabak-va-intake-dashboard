@@ -8,6 +8,8 @@ interface Row {
   crh: number
   signed_retainers: number
   unsigned_retainers: number
+  converted_cases?: number
+  rfc_sent?: number
   total_case_wanted: number
   signed_success_rate: number
   present: string
@@ -15,6 +17,7 @@ interface Row {
 
 interface Props {
   data: Row[]
+  lob?: string
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -33,21 +36,24 @@ function getRateColor(rate: number) {
   return '#ef4444'
 }
 
-export default function Leaderboard({ data }: Props) {
+export default function Leaderboard({ data, lob = 'VA' }: Props) {
   // Aggregate per agent
   const byAgent: Record<string, {
     signed: number; unsigned: number; total: number
+    converted: number; rfc: number
     capd_total: number; capd_days: number
     crh: number; rejected: number; inbound: number
   }> = {}
 
   for (const row of data) {
     if (!byAgent[row.agent_name]) {
-      byAgent[row.agent_name] = { signed: 0, unsigned: 0, total: 0, capd_total: 0, capd_days: 0, crh: 0, rejected: 0, inbound: 0 }
+      byAgent[row.agent_name] = { signed: 0, unsigned: 0, total: 0, converted: 0, rfc: 0, capd_total: 0, capd_days: 0, crh: 0, rejected: 0, inbound: 0 }
     }
     const a = byAgent[row.agent_name]
     a.signed += row.signed_retainers || 0
     a.unsigned += row.unsigned_retainers || 0
+    a.converted += row.converted_cases || 0
+    a.rfc += row.rfc_sent || 0
     a.total += row.total_case_wanted || 0
     a.capd_total += row.capd || 0
     a.capd_days += 1
@@ -58,11 +64,22 @@ export default function Leaderboard({ data }: Props) {
 
   const rows = Object.entries(byAgent)
     .map(([agent, vals]) => {
-      const rate = vals.total > 0 ? vals.signed / vals.total : 0
+      let rate = 0
+      if (lob === 'SSD') {
+        rate = vals.signed > 0 ? vals.converted / vals.signed : 0
+      } else {
+        const total = vals.signed + vals.unsigned
+        rate = total > 0 ? vals.signed / total : 0
+      }
       const avgCapd = vals.capd_days > 0 ? Math.round(vals.capd_total / vals.capd_days) : 0
       return { agent, rate, avgCapd, ...vals }
     })
-    .sort((a, b) => b.signed - a.signed)
+    .sort((a, b) => {
+      if (lob === 'SSD') {
+        return b.converted - a.converted
+      }
+      return b.signed - a.signed
+    })
 
   return (
     <div className="glass-card" style={{ padding: '20px 0' }}>
@@ -78,9 +95,27 @@ export default function Leaderboard({ data }: Props) {
             <tr>
               <th>#</th>
               <th>Agent</th>
-              <th style={{ textAlign: 'right' }}>Signed</th>
-              <th style={{ textAlign: 'right' }}>Unsigned</th>
-              <th style={{ textAlign: 'right' }}>Conv. Rate</th>
+              {lob === 'SSD' ? (
+                <>
+                  <th style={{ textAlign: 'right' }}>Converted</th>
+                  <th style={{ textAlign: 'right' }}>Signed</th>
+                  <th style={{ textAlign: 'right' }}>RFC Sent</th>
+                  <th style={{ textAlign: 'right' }}>Conv. Rate</th>
+                </>
+              ) : lob === 'VA' ? (
+                <>
+                  <th style={{ textAlign: 'right' }}>Signed</th>
+                  <th style={{ textAlign: 'right' }}>Unsigned</th>
+                  <th style={{ textAlign: 'right' }}>Conv. Rate</th>
+                </>
+              ) : (
+                <>
+                  <th style={{ textAlign: 'right' }}>Signed</th>
+                  <th style={{ textAlign: 'right' }}>Converted</th>
+                  <th style={{ textAlign: 'right' }}>Unsigned</th>
+                  <th style={{ textAlign: 'right' }}>RFC Sent</th>
+                </>
+              )}
               <th style={{ textAlign: 'right' }}>Avg CAPD</th>
               <th style={{ textAlign: 'right' }}>Inbound</th>
               <th style={{ textAlign: 'right' }}>CRH</th>
@@ -112,20 +147,49 @@ export default function Leaderboard({ data }: Props) {
                       <span style={{ fontWeight: 600 }}>{row.agent}</span>
                     </div>
                   </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{row.signed}</td>
-                  <td style={{ textAlign: 'right', color: '#f59e0b' }}>{row.unsigned}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <span style={{
-                      fontWeight: 700,
-                      color: getRateColor(row.rate),
-                      background: `${getRateColor(row.rate)}18`,
-                      padding: '2px 8px',
-                      borderRadius: 6,
-                      fontSize: 13,
-                    }}>
-                      {(row.rate * 100).toFixed(1)}%
-                    </span>
-                  </td>
+                  {lob === 'SSD' ? (
+                    <>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{row.converted}</td>
+                      <td style={{ textAlign: 'right', color: '#3b82f6' }}>{row.signed}</td>
+                      <td style={{ textAlign: 'right', color: '#ec4899' }}>{row.rfc}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: getRateColor(row.rate),
+                          background: `${getRateColor(row.rate)}18`,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}>
+                          {(row.rate * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                    </>
+                  ) : lob === 'VA' ? (
+                    <>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{row.signed}</td>
+                      <td style={{ textAlign: 'right', color: '#f59e0b' }}>{row.unsigned}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: getRateColor(row.rate),
+                          background: `${getRateColor(row.rate)}18`,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}>
+                          {(row.rate * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#3b82f6' }}>{row.signed}</td>
+                      <td style={{ textAlign: 'right', color: '#10b981' }}>{row.converted}</td>
+                      <td style={{ textAlign: 'right', color: '#f59e0b' }}>{row.unsigned}</td>
+                      <td style={{ textAlign: 'right', color: '#ec4899' }}>{row.rfc}</td>
+                    </>
+                  )}
                   <td style={{ textAlign: 'right' }}>
                     <span style={{ color: row.avgCapd >= 40 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
                       {row.avgCapd}

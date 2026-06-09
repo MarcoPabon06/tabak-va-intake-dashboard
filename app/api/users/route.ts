@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDb()
   const users = db
-    .prepare('SELECT id, username, display_name, role, active, created_at FROM users ORDER BY id')
+    .prepare('SELECT id, username, display_name, role, active, lob, created_at FROM users ORDER BY id')
     .all()
 
   return NextResponse.json(users)
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { username, password, role, display_name } = body
+  const { username, password, role, display_name, lob } = body
 
   if (!username || !password || !role) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -36,19 +36,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
+  const userLob = lob === 'SSD' ? 'SSD' : 'VA'
   const db = getDb()
   const hash = await bcrypt.hash(password, 10)
 
   try {
     const result = db
       .prepare(
-        'INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)'
+        'INSERT INTO users (username, password_hash, role, display_name, lob) VALUES (?, ?, ?, ?, ?)'
       )
-      .run(username, hash, role, display_name || username)
+      .run(username, hash, role, display_name || username, userLob)
 
     // Sync to agents table: auto-add as active agent
     const actualDisplayName = (display_name || username).trim()
-    db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(actualDisplayName)
+    db.prepare('INSERT OR IGNORE INTO agents (name, active, lob) VALUES (?, 1, ?)').run(actualDisplayName, userLob)
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (e: any) {
@@ -67,7 +68,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { id, password, active, role, display_name } = body
+  const { id, password, active, role, display_name, lob } = body
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
@@ -109,6 +110,16 @@ export async function PATCH(req: NextRequest) {
     // Sync to agents table name change
     if (user?.display_name) {
       db.prepare('UPDATE agents SET name = ? WHERE name = ?').run(display_name.trim(), user.display_name.trim())
+    }
+  }
+
+  if (lob) {
+    if (!['VA', 'SSD'].includes(lob)) {
+      return NextResponse.json({ error: 'Invalid LOB value' }, { status: 400 })
+    }
+    db.prepare('UPDATE users SET lob = ? WHERE id = ?').run(lob, id)
+    if (user?.display_name) {
+      db.prepare('UPDATE agents SET lob = ? WHERE name = ?').run(lob, user.display_name.trim())
     }
   }
 

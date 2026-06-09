@@ -18,9 +18,18 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer())
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
 
-  const sheetName = 'Acumulado'
+  let sheetName = 'Acumulado'
   if (!workbook.SheetNames.includes(sheetName)) {
-    return NextResponse.json({ error: `Sheet "${sheetName}" not found in workbook` }, { status: 400 })
+    const alternate = workbook.SheetNames.find(n => n.toLowerCase().replace(/\s+/g, '') === 'grandtotal')
+    if (alternate) {
+      sheetName = alternate
+    } else {
+      sheetName = workbook.SheetNames[0]
+    }
+  }
+
+  if (!sheetName) {
+    return NextResponse.json({ error: 'No sheet found in workbook' }, { status: 400 })
   }
 
   const ws = workbook.Sheets[sheetName]
@@ -36,7 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (headerIdx === -1) {
-    return NextResponse.json({ error: 'Could not find header row in Acumulado sheet' }, { status: 400 })
+    return NextResponse.json({ error: `Could not find header row in sheet "${sheetName}"` }, { status: 400 })
   }
 
   const headers: string[] = rows[headerIdx]
@@ -52,21 +61,24 @@ export async function POST(req: NextRequest) {
   const iCrh = col('CRH')
   const iSigned = col('Signed Retainers')
   const iUnsigned = col('Unsigned')
-  const iTotal = col('Total Case')
-  const iRate = col('success rate')
+  const iConverted = col('Converted')
+  const iRfc = col('RFC')
   const iWeek = col('Semana')
   const iPresent = col('Presente')
+
+  // Detect SSD sheet: if Converted or RFC exists
+  const isSSDSheet = iConverted !== -1 || iRfc !== -1
 
   const db = getDb()
 
   const insert = db.prepare(`
     INSERT INTO daily_performance (
       date, agent_name, capd, inbound_calls, case_rejected, crh,
-      signed_retainers, unsigned_retainers, total_case_wanted,
+      signed_retainers, unsigned_retainers, converted_cases, rfc_sent, total_case_wanted,
       signed_success_rate, week_label, present
     ) VALUES (
       @date, @agent_name, @capd, @inbound_calls, @case_rejected, @crh,
-      @signed_retainers, @unsigned_retainers, @total_case_wanted,
+      @signed_retainers, @unsigned_retainers, @converted_cases, @rfc_sent, @total_case_wanted,
       @signed_success_rate, @week_label, @present
     )
     ON CONFLICT(date, agent_name) DO UPDATE SET
@@ -76,6 +88,8 @@ export async function POST(req: NextRequest) {
       crh = excluded.crh,
       signed_retainers = excluded.signed_retainers,
       unsigned_retainers = excluded.unsigned_retainers,
+      converted_cases = excluded.converted_cases,
+      rfc_sent = excluded.rfc_sent,
       total_case_wanted = excluded.total_case_wanted,
       signed_success_rate = excluded.signed_success_rate,
       week_label = excluded.week_label,
@@ -104,24 +118,50 @@ export async function POST(req: NextRequest) {
         skipped++; continue
       }
 
-      const signed = Number(row[iSigned]) || 0
-      const unsigned = Number(row[iUnsigned]) || 0
-      const total = signed + unsigned
+      const signed = iSigned !== -1 ? Number(row[iSigned]) || 0 : 0
 
-      insert.run({
-        date: dateStr,
-        agent_name: String(row[iAgent]).trim(),
-        capd: Number(row[iCapd]) || 0,
-        inbound_calls: Number(row[iInbound]) || 0,
-        case_rejected: Number(row[iRejected]) || 0,
-        crh: Number(row[iCrh]) || 0,
-        signed_retainers: signed,
-        unsigned_retainers: unsigned,
-        total_case_wanted: total,
-        signed_success_rate: total > 0 ? signed / total : 0,
-        week_label: String(row[iWeek] || ''),
-        present: String(row[iPresent] || 'SI'),
-      })
+      if (isSSDSheet) {
+        const converted = iConverted !== -1 ? Number(row[iConverted]) || 0 : 0
+        const rfc = iRfc !== -1 ? Number(row[iRfc]) || 0 : 0
+        
+        insert.run({
+          date: dateStr,
+          agent_name: String(row[iAgent]).trim(),
+          capd: iCapd !== -1 ? Number(row[iCapd]) || 0 : 0,
+          inbound_calls: iInbound !== -1 ? Number(row[iInbound]) || 0 : 0,
+          case_rejected: iRejected !== -1 ? Number(row[iRejected]) || 0 : 0,
+          crh: iCrh !== -1 ? Number(row[iCrh]) || 0 : 0,
+          signed_retainers: signed,
+          unsigned_retainers: 0,
+          converted_cases: converted,
+          rfc_sent: rfc,
+          total_case_wanted: signed,
+          signed_success_rate: signed > 0 ? converted / signed : 0,
+          week_label: iWeek !== -1 ? String(row[iWeek] || '') : '',
+          present: iPresent !== -1 ? String(row[iPresent] || 'SI') : 'SI',
+        })
+      } else {
+        const unsigned = iUnsigned !== -1 ? Number(row[iUnsigned]) || 0 : 0
+        const total = signed + unsigned
+
+        insert.run({
+          date: dateStr,
+          agent_name: String(row[iAgent]).trim(),
+          capd: iCapd !== -1 ? Number(row[iCapd]) || 0 : 0,
+          inbound_calls: iInbound !== -1 ? Number(row[iInbound]) || 0 : 0,
+          case_rejected: iRejected !== -1 ? Number(row[iRejected]) || 0 : 0,
+          crh: iCrh !== -1 ? Number(row[iCrh]) || 0 : 0,
+          signed_retainers: signed,
+          unsigned_retainers: unsigned,
+          converted_cases: 0,
+          rfc_sent: 0,
+          total_case_wanted: total,
+          signed_success_rate: total > 0 ? signed / total : 0,
+          week_label: iWeek !== -1 ? String(row[iWeek] || '') : '',
+          present: iPresent !== -1 ? String(row[iPresent] || 'SI') : 'SI',
+        })
+      }
+      
       imported++
     }
   })

@@ -9,6 +9,8 @@ interface Row {
   crh: number
   signed_retainers: number
   unsigned_retainers: number
+  converted_cases?: number
+  rfc_sent?: number
   total_case_wanted: number
   signed_success_rate: number
   present: string
@@ -16,6 +18,7 @@ interface Row {
 
 interface Props {
   data: Row[]
+  lob?: string
 }
 
 interface Card {
@@ -28,11 +31,11 @@ interface Card {
   trend?: 'up' | 'down' | 'neutral'
 }
 
-export default function SummaryCards({ data }: Props) {
+export default function SummaryCards({ data, lob = 'VA' }: Props) {
   const totalSigned = data.reduce((s, r) => s + (r.signed_retainers || 0), 0)
   const totalUnsigned = data.reduce((s, r) => s + (r.unsigned_retainers || 0), 0)
-  const totalCases = totalSigned + totalUnsigned
-  const convRate = totalCases > 0 ? (totalSigned / totalCases) * 100 : 0
+  const totalConverted = data.reduce((s, r) => s + (r.converted_cases || 0), 0)
+  const totalRfc = data.reduce((s, r) => s + (r.rfc_sent || 0), 0)
   const totalCrh = data.reduce((s, r) => s + (r.crh || 0), 0)
   const totalRejected = data.reduce((s, r) => s + (r.case_rejected || 0), 0)
 
@@ -45,32 +48,115 @@ export default function SummaryCards({ data }: Props) {
   // Unique working days
   const uniqueDays = new Set(data.map((r) => r.date)).size
 
-  const cards: Card[] = [
-    {
-      id: 'card-signed',
-      label: 'Signed Retainers',
-      value: totalSigned,
-      sub: `${uniqueDays} days tracked`,
-      color: '#10b981',
-      icon: '✅',
-    },
-    {
-      id: 'card-conversion',
-      label: 'Conversion Rate',
-      value: `${convRate.toFixed(1)}%`,
-      sub: `${totalSigned} signed / ${totalCases} total`,
-      color: '#6366f1',
-      icon: '📈',
-      trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
-    },
-    {
-      id: 'card-unsigned',
-      label: 'Unsigned Retainers',
-      value: totalUnsigned,
-      sub: `Pending conversions`,
-      color: '#f59e0b',
-      icon: '⏳',
-    },
+  const cards: Card[] = []
+
+  if (lob === 'SSD') {
+    const convRate = totalSigned > 0 ? (totalConverted / totalSigned) * 100 : 0
+    cards.push(
+      {
+        id: 'card-converted',
+        label: 'Converted Cases',
+        value: totalConverted,
+        sub: `${uniqueDays} days tracked`,
+        color: '#10b981',
+        icon: '💼',
+      },
+      {
+        id: 'card-conversion',
+        label: 'SSD Conversion Rate',
+        value: `${convRate.toFixed(1)}%`,
+        sub: `${totalConverted} converted / ${totalSigned} signed`,
+        color: '#6366f1',
+        icon: '📈',
+        trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
+      },
+      {
+        id: 'card-signed',
+        label: 'Signed Retainers (Base)',
+        value: totalSigned,
+        sub: `Base pool for conversion`,
+        color: '#3b82f6',
+        icon: '✅',
+      },
+      {
+        id: 'card-rfc',
+        label: 'RFC Sent',
+        value: totalRfc,
+        sub: `Request for Counsel`,
+        color: '#ec4899',
+        icon: '📄',
+      }
+    )
+  } else if (lob === 'VA') {
+    const totalCases = totalSigned + totalUnsigned
+    const convRate = totalCases > 0 ? (totalSigned / totalCases) * 100 : 0
+    cards.push(
+      {
+        id: 'card-signed',
+        label: 'Signed Retainers',
+        value: totalSigned,
+        sub: `${uniqueDays} days tracked`,
+        color: '#10b981',
+        icon: '✅',
+      },
+      {
+        id: 'card-conversion',
+        label: 'VA Conversion Rate',
+        value: `${convRate.toFixed(1)}%`,
+        sub: `${totalSigned} signed / ${totalCases} total`,
+        color: '#6366f1',
+        icon: '📈',
+        trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
+      },
+      {
+        id: 'card-unsigned',
+        label: 'Unsigned Retainers',
+        value: totalUnsigned,
+        sub: `Pending conversions`,
+        color: '#f59e0b',
+        icon: '⏳',
+      }
+    )
+  } else {
+    // 'All' LOB
+    cards.push(
+      {
+        id: 'card-signed',
+        label: 'Signed Retainers',
+        value: totalSigned,
+        sub: `VA & SSD combined`,
+        color: '#3b82f6',
+        icon: '✅',
+      },
+      {
+        id: 'card-converted',
+        label: 'Converted Cases (SSD)',
+        value: totalConverted,
+        sub: `SSD only`,
+        color: '#10b981',
+        icon: '💼',
+      },
+      {
+        id: 'card-unsigned',
+        label: 'Unsigned Retainers (VA)',
+        value: totalUnsigned,
+        sub: `VA only`,
+        color: '#f59e0b',
+        icon: '⏳',
+      },
+      {
+        id: 'card-rfc',
+        label: 'RFC Sent (SSD)',
+        value: totalRfc,
+        sub: `SSD only`,
+        color: '#ec4899',
+        icon: '📄',
+      }
+    )
+  }
+
+  // Add common cards
+  cards.push(
     {
       id: 'card-capd',
       label: 'Avg CAPD',
@@ -95,8 +181,8 @@ export default function SummaryCards({ data }: Props) {
       sub: `Across all agents`,
       color: '#94a3b8',
       icon: '❌',
-    },
-  ]
+    }
+  )
 
   return (
     <div

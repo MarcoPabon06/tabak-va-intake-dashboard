@@ -21,11 +21,14 @@ interface AgentEntry {
   crh: number
   signed_retainers: number
   unsigned_retainers: number
+  converted_cases: number
+  rfc_sent: number
   ura: number
   reprocess: number
+  lob: string
 }
 
-function emptyEntry(agent: string): AgentEntry {
+function emptyEntry(agent: string, lob: string): AgentEntry {
   return {
     agent_name: agent,
     present: 'SI',
@@ -35,8 +38,11 @@ function emptyEntry(agent: string): AgentEntry {
     crh: 0,
     signed_retainers: 0,
     unsigned_retainers: 0,
+    converted_cases: 0,
+    rfc_sent: 0,
     ura: 0,
     reprocess: 0,
+    lob: lob || 'VA',
   }
 }
 
@@ -44,7 +50,7 @@ export default function EntryPage() {
   const router = useRouter()
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
-  const [agentNames, setAgentNames] = useState<string[]>([])
+  const [activeAgentsList, setActiveAgentsList] = useState<any[]>([])
   const [entries, setEntries] = useState<AgentEntry[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -59,12 +65,10 @@ export default function EntryPage() {
         const res = await fetch('/api/users')
         const users: any[] = await res.json()
         // Only show active Regular users in the daily entry form
-        const activeAgents = users
-          .filter((u) => u.role === 'regular' && u.active === 1)
-          .map((u) => u.display_name || u.username)
-          .sort()
-        setAgentNames(activeAgents)
-        setEntries(activeAgents.map(emptyEntry))
+        const activeAgents = users.filter((u) => u.role === 'regular' && u.active === 1)
+        activeAgents.sort((a, b) => (a.display_name || a.username).localeCompare(b.display_name || b.username))
+        setActiveAgentsList(activeAgents)
+        setEntries(activeAgents.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
       } catch {
         setError('Could not load agent list. Please refresh.')
       } finally {
@@ -83,13 +87,22 @@ export default function EntryPage() {
   }
 
   function getTotal(e: AgentEntry) {
+    if (e.lob === 'SSD') {
+      return e.signed_retainers || 0
+    }
     return (e.signed_retainers || 0) + (e.unsigned_retainers || 0)
   }
 
   function getRate(e: AgentEntry) {
-    const total = getTotal(e)
-    if (total === 0) return '—'
-    return ((e.signed_retainers / total) * 100).toFixed(1) + '%'
+    if (e.lob === 'SSD') {
+      const total = e.signed_retainers || 0
+      if (total === 0) return '—'
+      return (((e.converted_cases || 0) / total) * 100).toFixed(1) + '%'
+    } else {
+      const total = (e.signed_retainers || 0) + (e.unsigned_retainers || 0)
+      if (total === 0) return '—'
+      return ((e.signed_retainers / total) * 100).toFixed(1) + '%'
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -116,22 +129,37 @@ export default function EntryPage() {
   }
 
   function resetForm() {
-    setEntries(agentNames.map(emptyEntry))
+    setEntries(activeAgentsList.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
     setDate(today)
     setError('')
     setSuccess(false)
   }
 
-  const numFields = [
-    { key: 'capd', label: 'CAPD', hint: 'Calls made' },
-    { key: 'inbound_calls', label: 'Inbound', hint: 'Inbound calls' },
-    { key: 'case_rejected', label: 'Rejected', hint: 'Cases rejected' },
-    { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
-    { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
-    { key: 'unsigned_retainers', label: 'Unsigned', hint: 'Unsigned retainers' },
-    { key: 'ura', label: 'URA', hint: 'Unnecessary Req. Assistance' },
-    { key: 'reprocess', label: 'Reprocess', hint: 'Times reprocessed' },
-  ] as const
+  function getFieldsForLob(lob: string) {
+    if (lob === 'SSD') {
+      return [
+        { key: 'capd', label: 'CAPD', hint: 'Calls made' },
+        { key: 'inbound_calls', label: 'Inbound', hint: 'Inbound calls' },
+        { key: 'case_rejected', label: 'Rejected', hint: 'Cases rejected' },
+        { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
+        { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
+        { key: 'converted_cases', label: 'Converted', hint: 'Converted to Case' },
+        { key: 'rfc_sent', label: 'RFC Sent', hint: 'RFC cases sent' },
+        { key: 'ura', label: 'URA', hint: 'Unnecessary Req. Assistance' },
+        { key: 'reprocess', label: 'Reprocess', hint: 'Times reprocessed' },
+      ] as const
+    }
+    return [
+      { key: 'capd', label: 'CAPD', hint: 'Calls made' },
+      { key: 'inbound_calls', label: 'Inbound', hint: 'Inbound calls' },
+      { key: 'case_rejected', label: 'Rejected', hint: 'Cases rejected' },
+      { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
+      { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
+      { key: 'unsigned_retainers', label: 'Unsigned', hint: 'Unsigned retainers' },
+      { key: 'ura', label: 'URA', hint: 'Unnecessary Req. Assistance' },
+      { key: 'reprocess', label: 'Reprocess', hint: 'Times reprocessed' },
+    ] as const
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -143,9 +171,9 @@ export default function EntryPage() {
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Daily Entry</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               Log today's performance metrics for all active agents
-              {!loadingAgents && agentNames.length > 0 && (
+              {!loadingAgents && activeAgentsList.length > 0 && (
                 <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>
-                  · {agentNames.length} agent{agentNames.length !== 1 ? 's' : ''} active
+                  · {activeAgentsList.length} agent{activeAgentsList.length !== 1 ? 's' : ''} active
                 </span>
               )}
             </p>
@@ -187,7 +215,7 @@ export default function EntryPage() {
               <span style={{ width: 20, height: 20, border: '2px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
               Loading active agents…
             </div>
-          ) : agentNames.length === 0 ? (
+          ) : activeAgentsList.length === 0 ? (
             <div className="glass-card" style={{ padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
               <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>No active agents found</h2>
@@ -206,6 +234,7 @@ export default function EntryPage() {
                   const color = COLOR_PALETTE[idx % COLOR_PALETTE.length]
                   const rate = getRate(entry)
                   const total = getTotal(entry)
+                  const fields = getFieldsForLob(entry.lob)
                   return (
                     <div key={entry.agent_name} className="glass-card" style={{ padding: '16px 20px' }}>
                       {/* Agent header */}
@@ -213,6 +242,9 @@ export default function EntryPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }} />
                           <span style={{ fontWeight: 700, fontSize: 15 }}>{entry.agent_name}</span>
+                          <span className="badge badge-accent" style={{ fontSize: 11, padding: '2px 8px' }}>
+                            {entry.lob}
+                          </span>
                         </div>
 
                         {/* Presence toggle */}
@@ -245,18 +277,28 @@ export default function EntryPage() {
                         </div>
 
                         {/* Live rate */}
-                        {total > 0 && (
-                          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                            Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
-                            {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
-                            {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
-                          </div>
+                        {entry.lob === 'SSD' ? (
+                          (entry.signed_retainers || 0) > 0 && (
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                              Converted: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.converted_cases}</span>
+                              {' / '}Signed: <span style={{ fontWeight: 600 }}>{entry.signed_retainers}</span>
+                              {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
+                            </div>
+                          )
+                        ) : (
+                          total > 0 && (
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                              Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
+                              {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
+                              {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
+                            </div>
+                          )
                         )}
                       </div>
 
                       {/* Number fields */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12 }}>
-                        {numFields.map(({ key, label, hint }) => (
+                        {fields.map(({ key, label, hint }) => (
                           <div key={key}>
                             <label className="field-label" title={hint}>{label}</label>
                             <input

@@ -27,12 +27,14 @@ interface Row {
   agent_name: string
   signed_retainers: number
   unsigned_retainers: number
+  converted_cases?: number
+  rfc_sent?: number
   total_case_wanted: number
 }
 
 interface Props {
   data: Row[]
-  metric: 'signed_retainers' | 'total_case_wanted' | 'unsigned_retainers'
+  metric: 'signed_retainers' | 'total_case_wanted' | 'unsigned_retainers' | 'converted_cases'
   title: string
 }
 

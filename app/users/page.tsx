@@ -9,6 +9,7 @@ interface User {
   display_name: string
   role: string
   active: number
+  lob?: string
   created_at: string
 }
 
@@ -16,7 +17,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
-  const [newUser, setNewUser] = useState({ username: '', password: '', display_name: '', role: 'regular' })
+  const [newUser, setNewUser] = useState({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA' })
   const [resetPwd, setResetPwd] = useState<{ id: number; pwd: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -48,7 +49,7 @@ export default function UsersPage() {
     setSaving(false)
     if (res.ok) {
       showMsg('success', `User "${newUser.username}" created successfully.`)
-      setNewUser({ username: '', password: '', display_name: '', role: 'regular' })
+      setNewUser({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA' })
       setShowAdd(false)
       fetchUsers()
     } else {
@@ -63,6 +64,20 @@ export default function UsersPage() {
       body: JSON.stringify({ id: user.id, active: user.active === 0 }),
     })
     fetchUsers()
+  }
+
+  async function updateLob(userId: number, lob: string) {
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, lob }),
+    })
+    if (res.ok) {
+      showMsg('success', 'LOB updated successfully.')
+      fetchUsers()
+    } else {
+      showMsg('error', 'Failed to update LOB.')
+    }
   }
 
   async function doResetPassword() {
@@ -134,6 +149,13 @@ export default function UsersPage() {
                     <option value="master">Master (Full access)</option>
                   </select>
                 </div>
+                <div>
+                  <label className="field-label">Line of Business (LOB)</label>
+                  <select id="new-lob" className="input-field" value={newUser.lob} onChange={(e) => setNewUser({ ...newUser, lob: e.target.value })}>
+                    <option value="VA">VA Intake Specialist</option>
+                    <option value="SSD">SSD Intake Specialist</option>
+                  </select>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                 <button id="btn-create-user" className="btn-primary" onClick={createUser} disabled={saving}>{saving ? 'Creating…' : 'Create User'}</button>
@@ -168,6 +190,7 @@ export default function UsersPage() {
                     <th>User</th>
                     <th>Username</th>
                     <th>Role</th>
+                    <th>Line of Business</th>
                     <th>Status</th>
                     <th>Created</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
@@ -189,6 +212,27 @@ export default function UsersPage() {
                         <span className={user.role === 'master' ? 'badge badge-accent' : 'badge badge-success'}>
                           {user.role}
                         </span>
+                      </td>
+                      <td>
+                        <select
+                          value={user.lob || 'VA'}
+                          onChange={(e) => updateLob(user.id, e.target.value)}
+                          className="input-field"
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            width: 'auto',
+                            height: 'auto',
+                            marginBottom: 0,
+                            borderRadius: '6px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake</option>
+                          <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake</option>
+                        </select>
                       </td>
                       <td>
                         <span className={user.active ? 'badge badge-success' : 'badge badge-danger'}>
