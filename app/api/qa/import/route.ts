@@ -120,9 +120,13 @@ export async function POST(req: Request) {
           continue
         }
 
-        // Ensure agent exists and is active in agents table
-        insertAgentStmt.run(agentName)
-        activateAgentStmt.run(agentName)
+        // Ensure agent exists and is active in agents table with correct LOB
+        const userRow = db.prepare('SELECT lob FROM users WHERE display_name = ?').get(agentName) as { lob: string } | undefined
+        const userLob = userRow?.lob || 'VA'
+        const actResult = db.prepare('UPDATE agents SET active = 1, lob = ? WHERE name = ?').run(userLob, agentName)
+        if (actResult.changes === 0) {
+          db.prepare('INSERT INTO agents (name, active, lob) VALUES (?, 1, ?)').run(agentName, userLob)
+        }
 
         // Extract category scores
         const scoreIntro = Math.round(Number(row[0] || 0) * 100) / 100
@@ -304,9 +308,13 @@ export async function POST(req: Request) {
 
       const tier = getTier(overallScore)
 
-      // Ensure agent exists and is active in agents table
-      db.prepare('INSERT OR IGNORE INTO agents (name, active) VALUES (?, 1)').run(agentName)
-      db.prepare('UPDATE agents SET active = 1 WHERE name = ?').run(agentName)
+      // Ensure agent exists and is active in agents table with correct LOB
+      const userRow = db.prepare('SELECT lob FROM users WHERE display_name = ?').get(agentName) as { lob: string } | undefined
+      const userLob = userRow?.lob || 'VA'
+      const actResult = db.prepare('UPDATE agents SET active = 1, lob = ? WHERE name = ?').run(userLob, agentName)
+      if (actResult.changes === 0) {
+        db.prepare('INSERT INTO agents (name, active, lob) VALUES (?, 1, ?)').run(agentName, userLob)
+      }
 
       const stmt = db.prepare(`
         INSERT INTO qa_evaluations (

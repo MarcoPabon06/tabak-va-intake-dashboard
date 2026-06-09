@@ -689,10 +689,20 @@ export default function QAPage() {
   const [requestModalEvalId, setRequestModalEvalId] = useState<number | null>(null)
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestError, setRequestError] = useState('')
+  const [selectedLob, setSelectedLob] = useState<string>('VA')
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
   const isMaster = userRole === 'master'
+
+  useEffect(() => {
+    if (session?.user) {
+      const u = session.user as any
+      if (u.role === 'regular') {
+        setSelectedLob(u.lob || 'VA')
+      }
+    }
+  }, [session])
 
   const fetchRequests = () => {
     fetch('/api/coaching/requests')
@@ -702,8 +712,8 @@ export default function QAPage() {
   }
 
   const fetchEvals = () => {
-    const url = isMaster ? '/api/qa' : `/api/qa?agent=${encodeURIComponent(userName)}`
-    fetch(url)
+    const lobParam = isMaster ? `?lob=${selectedLob}` : `?agent=${encodeURIComponent(userName)}`
+    fetch(`/api/qa${lobParam}`)
       .then((r) => r.json())
       .then((data) => setEvals(Array.isArray(data) ? data : []))
       .catch(() => setEvals([]))
@@ -713,7 +723,7 @@ export default function QAPage() {
   useEffect(() => {
     fetchEvals()
     fetchRequests()
-  }, [isMaster, userName])
+  }, [isMaster, userName, selectedLob])
 
   const handleAcknowledge = async (id: number) => {
     try {
@@ -795,13 +805,40 @@ export default function QAPage() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
       <main style={{ flex: 1, marginLeft: 'var(--sidebar-width)', padding: '32px 36px', maxWidth: 1200 }}>
-        <h1 className="fade-in" style={{
-          fontSize: 22, fontWeight: 800, marginBottom: 24,
-          background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-        }}>
-          📋 QA Scores
-        </h1>
+        {/* Header & LOB selector */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+          <h1 className="fade-in" style={{
+            fontSize: 22, fontWeight: 800, margin: 0,
+            background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          }}>
+            📋 QA Scores
+          </h1>
+
+          {isMaster && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label className="field-label" style={{ marginBottom: 0, whiteSpace: 'nowrap', fontWeight: 600 }}>Team:</label>
+              <select
+                id="qa-lob-select"
+                value={selectedLob}
+                onChange={(e) => setSelectedLob(e.target.value)}
+                className="input-field"
+                style={{
+                  width: 200,
+                  marginBottom: 0,
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600
+                }}
+              >
+                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Team</option>
+                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Team</option>
+              </select>
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#64748b' }}>Loading evaluations...</div>
