@@ -26,7 +26,24 @@ export async function GET(req: NextRequest) {
     // 4. Sample of recent dates in daily_performance
     const sampleDates = db.prepare('SELECT DISTINCT date FROM daily_performance ORDER BY date DESC LIMIT 15').all() as { date: string }[]
 
-    // 5. Check if any agents match the INNER JOIN used in dashboard
+    // 5. SSD records specific analysis
+    const ssdAnalysis = db.prepare(`
+      SELECT MIN(dp.date) as min_date, MAX(dp.date) as max_date, COUNT(*) as cnt
+      FROM daily_performance dp
+      INNER JOIN agents a ON dp.agent_name = a.name
+      WHERE a.lob = 'SSD'
+    `).get()
+
+    // 6. Test a direct run of the dashboard query for SSD LOB
+    const apiTest = db.prepare(`
+      SELECT dp.date, dp.agent_name, dp.signed_retainers, dp.converted_cases
+      FROM daily_performance dp
+      INNER JOIN agents a ON dp.agent_name = a.name
+      WHERE dp.date >= '2025-01-01' AND dp.date <= '2099-12-31' AND a.lob = 'SSD'
+      LIMIT 10
+    `).all()
+
+    // 7. Check if any agents match the INNER JOIN used in dashboard
     const joinedSample = db.prepare(`
       SELECT dp.agent_name, a.name as agent_table_name, a.lob, COUNT(dp.id) as record_count
       FROM daily_performance dp
@@ -43,6 +60,8 @@ export async function GET(req: NextRequest) {
       agents: agentsList,
       performance_unique_agents: perfAgents.map(a => a.agent_name),
       recent_performance_dates: sampleDates.map(d => d.date),
+      ssd_records_analysis: ssdAnalysis,
+      mock_dashboard_query_for_ssd: apiTest,
       join_analysis: joinedSample
     })
   } catch (error: any) {
