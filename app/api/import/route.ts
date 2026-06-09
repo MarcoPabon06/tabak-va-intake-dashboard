@@ -18,14 +18,28 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer())
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
 
-  let sheetName = 'Acumulado'
-  if (!workbook.SheetNames.includes(sheetName)) {
-    const alternate = workbook.SheetNames.find(n => n.toLowerCase().replace(/\s+/g, '') === 'grandtotal')
-    if (alternate) {
-      sheetName = alternate
-    } else {
-      sheetName = workbook.SheetNames[0]
-    }
+  // Identify the target sheet name
+  let sheetName = ''
+  
+  // Try to find the SSD sheet first (Grand-Totals, Grand Total, GrandTotals, etc.)
+  const ssdSheet = workbook.SheetNames.find(n => {
+    const normalized = n.toLowerCase().replace(/[\s\-_]+/g, '')
+    return normalized === 'grandtotal' || normalized === 'grandtotals'
+  })
+  
+  // Try to find the VA sheet (Acumulado)
+  const vaSheet = workbook.SheetNames.find(n => {
+    const normalized = n.toLowerCase().replace(/[\s\-_]+/g, '')
+    return normalized === 'acumulado'
+  })
+
+  if (ssdSheet) {
+    sheetName = ssdSheet
+  } else if (vaSheet) {
+    sheetName = vaSheet
+  } else {
+    // Fallback to the first sheet in the workbook
+    sheetName = workbook.SheetNames[0]
   }
 
   if (!sheetName) {
@@ -147,7 +161,15 @@ export async function POST(req: NextRequest) {
         skipped++; continue
       }
 
+      const agentName = String(row[iAgent]).trim()
       const signed = iSigned !== -1 ? Number(row[iSigned]) || 0 : 0
+
+      // Ensure agent exists and is active in agents table with correct LOB matching the sheet
+      const agentLob = isSSDSheet ? 'SSD' : 'VA'
+      const actResult = db.prepare('UPDATE agents SET active = 1, lob = ? WHERE name = ?').run(agentLob, agentName)
+      if (actResult.changes === 0) {
+        db.prepare('INSERT INTO agents (name, active, lob) VALUES (?, 1, ?)').run(agentName, agentLob)
+      }
 
       if (isSSDSheet) {
         const converted = iConverted !== -1 ? Number(row[iConverted]) || 0 : 0
@@ -155,7 +177,7 @@ export async function POST(req: NextRequest) {
         
         insert.run({
           date: dateStr,
-          agent_name: String(row[iAgent]).trim(),
+          agent_name: agentName,
           capd: iCapd !== -1 ? Number(row[iCapd]) || 0 : 0,
           inbound_calls: iInbound !== -1 ? Number(row[iInbound]) || 0 : 0,
           case_rejected: iRejected !== -1 ? Number(row[iRejected]) || 0 : 0,
@@ -175,7 +197,7 @@ export async function POST(req: NextRequest) {
 
         insert.run({
           date: dateStr,
-          agent_name: String(row[iAgent]).trim(),
+          agent_name: agentName,
           capd: iCapd !== -1 ? Number(row[iCapd]) || 0 : 0,
           inbound_calls: iInbound !== -1 ? Number(row[iInbound]) || 0 : 0,
           case_rejected: iRejected !== -1 ? Number(row[iRejected]) || 0 : 0,
