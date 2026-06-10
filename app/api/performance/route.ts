@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
   `)
 
   const insertMany = db.transaction((rows: any[]) => {
+    let count = 0
     for (const row of rows) {
       // Query agent LOB from the database dynamically
       const agentInfo = db.prepare('SELECT lob FROM agents WHERE name = ?').get(row.agent_name) as { lob?: string } | undefined
@@ -127,9 +128,23 @@ export async function POST(req: NextRequest) {
         ura: row.ura || 0,
         reprocess: row.reprocess || 0,
       })
+      count++
     }
+    return count
   })
 
-  insertMany(entries)
-  return NextResponse.json({ success: true, count: entries.length })
+  try {
+    const count = insertMany(entries)
+    console.log(`[performance POST] Saved ${count} rows for date=${date}`)
+
+    // Force a WAL checkpoint so all committed pages are flushed to the main DB file.
+    // Without this, data written in WAL mode may not survive a process restart before
+    // SQLite's automatic checkpoint threshold is reached.
+    db.pragma('wal_checkpoint(FULL)')
+
+    return NextResponse.json({ success: true, count })
+  } catch (err: any) {
+    console.error('[performance POST] Transaction failed:', err.message)
+    return NextResponse.json({ error: 'Failed to save data', detail: err.message }, { status: 500 })
+  }
 }
