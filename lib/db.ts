@@ -10,9 +10,27 @@ let db: Database.Database
 
 function getDb(): Database.Database {
   if (!db) {
+    // Ensure the directory for the database file exists (important for volume mounts)
+    const dbDir = path.dirname(DB_PATH)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+
     db = new Database(DB_PATH)
+
+    // WAL mode: writes go to a separate WAL file first, then are checkpointed
+    // into the main DB file. We set synchronous=NORMAL for a good balance of
+    // durability and performance, and run a checkpoint on startup to recover
+    // any pages that were left in the WAL from a previous process exit.
     db.pragma('journal_mode = WAL')
+    db.pragma('synchronous = NORMAL')
     db.pragma('foreign_keys = ON')
+
+    // Checkpoint any leftover WAL pages from a previous run so the main DB
+    // file is fully up-to-date before we start serving requests.
+    db.pragma('wal_checkpoint(FULL)')
+
+    console.log(`[db] Opened database at ${DB_PATH}`)
     initSchema(db)
   }
   return db
