@@ -224,6 +224,7 @@ export async function POST(req: NextRequest) {
       if (isSSDSheet) {
         const converted = iConverted !== -1 ? Number(row[iConverted]) || 0 : 0
         const rfc = iRfc !== -1 ? Number(row[iRfc]) || 0 : 0
+        const unsigned = iUnsigned !== -1 ? Number(row[iUnsigned]) || 0 : 0
         
         insert.run({
           date: dateStr,
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
           case_rejected: iRejected !== -1 ? Number(row[iRejected]) || 0 : 0,
           crh: iCrh !== -1 ? Number(row[iCrh]) || 0 : 0,
           signed_retainers: signed,
-          unsigned_retainers: 0,
+          unsigned_retainers: unsigned,
           converted_cases: converted,
           rfc_sent: rfc,
           total_case_wanted: signed,

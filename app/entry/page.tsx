@@ -150,14 +150,12 @@ export default function EntryPage() {
     if (lob === 'SSD') {
       return [
         { key: 'capd', label: 'CAPD', hint: 'Calls made' },
-        { key: 'inbound_calls', label: 'Inbound', hint: 'Inbound calls' },
-        { key: 'case_rejected', label: 'Rejected', hint: 'Cases rejected' },
-        { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
         { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
+        { key: 'unsigned_retainers', label: 'Unsigned', hint: 'Unsigned retainers' },
+        { key: 'rfc_sent', label: 'RFC', hint: 'RFC cases sent' },
+        { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
+        { key: 'case_rejected', label: 'Case Rejected', hint: 'Cases rejected' },
         { key: 'converted_cases', label: 'Converted', hint: 'Converted to Case' },
-        { key: 'rfc_sent', label: 'RFC Sent', hint: 'RFC cases sent' },
-        { key: 'ura', label: 'URA', hint: 'Unnecessary Req. Assistance' },
-        { key: 'reprocess', label: 'Reprocess', hint: 'Times reprocessed' },
       ] as const
     }
     return [
