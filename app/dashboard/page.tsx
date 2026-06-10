@@ -65,6 +65,15 @@ export default function DashboardPage() {
     fetch('/api/settings')
       .then((r) => r.json())
       .then((s) => setGoals({
+        // VA
+        goal_signed_retainers_va: parseInt(s.goal_signed_retainers_va) || 35,
+        goal_conversion_rate_va: parseInt(s.goal_conversion_rate_va) || 65,
+        goal_avg_capd_va: parseInt(s.goal_avg_capd_va) || 40,
+        // SSD
+        goal_converted_cases_ssd: parseInt(s.goal_converted_cases_ssd) || 35,
+        goal_conversion_rate_ssd: parseInt(s.goal_conversion_rate_ssd) || 65,
+        goal_avg_capd_ssd: parseInt(s.goal_avg_capd_ssd) || 40,
+        // Legacy fallback
         goal_signed_retainers: parseInt(s.goal_signed_retainers) || 35,
         goal_conversion_rate: parseInt(s.goal_conversion_rate) || 65,
         goal_avg_capd: parseInt(s.goal_avg_capd) || 40,

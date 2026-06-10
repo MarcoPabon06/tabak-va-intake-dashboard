@@ -188,14 +188,17 @@ function initSchema(db: Database.Database) {
     }
   }
 
-  // Seed default settings if empty
-  const count = db.prepare('SELECT COUNT(*) as cnt FROM settings').get() as any
-  if (count.cnt === 0) {
-    const defaults = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
-    defaults.run('goal_signed_retainers', '35')
-    defaults.run('goal_conversion_rate', '65')
-    defaults.run('goal_avg_capd', '40')
-  }
+  // Seed default settings
+  const defaults = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
+  defaults.run('goal_signed_retainers', '35')
+  defaults.run('goal_conversion_rate', '65')
+  defaults.run('goal_avg_capd', '40')
+  defaults.run('goal_signed_retainers_va', '35')
+  defaults.run('goal_conversion_rate_va', '65')
+  defaults.run('goal_avg_capd_va', '40')
+  defaults.run('goal_converted_cases_ssd', '35')
+  defaults.run('goal_conversion_rate_ssd', '65')
+  defaults.run('goal_avg_capd_ssd', '40')
 
   // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
   const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]

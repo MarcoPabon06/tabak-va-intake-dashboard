@@ -9,15 +9,17 @@ import BadgeShelf from '@/components/BadgeShelf'
 import PersonalQA from '@/components/PersonalQA'
 
 export interface GoalSettings {
-  goal_signed_retainers: number
-  goal_conversion_rate: number
-  goal_avg_capd: number
-}
-
-const DEFAULT_GOALS: GoalSettings = {
-  goal_signed_retainers: 35,
-  goal_conversion_rate: 65,
-  goal_avg_capd: 40,
+  goal_signed_retainers?: number
+  goal_conversion_rate?: number
+  goal_avg_capd?: number
+  // VA
+  goal_signed_retainers_va?: number
+  goal_conversion_rate_va?: number
+  goal_avg_capd_va?: number
+  // SSD
+  goal_converted_cases_ssd?: number
+  goal_conversion_rate_ssd?: number
+  goal_avg_capd_ssd?: number
 }
 
 interface Row {
@@ -37,13 +39,12 @@ interface Row {
 }
 
 interface Props {
-  allData: Row[]          // all agents for the period (for ranking)
-  agentName: string       // current user's display_name
-  goals?: GoalSettings    // admin-configured goals (fetched from API)
-  lob?: string            // active LOB
+  allData: Row[]
+  agentName: string
+  goals?: GoalSettings
+  lob?: string
 }
 
-// ─── Helper ──────────────────────────────────────────────────────────────
 function progressColor(pct: number) {
   if (pct >= 100) return '#10b981'
   if (pct >= 70) return '#6366f1'
@@ -52,7 +53,18 @@ function progressColor(pct: number) {
 }
 
 export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA' }: Props) {
-  const g = goals || DEFAULT_GOALS
+  const isSSD = lob === 'SSD'
+  const g = {
+    goal_signed_retainers: isSSD
+      ? (goals?.goal_converted_cases_ssd ?? goals?.goal_signed_retainers ?? 35)
+      : (goals?.goal_signed_retainers_va ?? goals?.goal_signed_retainers ?? 35),
+    goal_conversion_rate: isSSD
+      ? (goals?.goal_conversion_rate_ssd ?? goals?.goal_conversion_rate ?? 65)
+      : (goals?.goal_conversion_rate_va ?? goals?.goal_conversion_rate ?? 65),
+    goal_avg_capd: isSSD
+      ? (goals?.goal_avg_capd_ssd ?? goals?.goal_avg_capd ?? 40)
+      : (goals?.goal_avg_capd_va ?? goals?.goal_avg_capd ?? 40),
+  }
   const myData = allData.filter((r) => r.agent_name === agentName)
 
   // ── Totals ──

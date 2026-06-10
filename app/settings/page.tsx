@@ -13,31 +13,61 @@ interface GoalConfig {
   max: number
 }
 
-const GOAL_FIELDS: GoalConfig[] = [
+const VA_GOAL_FIELDS: GoalConfig[] = [
   {
-    key: 'goal_signed_retainers',
-    label: 'Monthly Signed Retainers',
+    key: 'goal_signed_retainers_va',
+    label: 'Monthly Signed Retainers (VA)',
     icon: '✅',
     unit: 'retainers',
-    description: 'Target number of signed retainers per agent per month',
+    description: 'Target signed retainers per VA agent per month',
     min: 1,
     max: 200,
   },
   {
-    key: 'goal_conversion_rate',
-    label: 'Conversion Rate',
+    key: 'goal_conversion_rate_va',
+    label: 'Conversion Rate (VA)',
     icon: '📈',
     unit: '%',
-    description: 'Target conversion rate (Signed ÷ Total Cases)',
+    description: 'Target conversion rate for VA team (Signed ÷ Total Cases)',
     min: 1,
     max: 100,
   },
   {
-    key: 'goal_avg_capd',
-    label: 'Average CAPD',
+    key: 'goal_avg_capd_va',
+    label: 'Average CAPD (VA)',
     icon: '📞',
     unit: 'calls/day',
-    description: 'Target average Calls Attempted Per Day',
+    description: 'Target average Calls Attempted Per Day for VA team',
+    min: 1,
+    max: 200,
+  },
+]
+
+const SSD_GOAL_FIELDS: GoalConfig[] = [
+  {
+    key: 'goal_converted_cases_ssd',
+    label: 'Monthly Converted Cases (SSD)',
+    icon: '💼',
+    unit: 'cases',
+    description: 'Target converted cases per SSD agent per month',
+    min: 1,
+    max: 200,
+  },
+  {
+    key: 'goal_conversion_rate_ssd',
+    label: 'Conversion Rate (SSD)',
+    icon: '📈',
+    unit: '%',
+    description: 'Target conversion rate for SSD team (Converted ÷ Signed)',
+    min: 1,
+    max: 100,
+  },
+  {
+    key: 'goal_avg_capd_ssd',
+    label: 'Average CAPD (SSD)',
+    icon: '📞',
+    unit: 'calls/day',
+    description: 'Target average Calls Attempted Per Day for SSD team',
     min: 1,
     max: 200,
   },
@@ -94,12 +124,12 @@ export default function SettingsPage() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
       <main style={{ marginLeft: 'var(--sidebar-width)', flex: 1, padding: '32px 28px', background: 'var(--bg-primary)' }}>
-        <div style={{ maxWidth: 700 }}>
+        <div style={{ maxWidth: 950 }}>
           {/* Header */}
           <div style={{ marginBottom: 28 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Settings</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-              Configure monthly goals and targets for your team. These targets power the goal progress bars on each agent's personal dashboard.
+              Configure separate monthly targets for your VA and SSD intake teams. These goals determine the progress bars and streaks displayed on each specialist's personal dashboard.
             </p>
           </div>
 
@@ -122,95 +152,192 @@ export default function SettingsPage() {
             </div>
           ) : (
             <>
-              {/* Goal settings */}
-              <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 20, borderColor: 'rgba(99,102,241,0.25)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                  <span style={{ fontSize: 20 }}>🎯</span>
-                  <div>
-                    <h2 style={{ fontSize: 16, fontWeight: 700 }}>Monthly Goal Targets</h2>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>These appear as progress bars on each agent's personal dashboard</p>
+              {/* Dual LOB settings grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginBottom: 20 }}>
+                
+                {/* VA Team Goals Card */}
+                <div className="glass-card" style={{ padding: '24px 28px', borderColor: 'rgba(99,102,241,0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                    <span style={{ fontSize: 20 }}>🇺🇸</span>
+                    <div>
+                      <h2 style={{ fontSize: 16, fontWeight: 700 }}>VA Intake Goals</h2>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target settings for the Veterans Benefits LOB</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {VA_GOAL_FIELDS.map((field) => {
+                      const defVal = field.key === 'goal_signed_retainers_va' ? '35' : field.key === 'goal_conversion_rate_va' ? '65' : '40'
+                      const val = settings[field.key] ?? defVal
+                      const numVal = parseInt(val) || 0
+                      return (
+                        <div key={field.key}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 16 }}>{field.icon}</span>
+                            <label className="field-label" style={{ marginBottom: 0 }}>{field.label}</label>
+                          </div>
+                          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 24 }}>{field.description}</p>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingLeft: 24 }}>
+                            <input
+                              id={`setting-${field.key}`}
+                              type="range"
+                              min={field.min}
+                              max={field.max}
+                              value={numVal}
+                              onChange={(e) => updateSetting(field.key, e.target.value)}
+                              style={{
+                                flex: 1,
+                                height: 6,
+                                appearance: 'none',
+                                background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
+                                borderRadius: 4,
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="number"
+                                className="input-field"
+                                min={field.min}
+                                max={field.max}
+                                value={val}
+                                onChange={(e) => updateSetting(field.key, e.target.value)}
+                                style={{ width: 80, textAlign: 'center', fontWeight: 700, fontSize: 16 }}
+                              />
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 60 }}>{field.unit}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {GOAL_FIELDS.map((field) => {
-                    const val = settings[field.key] || '0'
-                    const numVal = parseInt(val) || 0
-                    return (
-                      <div key={field.key}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontSize: 16 }}>{field.icon}</span>
-                          <label className="field-label" style={{ marginBottom: 0 }}>{field.label}</label>
-                        </div>
-                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 24 }}>{field.description}</p>
+                {/* SSD Team Goals Card */}
+                <div className="glass-card" style={{ padding: '24px 28px', borderColor: 'rgba(236,72,153,0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                    <span style={{ fontSize: 20 }}>💼</span>
+                    <div>
+                      <h2 style={{ fontSize: 16, fontWeight: 700 }}>SSD Intake Goals</h2>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target settings for the Disability LOB</p>
+                    </div>
+                  </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingLeft: 24 }}>
-                          {/* Slider */}
-                          <input
-                            id={`setting-${field.key}`}
-                            type="range"
-                            min={field.min}
-                            max={field.max}
-                            value={numVal}
-                            onChange={(e) => updateSetting(field.key, e.target.value)}
-                            style={{
-                              flex: 1,
-                              height: 6,
-                              appearance: 'none',
-                              background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
-                              borderRadius: 4,
-                              outline: 'none',
-                              cursor: 'pointer',
-                            }}
-                          />
-                          {/* Number input */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {SSD_GOAL_FIELDS.map((field) => {
+                      const defVal = field.key === 'goal_converted_cases_ssd' ? '35' : field.key === 'goal_conversion_rate_ssd' ? '65' : '40'
+                      const val = settings[field.key] ?? defVal
+                      const numVal = parseInt(val) || 0
+                      return (
+                        <div key={field.key}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 16 }}>{field.icon}</span>
+                            <label className="field-label" style={{ marginBottom: 0 }}>{field.label}</label>
+                          </div>
+                          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 24 }}>{field.description}</p>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingLeft: 24 }}>
                             <input
-                              type="number"
-                              className="input-field"
+                              id={`setting-${field.key}`}
+                              type="range"
                               min={field.min}
                               max={field.max}
-                              value={val}
+                              value={numVal}
                               onChange={(e) => updateSetting(field.key, e.target.value)}
-                              style={{ width: 80, textAlign: 'center', fontWeight: 700, fontSize: 16 }}
+                              style={{
+                                flex: 1,
+                                height: 6,
+                                appearance: 'none',
+                                background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
+                                borderRadius: 4,
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
                             />
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 60 }}>{field.unit}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="number"
+                                className="input-field"
+                                min={field.min}
+                                max={field.max}
+                                value={val}
+                                onChange={(e) => updateSetting(field.key, e.target.value)}
+                                style={{ width: 80, textAlign: 'center', fontWeight: 700, fontSize: 16 }}
+                              />
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 60 }}>{field.unit}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
+
               </div>
 
-              {/* Preview */}
-              <div className="glass-card" style={{ padding: '18px 24px', marginBottom: 20 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
-                  Preview — How agents will see their goals
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-                  {GOAL_FIELDS.map((field) => {
-                    const goal = parseInt(settings[field.key] || '0')
-                    // Simulate 60% progress for preview
-                    const previewValue = Math.round(goal * 0.6)
-                    const pct = 60
-                    return (
-                      <div key={field.key} style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{field.icon} {field.label}</span>
-                          <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 700 }}>{pct}%</span>
+              {/* Preview Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginBottom: 20 }}>
+                
+                {/* VA Preview */}
+                <div className="glass-card" style={{ padding: '18px 24px' }}>
+                  <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                    Preview — VA Agent dashboard view
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {VA_GOAL_FIELDS.map((field) => {
+                      const def = field.key === 'goal_signed_retainers_va' ? 35 : field.key === 'goal_conversion_rate_va' ? 65 : 40
+                      const goal = parseInt(settings[field.key] || String(def))
+                      const previewValue = Math.round(goal * 0.6)
+                      return (
+                        <div key={field.key} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{field.label.split(' ')[0]}</span>
+                            <span style={{ fontSize: 10, color: '#6366f1', fontWeight: 700 }}>60%</span>
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#6366f1', marginBottom: 2 }}>
+                            {previewValue}{field.unit === '%' ? '%' : ''}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Goal: {goal}</div>
+                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: '60%', background: '#6366f1' }} />
+                          </div>
                         </div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b', marginBottom: 4 }}>
-                          {previewValue}{field.unit === '%' ? '%' : ''}
-                        </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>Goal: {goal}{field.unit === '%' ? '%' : ''}</div>
-                        <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: '60%', borderRadius: 3, background: 'linear-gradient(90deg, #f59e0bcc, #f59e0b)', transition: 'width 0.5s' }} />
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
+
+                {/* SSD Preview */}
+                <div className="glass-card" style={{ padding: '18px 24px' }}>
+                  <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                    Preview — SSD Agent dashboard view
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {SSD_GOAL_FIELDS.map((field) => {
+                      const def = field.key === 'goal_converted_cases_ssd' ? 35 : field.key === 'goal_conversion_rate_ssd' ? 65 : 40
+                      const goal = parseInt(settings[field.key] || String(def))
+                      const previewValue = Math.round(goal * 0.6)
+                      return (
+                        <div key={field.key} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{field.label.split(' ')[0]}</span>
+                            <span style={{ fontSize: 10, color: '#ec4899', fontWeight: 700 }}>60%</span>
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#ec4899', marginBottom: 2 }}>
+                            {previewValue}{field.unit === '%' ? '%' : ''}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Goal: {goal}</div>
+                          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: '60%', background: '#ec4899' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
               </div>
 
               {/* Save */}
