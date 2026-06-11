@@ -59,6 +59,7 @@ export default function EntryPage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [viewLob, setViewLob] = useState<string>('All')
+  const [reloadCounter, setReloadCounter] = useState(0)
 
   useEffect(() => {
     if (session?.user) {
@@ -78,15 +79,68 @@ export default function EntryPage() {
         const activeAgents = users.filter((u) => u.role === 'regular' && u.active === 1)
         activeAgents.sort((a, b) => (a.display_name || a.username).localeCompare(b.display_name || b.username))
         setActiveAgentsList(activeAgents)
-        setEntries(activeAgents.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
+        if (activeAgents.length === 0) {
+          setLoadingAgents(false)
+        }
       } catch {
         setError('Could not load agent list. Please refresh.')
-      } finally {
         setLoadingAgents(false)
       }
     }
     fetchAgents()
   }, [])
+
+  // Load existing performance data when date, active agents list, or reloadCounter changes
+  useEffect(() => {
+    if (activeAgentsList.length === 0) return
+
+    async function loadPerformanceData() {
+      setLoadingAgents(true)
+      setError('')
+      try {
+        const res = await fetch(`/api/performance?from=${date}&to=${date}`)
+        if (!res.ok) throw new Error('Failed to fetch performance')
+        const existingData: any[] = await res.json()
+
+        const existingMap = new Map<string, any>()
+        existingData.forEach((row) => {
+          existingMap.set(row.agent_name, row)
+        })
+
+        const mergedEntries = activeAgentsList.map((u) => {
+          const name = u.display_name || u.username
+          const match = existingMap.get(name)
+          if (match) {
+            return {
+              agent_name: name,
+              present: match.present || 'SI',
+              capd: match.capd || 0,
+              inbound_calls: match.inbound_calls || 0,
+              case_rejected: match.case_rejected || 0,
+              crh: match.crh || 0,
+              signed_retainers: match.signed_retainers || 0,
+              unsigned_retainers: match.unsigned_retainers || 0,
+              converted_cases: match.converted_cases || 0,
+              rfc_sent: match.rfc_sent || 0,
+              ura: match.ura || 0,
+              reprocess: match.reprocess || 0,
+              lob: u.lob || 'VA',
+            }
+          } else {
+            return emptyEntry(name, u.lob || 'VA')
+          }
+        })
+        setEntries(mergedEntries)
+      } catch (err: any) {
+        setError('Could not load existing data for this date.')
+        setEntries(activeAgentsList.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
+      } finally {
+        setLoadingAgents(false)
+      }
+    }
+
+    loadPerformanceData()
+  }, [date, activeAgentsList, reloadCounter])
 
   function update(agentIdx: number, field: keyof AgentEntry, value: any) {
     setEntries((prev) => {
@@ -131,6 +185,7 @@ export default function EntryPage() {
       if (!res.ok) throw new Error(json.error || 'Failed to save')
       setSuccess(true)
       setTimeout(() => setSuccess(false), 4000)
+      setReloadCounter((prev) => prev + 1)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -139,11 +194,11 @@ export default function EntryPage() {
   }
 
   function resetForm() {
-    setEntries(activeAgentsList.map((u) => emptyEntry(u.display_name || u.username, u.lob || 'VA')))
     setDate(today)
     setViewLob('All')
     setError('')
     setSuccess(false)
+    setReloadCounter((prev) => prev + 1)
   }
 
   function getFieldsForLob(lob: string) {
