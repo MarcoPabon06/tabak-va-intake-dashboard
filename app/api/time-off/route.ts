@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const userRole = (session.user as any)?.role || 'regular'
   
   // Resolve NextAuth username
-  const sessionUsername = session.user?.name || ''
+  const sessionUsername = session.user?.email || ''
 
   if (userRole === 'regular') {
     // Regular users can only see their own requests
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Start date cannot be after end date.' }, { status: 400 })
     }
 
-    const sessionUsername = session.user?.name || ''
+    const sessionUsername = session.user?.email || ''
     const db = getDb()
 
     // Look up agent name and LOB from users table to ensure security
@@ -200,7 +200,7 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const db = getDb()
-    const sessionUsername = session.user?.name || ''
+    const sessionUsername = session.user?.email || ''
     const userRole = (session.user as any)?.role || 'regular'
 
     // Find original request
