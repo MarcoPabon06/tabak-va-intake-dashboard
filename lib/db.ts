@@ -177,6 +177,25 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_coaching_requests_agent ON coaching_requests(agent_name);
     CREATE INDEX IF NOT EXISTS idx_coaching_requests_status ON coaching_requests(status);
+
+    CREATE TABLE IF NOT EXISTS time_off_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD')),
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      reason TEXT,
+      status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Approved', 'Rejected')),
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      manager_notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(username) REFERENCES users(username)
+    );
+    CREATE INDEX IF NOT EXISTS idx_timeoff_dates ON time_off_requests(start_date, end_date);
+    CREATE INDEX IF NOT EXISTS idx_timeoff_lob ON time_off_requests(lob);
+    CREATE INDEX IF NOT EXISTS idx_timeoff_status ON time_off_requests(status);
   `)
 
   // Run self-healing schema migrations for new columns

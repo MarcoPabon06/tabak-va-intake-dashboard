@@ -21,6 +21,7 @@ const navLinks = [
   { href: '/qa-entry', label: 'QA Entry', icon: '📋', masterOnly: true },
   { href: '/qa', label: 'QA Scores', icon: '🏅' },
   { href: '/coaching', label: 'Coaching Logs', icon: '🎯' },
+  { href: '/time-off', label: 'Time Off', icon: '📅' },
   { href: '/import', label: 'Import Excel', icon: '📥', masterOnly: true },
   { href: '/users', label: 'User Management', icon: '👥', masterOnly: true },
   { href: '/settings', label: 'Settings', icon: '⚙️', masterOnly: true },
