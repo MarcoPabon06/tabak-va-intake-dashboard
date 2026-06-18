@@ -186,7 +186,7 @@ export default function NotificationBell() {
             marginBottom: 8,
             zIndex: 100,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-            borderColor: 'rgba(99, 102, 241, 0.2)',
+            borderColor: 'rgba(184, 33, 5, 0.2)',
             display: 'flex',
             flexDirection: 'column',
             animation: 'fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -209,7 +209,7 @@ export default function NotificationBell() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#6366f1',
+                  color: '#b82105',
                   fontSize: 11,
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -236,12 +236,12 @@ export default function NotificationBell() {
                     padding: '12px 16px',
                     borderBottom: '1px solid rgba(255,255,255,0.04)',
                     cursor: 'pointer',
-                    background: n.read === 0 ? 'rgba(99, 102, 241, 0.08)' : 'transparent',
+                    background: n.read === 0 ? 'rgba(184, 33, 5, 0.08)' : 'transparent',
                     transition: 'background 0.2s',
                     position: 'relative',
                   }}
                   onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)')}
-                  onMouseOut={(e) => (e.currentTarget.style.background = n.read === 0 ? 'rgba(99, 102, 241, 0.08)' : 'transparent')}
+                  onMouseOut={(e) => (e.currentTarget.style.background = n.read === 0 ? 'rgba(184, 33, 5, 0.08)' : 'transparent')}
                 >
                   {n.read === 0 && (
                     <div style={{
@@ -251,7 +251,7 @@ export default function NotificationBell() {
                       width: 6,
                       height: 6,
                       borderRadius: '50%',
-                      background: '#6366f1',
+                      background: '#b82105',
                     }} />
                   )}
                   <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -282,7 +282,7 @@ export default function NotificationBell() {
             width: 320,
             padding: '16px 20px',
             background: 'rgba(10, 22, 40, 0.95)',
-            borderColor: 'rgba(99, 102, 241, 0.4)',
+            borderColor: 'rgba(184, 33, 5, 0.4)',
             boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
             zIndex: 9999,
             display: 'flex',

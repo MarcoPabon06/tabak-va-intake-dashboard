@@ -8,8 +8,8 @@ import { format } from 'date-fns'
 
 // Colors assigned by index — no hardcoding needed
 const COLOR_PALETTE = [
-  '#6366f1', '#ec4899', '#10b981', '#f59e0b',
-  '#3b82f6', '#06b6d4', '#8b5cf6', '#f97316',
+  '#b82105', '#ec4899', '#10b981', '#f59e0b',
+  '#3b82f6', '#06b6d4', '#5f758e', '#f97316',
   '#14b8a6', '#e11d48',
 ]
 
@@ -301,7 +301,7 @@ export default function EntryPage() {
           {/* Loading agents */}
           {loadingAgents ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
-              <span style={{ width: 20, height: 20, border: '2px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+              <span style={{ width: 20, height: 20, border: '2px solid rgba(184, 33, 5, 0.3)', borderTopColor: '#b82105', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
               Loading active agents…
             </div>
           ) : activeAgentsList.length === 0 ? (
@@ -372,7 +372,7 @@ export default function EntryPage() {
                             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                               Converted: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.converted_cases}</span>
                               {' / '}Signed: <span style={{ fontWeight: 600 }}>{entry.signed_retainers}</span>
-                              {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
+                              {' · '}Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{rate}</span>
                             </div>
                           )
                         ) : (
@@ -380,7 +380,7 @@ export default function EntryPage() {
                             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                               Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
                               {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
-                              {' · '}Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{rate}</span>
+                              {' · '}Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{rate}</span>
                             </div>
                           )
                         )}

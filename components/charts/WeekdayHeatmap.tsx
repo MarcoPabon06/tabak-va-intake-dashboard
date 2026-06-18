@@ -53,7 +53,7 @@ export default function WeekdayHeatmap({ data }: Props) {
   const getColor = (val: number) => {
     const ratio = val / max
     if (ratio >= 0.75) return '#10b981'
-    if (ratio >= 0.5) return '#6366f1'
+    if (ratio >= 0.5) return '#b82105'
     if (ratio >= 0.25) return '#f59e0b'
     return '#475569'
   }
@@ -62,7 +62,7 @@ export default function WeekdayHeatmap({ data }: Props) {
     if (!active || !payload?.length) return null
     const d = payload[0].payload
     return (
-      <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+      <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
         <div style={{ fontWeight: 700, marginBottom: 4, color: '#f8fafc' }}>{d.day}</div>
         <div style={{ color: '#94a3b8' }}>Avg Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{d.avg_signed}</span></div>
         <div style={{ color: '#94a3b8' }}>Total Signed: <span style={{ fontWeight: 600 }}>{d.total}</span></div>
@@ -81,7 +81,7 @@ export default function WeekdayHeatmap({ data }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="day" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.06)' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(184, 33, 5, 0.06)' }} />
           <Bar dataKey="avg_signed" radius={[6, 6, 0, 0]}>
             {chartData.map((entry) => (
               <Cell key={entry.day} fill={getColor(entry.avg_signed)} fillOpacity={0.85} />
@@ -90,7 +90,7 @@ export default function WeekdayHeatmap({ data }: Props) {
         </BarChart>
       </ResponsiveContainer>
       <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
-        {[{ color: '#10b981', label: 'High' }, { color: '#6366f1', label: 'Good' }, { color: '#f59e0b', label: 'Moderate' }, { color: '#475569', label: 'Low' }].map(({ color, label }) => (
+        {[{ color: '#10b981', label: 'High' }, { color: '#b82105', label: 'Good' }, { color: '#f59e0b', label: 'Moderate' }, { color: '#475569', label: 'Low' }].map(({ color, label }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94a3b8' }}>
             <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: 'inline-block' }} />
             {label}

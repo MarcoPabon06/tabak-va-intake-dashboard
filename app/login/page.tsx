@@ -37,12 +37,12 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'radial-gradient(ellipse at 60% 20%, rgba(99,102,241,0.12) 0%, transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(139,92,246,0.08) 0%, transparent 50%), #050b18',
+        background: 'radial-gradient(ellipse at 60% 20%, rgba(184, 33, 5, 0.12) 0%, transparent 60%), radial-gradient(ellipse at 20% 80%, rgba(95, 117, 142, 0.08) 0%, transparent 50%), #050b18',
         padding: '24px',
       }}
     >
       {/* Decorative orbs */}
-      <div style={{ position: 'fixed', top: '10%', right: '15%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'fixed', top: '10%', right: '15%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(184, 33, 5, 0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'fixed', bottom: '15%', left: '10%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
       <div className="fade-in" style={{ width: '100%', maxWidth: 420 }}>
@@ -50,10 +50,10 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{
             width: 64, height: 64, margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            background: 'linear-gradient(135deg, #b82105, #5f758e)',
             borderRadius: 18,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28, boxShadow: '0 8px 32px rgba(99,102,241,0.4)',
+            fontSize: 28, boxShadow: '0 8px 32px rgba(184, 33, 5, 0.4)',
           }}>
             ⚡
           </div>

@@ -147,7 +147,7 @@ export default function SettingsPage() {
 
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--text-secondary)' }}>
-              <span style={{ width: 20, height: 20, border: '2px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+              <span style={{ width: 20, height: 20, border: '2px solid rgba(184, 33, 5, 0.3)', borderTopColor: '#b82105', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
               Loading settings…
             </div>
           ) : (
@@ -156,7 +156,7 @@ export default function SettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, marginBottom: 20 }}>
                 
                 {/* VA Team Goals Card */}
-                <div className="glass-card" style={{ padding: '24px 28px', borderColor: 'rgba(99,102,241,0.25)' }}>
+                <div className="glass-card" style={{ padding: '24px 28px', borderColor: 'rgba(184, 33, 5, 0.25)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                     <span style={{ fontSize: 20 }}>🇺🇸</span>
                     <div>
@@ -190,7 +190,7 @@ export default function SettingsPage() {
                                 flex: 1,
                                 height: 6,
                                 appearance: 'none',
-                                background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
+                                background: `linear-gradient(to right, #b82105 0%, #b82105 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
                                 borderRadius: 4,
                                 outline: 'none',
                                 cursor: 'pointer',
@@ -294,14 +294,14 @@ export default function SettingsPage() {
                         <div key={field.key} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--border)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{field.label.split(' ')[0]}</span>
-                            <span style={{ fontSize: 10, color: '#6366f1', fontWeight: 700 }}>60%</span>
+                            <span style={{ fontSize: 10, color: '#b82105', fontWeight: 700 }}>60%</span>
                           </div>
-                          <div style={{ fontSize: 18, fontWeight: 800, color: '#6366f1', marginBottom: 2 }}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: '#b82105', marginBottom: 2 }}>
                             {previewValue}{field.unit === '%' ? '%' : ''}
                           </div>
                           <div style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 4 }}>Goal: {goal}</div>
                           <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: '60%', background: '#6366f1' }} />
+                            <div style={{ height: '100%', width: '60%', background: '#b82105' }} />
                           </div>
                         </div>
                       )
@@ -361,19 +361,19 @@ export default function SettingsPage() {
           width: 18px;
           height: 18px;
           border-radius: 50%;
-          background: #6366f1;
+          background: #b82105;
           cursor: pointer;
           border: 2px solid #f8fafc;
-          box-shadow: 0 2px 6px rgba(99,102,241,0.4);
+          box-shadow: 0 2px 6px rgba(184, 33, 5, 0.4);
         }
         input[type="range"]::-moz-range-thumb {
           width: 18px;
           height: 18px;
           border-radius: 50%;
-          background: #6366f1;
+          background: #b82105;
           cursor: pointer;
           border: 2px solid #f8fafc;
-          box-shadow: 0 2px 6px rgba(99,102,241,0.4);
+          box-shadow: 0 2px 6px rgba(184, 33, 5, 0.4);
         }
       `}</style>
     </div>

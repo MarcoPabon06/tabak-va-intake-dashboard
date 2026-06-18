@@ -10,7 +10,7 @@ interface Props {
 const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   milestone:  { label: 'Signing Milestones', color: '#f59e0b' },
   streak:     { label: 'Streak & Consistency', color: '#ef4444' },
-  conversion: { label: 'Conversion Rate', color: '#6366f1' },
+  conversion: { label: 'Conversion Rate', color: '#b82105' },
   mvp:        { label: 'Monthly MVP', color: '#10b981' },
 }
 
@@ -40,8 +40,8 @@ export default function BadgeShelf({ badges }: Props) {
         </div>
         <span style={{
           fontSize: 12, fontWeight: 700,
-          color: earnedCount === totalCount ? '#10b981' : '#6366f1',
-          background: earnedCount === totalCount ? 'rgba(16,185,129,0.15)' : 'rgba(99,102,241,0.15)',
+          color: earnedCount === totalCount ? '#10b981' : '#b82105',
+          background: earnedCount === totalCount ? 'rgba(16,185,129,0.15)' : 'rgba(184, 33, 5, 0.15)',
           padding: '3px 10px', borderRadius: 8,
         }}>
           {earnedCount}/{totalCount} unlocked
@@ -80,7 +80,7 @@ export default function BadgeShelf({ badges }: Props) {
                       filter: badge.earned ? 'none' : 'grayscale(1) opacity(0.35)',
                       transform: isHovered ? 'translateY(-3px) scale(1.08)' : 'none',
                       boxShadow: badge.earned && isHovered
-                        ? '0 8px 20px rgba(99,102,241,0.25)'
+                        ? '0 8px 20px rgba(184, 33, 5, 0.25)'
                         : 'none',
                     }}
                   >
@@ -93,7 +93,7 @@ export default function BadgeShelf({ badges }: Props) {
                         bottom: '110%',
                         left: 0,
                         background: 'rgba(10,22,40,0.97)',
-                        border: '1px solid rgba(99,102,241,0.3)',
+                        border: '1px solid rgba(184, 33, 5, 0.3)',
                         borderRadius: 10,
                         padding: '10px 14px',
                         whiteSpace: 'nowrap',
@@ -138,8 +138,8 @@ export default function BadgeShelf({ badges }: Props) {
                           transform: 'rotate(45deg)',
                           width: 10, height: 10,
                           background: 'rgba(10,22,40,0.97)',
-                          borderRight: '1px solid rgba(99,102,241,0.3)',
-                          borderBottom: '1px solid rgba(99,102,241,0.3)',
+                          borderRight: '1px solid rgba(184, 33, 5, 0.3)',
+                          borderBottom: '1px solid rgba(184, 33, 5, 0.3)',
                         }} />
                       </div>
                     )}

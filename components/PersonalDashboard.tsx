@@ -47,7 +47,7 @@ interface Props {
 
 function progressColor(pct: number) {
   if (pct >= 100) return '#10b981'
-  if (pct >= 70) return '#6366f1'
+  if (pct >= 70) return '#b82105'
   if (pct >= 40) return '#f59e0b'
   return '#ef4444'
 }
@@ -172,7 +172,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
   const kpiCards = lob === 'SSD' ? [
     { label: 'Total Converted', value: totalConverted, color: '#10b981', icon: '💼' },
     { label: 'Total Signed', value: totalSigned, color: '#3b82f6', icon: '✅' },
-    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
+    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#b82105', icon: '📈' },
     { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
     { label: 'RFC Sent', value: totalRfc, color: '#ec4899', icon: '📄' },
     { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
@@ -180,7 +180,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
   ] : [
     { label: 'Total Signed', value: totalSigned, color: '#10b981', icon: '✅' },
     { label: 'Total Unsigned', value: totalUnsigned, color: '#f59e0b', icon: '⏳' },
-    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#6366f1', icon: '📈' },
+    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#b82105', icon: '📈' },
     { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
     { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
     { label: 'Rejected', value: totalRejected, color: '#94a3b8', icon: '❌' },
@@ -192,8 +192,8 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
       <div className="glass-card fade-in" style={{
         padding: '24px 28px',
         marginBottom: 16,
-        background: 'linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(16,185,129,0.08) 100%)',
-        borderColor: 'rgba(99,102,241,0.25)',
+        background: 'linear-gradient(135deg, rgba(184, 33, 5, 0.12) 0%, rgba(16,185,129,0.08) 100%)',
+        borderColor: 'rgba(184, 33, 5, 0.25)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ flex: 1 }}>
@@ -217,7 +217,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
               background: myRank === 1 ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)',
               border: `1px solid ${myRank === 1 ? 'rgba(245,158,11,0.3)' : 'var(--border)'}`,
             }}>
-              <span style={{ fontSize: 22, fontWeight: 800, color: myRank === 1 ? '#f59e0b' : myRank <= 3 ? '#6366f1' : 'var(--text-primary)' }}>
+              <span style={{ fontSize: 22, fontWeight: 800, color: myRank === 1 ? '#f59e0b' : myRank <= 3 ? '#b82105' : 'var(--text-primary)' }}>
                 #{myRank}
               </span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>of {totalAgents}</span>
@@ -310,7 +310,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
               <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip
-                contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, fontSize: 13 }}
+                contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, fontSize: 13 }}
                 labelStyle={{ color: '#f8fafc', fontWeight: 700 }}
               />
               <Area type="monotone" dataKey={lob === 'SSD' ? 'converted' : 'signed'} stroke={lob === 'SSD' ? '#10b981' : '#3b82f6'} fill="url(#trendGrad)" strokeWidth={2} name={lob === 'SSD' ? 'Converted' : 'Signed'} />
@@ -328,7 +328,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
               <XAxis dataKey="date" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, fontSize: 13 }}
+                contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, fontSize: 13 }}
                 labelStyle={{ color: '#f8fafc', fontWeight: 700 }}
               />
               <Bar dataKey="capd" radius={[4, 4, 0, 0]} name="CAPD">

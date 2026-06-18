@@ -508,12 +508,12 @@ export default function CoachingPage() {
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: hubTab === 'coaching' ? '#6366f1' : '#64748b',
+                color: hubTab === 'coaching' ? '#b82105' : '#64748b',
                 fontSize: 15,
                 fontWeight: 800,
                 padding: '6px 12px',
                 cursor: 'pointer',
-                borderBottom: hubTab === 'coaching' ? '2px solid #6366f1' : 'none',
+                borderBottom: hubTab === 'coaching' ? '2px solid #b82105' : 'none',
                 transition: 'color 0.2s',
               }}
             >
@@ -581,7 +581,7 @@ export default function CoachingPage() {
               <button
                 onClick={() => setShowForm(!showForm)}
                 style={{
-                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                   color: '#fff',
                   border: 'none',
                   padding: '8px 16px',
@@ -620,7 +620,7 @@ export default function CoachingPage() {
           <>
             {/* Log Coaching Form */}
             {showForm && isMaster && (
-              <div className="glass-card fade-in" style={{ padding: '24px 28px', marginBottom: 24, borderColor: 'rgba(99,102,241,0.25)' }}>
+              <div className="glass-card fade-in" style={{ padding: '24px 28px', marginBottom: 24, borderColor: 'rgba(184, 33, 5, 0.25)' }}>
                 <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16, color: '#e2e8f0' }}>New Coaching Check-in</h3>
                 {formError && (
                   <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#ef4444', fontSize: 12, fontWeight: 600 }}>
@@ -689,7 +689,7 @@ export default function CoachingPage() {
                                 border: 'none',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
-                                background: isSelected ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'rgba(255,255,255,0.06)',
+                                background: isSelected ? 'linear-gradient(135deg, #b82105, #4f46e5)' : 'rgba(255,255,255,0.06)',
                                 color: isSelected ? '#fff' : '#94a3b8',
                               }}
                             >
@@ -787,7 +787,7 @@ export default function CoachingPage() {
                   {selectedCalendarDate && (
                     <button
                       onClick={() => setSelectedCalendarDate(null)}
-                      style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#6366f1', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer' }}
+                      style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#b82105', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer' }}
                     >
                       ✕ Clear Calendar Filter
                     </button>
@@ -833,7 +833,7 @@ export default function CoachingPage() {
                               <button
                                 onClick={() => handleScheduleRequestClick(req)}
                                 style={{
-                                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                                  background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                                   color: '#fff',
                                   border: 'none',
                                   padding: '4px 12px',
@@ -868,7 +868,7 @@ export default function CoachingPage() {
                         className="glass-card fade-in"
                         style={{
                           padding: '20px 24px',
-                          borderLeft: '4px solid #6366f1',
+                          borderLeft: '4px solid #b82105',
                           position: 'relative',
                         }}
                       >
@@ -901,7 +901,7 @@ export default function CoachingPage() {
                         {session.linked_evaluation_id && (
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#cbd5e1', marginBottom: 12 }}>
                             <span>📋 Linked Call Grade:</span>
-                            <span style={{ fontWeight: 800, color: '#6366f1' }}>{session.linked_eval_score}%</span>
+                            <span style={{ fontWeight: 800, color: '#b82105' }}>{session.linked_eval_score}%</span>
                             <span style={{ color: '#64748b' }}>({session.linked_eval_date})</span>
                             {session.linked_eval_call_id && <span style={{ color: '#94a3b8' }}>Call: {session.linked_eval_call_id}</span>}
                           </div>
@@ -988,17 +988,17 @@ export default function CoachingPage() {
                           onClick={() => isClickable && setSelectedCalendarDate(isSelected ? null : cellDateString)}
                           style={{
                             height: 34, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 11,
-                            fontWeight: isClickable ? 700 : 500, color: isSelected ? '#fff' : hasFollowUp ? '#6366f1' : hasPendingRequest ? '#f59e0b' : '#cbd5e1',
-                            background: isSelected ? 'rgba(99,102,241,0.25)' : hasFollowUp ? 'rgba(99,102,241,0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent',
-                            border: isSelected ? '1px solid #6366f1' : hasPendingRequest ? '1px solid rgba(245,158,11,0.3)' : hasFollowUp ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+                            fontWeight: isClickable ? 700 : 500, color: isSelected ? '#fff' : hasFollowUp ? '#b82105' : hasPendingRequest ? '#f59e0b' : '#cbd5e1',
+                            background: isSelected ? 'rgba(184, 33, 5, 0.25)' : hasFollowUp ? 'rgba(184, 33, 5, 0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent',
+                            border: isSelected ? '1px solid #b82105' : hasPendingRequest ? '1px solid rgba(245,158,11,0.3)' : hasFollowUp ? '1px solid rgba(184, 33, 5, 0.2)' : '1px solid transparent',
                             borderRadius: 6, cursor: isClickable ? 'pointer' : 'default', transition: 'background 0.2s, border 0.2s'
                           }}
-                          onMouseOver={(e) => isClickable && !isSelected && (e.currentTarget.style.background = 'rgba(99,102,241,0.15)')}
-                          onMouseOut={(e) => isClickable && !isSelected && (e.currentTarget.style.background = hasFollowUp ? 'rgba(99,102,241,0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent')}
+                          onMouseOver={(e) => isClickable && !isSelected && (e.currentTarget.style.background = 'rgba(184, 33, 5, 0.15)')}
+                          onMouseOut={(e) => isClickable && !isSelected && (e.currentTarget.style.background = hasFollowUp ? 'rgba(184, 33, 5, 0.08)' : hasPendingRequest ? 'rgba(245,158,11,0.05)' : 'transparent')}
                         >
                           <span>{dayVal}</span>
                           {hasFollowUp && (
-                            <span style={{ position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: '50%', background: '#6366f1', boxShadow: '0 0 6px #6366f1' }} />
+                            <span style={{ position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: '50%', background: '#b82105', boxShadow: '0 0 6px #b82105' }} />
                           )}
                           {hasPendingRequest && (
                             <span style={{ position: 'absolute', top: 4, right: 4, width: 4, height: 4, borderRadius: '50%', background: '#f59e0b', boxShadow: '0 0 6px #f59e0b' }} title={`${dayPendingRequests.length} pending request(s)`} />
@@ -1298,7 +1298,7 @@ export default function CoachingPage() {
                             <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
                               <div style={{
                                 height: '100%', width: `${elapsedPercent}%`,
-                                background: `linear-gradient(90deg, ${plan.status === 'Active' ? '#f59e0b' : plan.status.includes('Successful') ? '#10b981' : '#ef4444'}, #6366f1)`,
+                                background: `linear-gradient(90deg, ${plan.status === 'Active' ? '#f59e0b' : plan.status.includes('Successful') ? '#10b981' : '#ef4444'}, #b82105)`,
                                 borderRadius: 4
                               }} />
                             </div>
@@ -1454,7 +1454,7 @@ export default function CoachingPage() {
                     style={{
                       padding: '20px 24px',
                       borderLeft: `4px solid ${
-                        request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'
+                        request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#b82105' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'
                       }`,
                       position: 'relative',
                     }}
@@ -1476,8 +1476,8 @@ export default function CoachingPage() {
                       <span style={{
                         fontSize: 10,
                         fontWeight: 700,
-                        color: request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b',
-                        background: `${request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#6366f1' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
+                        color: request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#b82105' : request.status === 'Declined' ? '#ef4444' : '#f59e0b',
+                        background: `${request.status === 'Completed' ? '#10b981' : request.status === 'Scheduled' ? '#b82105' : request.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
                         padding: '2px 8px',
                         borderRadius: 4,
                         marginLeft: 'auto'
@@ -1489,7 +1489,7 @@ export default function CoachingPage() {
                     {request.linked_evaluation_id && (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#cbd5e1', marginBottom: 12 }}>
                         <span>📋 Linked Evaluation:</span>
-                        <span style={{ fontWeight: 800, color: '#6366f1' }}>{request.linked_eval_score}%</span>
+                        <span style={{ fontWeight: 800, color: '#b82105' }}>{request.linked_eval_score}%</span>
                         <span style={{ color: '#64748b' }}>({request.linked_eval_date})</span>
                         {request.linked_eval_call_id && <span style={{ color: '#94a3b8' }}>Call: {request.linked_eval_call_id}</span>}
                       </div>
@@ -1506,8 +1506,8 @@ export default function CoachingPage() {
                       <div style={{
                         marginBottom: 14,
                         padding: '10px 14px',
-                        background: request.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(99, 102, 241, 0.05)',
-                        border: '1px solid ' + (request.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
+                        background: request.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(184, 33, 5, 0.05)',
+                        border: '1px solid ' + (request.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(184, 33, 5, 0.15)'),
                         borderRadius: 8,
                         fontSize: 12,
                         color: request.status === 'Declined' ? '#fca5a5' : '#a5b4fc',
@@ -1536,7 +1536,7 @@ export default function CoachingPage() {
                         <button
                           onClick={() => handleScheduleRequestClick(request)}
                           style={{
-                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                             color: '#fff',
                             border: 'none',
                             padding: '6px 14px',

@@ -3,13 +3,13 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const AGENT_COLORS: Record<string, string> = {
-  'Daniel Castillo': '#6366f1',
+  'Daniel Castillo': '#b82105',
   'Adriana Soto': '#ec4899',
   'Oliver Ortega': '#10b981',
   'Alejandra NicoleReyes': '#f59e0b',
   'Omar Soto': '#3b82f6',
 }
-const ALL_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6']
+const ALL_COLORS = ['#b82105', '#ec4899', '#10b981', '#f59e0b', '#3b82f6']
 
 interface Row {
   agent_name: string
@@ -66,25 +66,25 @@ export default function ConversionChart({ data, lob = 'VA' }: Props) {
     const d = payload[0].payload
     if (lob === 'SSD') {
       return (
-        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
           <div style={{ fontWeight: 700, marginBottom: 6, color: '#f8fafc' }}>{d.fullName}</div>
           <div style={{ color: '#94a3b8' }}>💼 Converted: <span style={{ color: '#10b981', fontWeight: 700 }}>{d.Converted}</span></div>
           <div style={{ color: '#94a3b8' }}>✅ Signed: <span style={{ color: '#3b82f6', fontWeight: 700 }}>{d.Signed}</span></div>
-          <div style={{ color: '#94a3b8', marginTop: 4 }}>Conversion Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{d.rate}%</span></div>
+          <div style={{ color: '#94a3b8', marginTop: 4 }}>Conversion Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{d.rate}%</span></div>
         </div>
       )
     } else if (lob === 'VA') {
       return (
-        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
           <div style={{ fontWeight: 700, marginBottom: 6, color: '#f8fafc' }}>{d.fullName}</div>
           <div style={{ color: '#94a3b8' }}>✅ Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{d.Signed}</span></div>
           <div style={{ color: '#94a3b8' }}>⏳ Unsigned: <span style={{ color: '#f59e0b', fontWeight: 700 }}>{d.Unsigned}</span></div>
-          <div style={{ color: '#94a3b8', marginTop: 4 }}>Conversion Rate: <span style={{ color: '#6366f1', fontWeight: 700 }}>{d.rate}%</span></div>
+          <div style={{ color: '#94a3b8', marginTop: 4 }}>Conversion Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{d.rate}%</span></div>
         </div>
       )
     } else {
       return (
-        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13 }}>
           <div style={{ fontWeight: 700, marginBottom: 6, color: '#f8fafc' }}>{d.fullName}</div>
           <div style={{ color: '#94a3b8' }}>✅ Signed: <span style={{ color: '#3b82f6', fontWeight: 700 }}>{d.Signed}</span></div>
           <div style={{ color: '#94a3b8' }}>💼 Converted: <span style={{ color: '#10b981', fontWeight: 700 }}>{d.Converted}</span></div>
@@ -111,7 +111,7 @@ export default function ConversionChart({ data, lob = 'VA' }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="agent" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99,102,241,0.06)' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(184, 33, 5, 0.06)' }} />
           <Legend formatter={(val) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{val}</span>} />
           {lob === 'SSD' ? (
             <>

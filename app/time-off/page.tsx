@@ -304,9 +304,9 @@ export default function TimeOffPage() {
                 padding: '10px 12px',
                 borderRadius: 12,
                 cursor: 'pointer',
-                background: isSelected ? 'rgba(99, 102, 241, 0.15)' : statusBg,
+                background: isSelected ? 'rgba(184, 33, 5, 0.15)' : statusBg,
                 border: isSelected 
-                  ? '2px solid #6366f1' 
+                  ? '2px solid #b82105' 
                   : isToday 
                     ? '2px solid rgba(255, 255, 255, 0.4)' 
                     : `1px solid ${statusBorder}`,
@@ -314,7 +314,7 @@ export default function TimeOffPage() {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                boxShadow: isSelected ? '0 0 15px rgba(99, 102, 241, 0.3)' : 'none'
+                boxShadow: isSelected ? '0 0 15px rgba(184, 33, 5, 0.3)' : 'none'
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -532,7 +532,7 @@ export default function TimeOffPage() {
                       padding: '8px 16px',
                       fontSize: 13,
                       fontWeight: 600,
-                      boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.2)' : 'none'
+                      boxShadow: activeTab === tab.id ? '0 4px 12px rgba(184, 33, 5, 0.2)' : 'none'
                     }}
                     onClick={() => setActiveTab(tab.id as any)}
                   >
@@ -545,7 +545,7 @@ export default function TimeOffPage() {
               {/* Loader */}
               {loading && activeTab !== 'calendar' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--text-secondary)' }}>
-                  <span style={{ width: 20, height: 20, border: '2px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ width: 20, height: 20, border: '2px solid rgba(184, 33, 5, 0.3)', borderTopColor: '#b82105', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
                   Loading data...
                 </div>
               )}
@@ -829,7 +829,7 @@ export default function TimeOffPage() {
 
                           <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: 12, borderRadius: 10, border: '1px solid var(--border)' }}>
                             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
-                              Range: <span style={{ color: '#6366f1' }}>{req.start_date}</span> to <span style={{ color: '#6366f1' }}>{req.end_date}</span>
+                              Range: <span style={{ color: '#b82105' }}>{req.start_date}</span> to <span style={{ color: '#b82105' }}>{req.end_date}</span>
                             </div>
                             {req.reason && (
                               <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>

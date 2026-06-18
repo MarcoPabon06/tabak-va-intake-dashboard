@@ -69,7 +69,7 @@ export default function QAEntryPage() {
 
   function getScoreColor(p: number) {
     if (p >= 90) return '#10b981'
-    if (p >= 75) return '#6366f1'
+    if (p >= 75) return '#b82105'
     if (p >= 60) return '#f59e0b'
     if (p >= 40) return '#ef4444'
     return '#dc2626'
@@ -151,7 +151,7 @@ export default function QAEntryPage() {
           </div>
 
           {/* ═══════ Section A: Upload QA Excel ═══════ */}
-          <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 28, borderColor: 'rgba(99,102,241,0.25)' }}>
+          <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 28, borderColor: 'rgba(184, 33, 5, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
               <span style={{ fontSize: 20 }}>📥</span>
               <div>
@@ -172,8 +172,8 @@ export default function QAEntryPage() {
                 padding: '40px 24px',
                 textAlign: 'center',
                 cursor: 'pointer',
-                borderColor: dragging ? '#6366f1' : file ? 'rgba(16,185,129,0.5)' : 'var(--border)',
-                background: dragging ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)',
+                borderColor: dragging ? '#b82105' : file ? 'rgba(16,185,129,0.5)' : 'var(--border)',
+                background: dragging ? 'rgba(184, 33, 5, 0.06)' : 'var(--bg-card)',
                 transition: 'all 0.2s',
                 marginBottom: 16,
               }}
@@ -252,7 +252,7 @@ export default function QAEntryPage() {
           </div>
 
           {/* ═══════ Section B: Manual QA Entry ═══════ */}
-          <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 28, borderColor: 'rgba(99,102,241,0.25)' }}>
+          <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 28, borderColor: 'rgba(184, 33, 5, 0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
               <span style={{ fontSize: 20 }}>✏️</span>
               <div>
@@ -366,7 +366,7 @@ export default function QAEntryPage() {
                           flex: 1,
                           height: 6,
                           appearance: 'none',
-                          background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${fillPct}%, rgba(255,255,255,0.08) ${fillPct}%, rgba(255,255,255,0.08) 100%)`,
+                          background: `linear-gradient(to right, #b82105 0%, #b82105 ${fillPct}%, rgba(255,255,255,0.08) ${fillPct}%, rgba(255,255,255,0.08) 100%)`,
                           borderRadius: 4,
                           outline: 'none',
                           cursor: 'pointer',
@@ -506,13 +506,13 @@ export default function QAEntryPage() {
         select.input-field option { background: #0a1628; color: #f8fafc; }
         input[type="range"]::-webkit-slider-thumb {
           appearance: none; width: 18px; height: 18px; border-radius: 50%;
-          background: #6366f1; cursor: pointer; border: 2px solid #f8fafc;
-          box-shadow: 0 2px 6px rgba(99,102,241,0.4);
+          background: #b82105; cursor: pointer; border: 2px solid #f8fafc;
+          box-shadow: 0 2px 6px rgba(184, 33, 5, 0.4);
         }
         input[type="range"]::-moz-range-thumb {
           width: 18px; height: 18px; border-radius: 50%;
-          background: #6366f1; cursor: pointer; border: 2px solid #f8fafc;
-          box-shadow: 0 2px 6px rgba(99,102,241,0.4);
+          background: #b82105; cursor: pointer; border: 2px solid #f8fafc;
+          box-shadow: 0 2px 6px rgba(184, 33, 5, 0.4);
         }
       `}</style>
     </div>

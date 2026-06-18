@@ -36,7 +36,7 @@ interface Evaluation {
 
 function tierColor(tier: string) {
   if (tier === 'Top Performer') return '#10b981'
-  if (tier === 'Strong Performer') return '#6366f1'
+  if (tier === 'Strong Performer') return '#b82105'
   if (tier === 'Developing Performer') return '#f59e0b'
   if (tier === 'Performance Risk') return '#ef4444'
   return '#dc2626'
@@ -51,8 +51,8 @@ function getTier(score: number): string {
 }
 
 const CATEGORIES = [
-  { key: 'score_introduction', label: 'Professional Introduction', max: 20, color: '#6366f1' },
-  { key: 'score_pk_policies', label: 'PK & Application Policies', max: 25, color: '#8b5cf6' },
+  { key: 'score_introduction', label: 'Professional Introduction', max: 20, color: '#b82105' },
+  { key: 'score_pk_policies', label: 'PK & Application Policies', max: 25, color: '#5f758e' },
   { key: 'score_eligibility', label: 'Eligibility Assessment', max: 20, color: '#a78bfa' },
   { key: 'score_deadline', label: 'Process & Deadline', max: 10, color: '#10b981' },
   { key: 'score_documentation', label: 'Documentation in CRM', max: 15, color: '#f59e0b' },
@@ -202,7 +202,7 @@ function ResolutionForm({ evaluation, onResolved }: { evaluation: Evaluation; on
             onClick={() => setIsRevising(true)}
             style={{
               flex: 1,
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              background: 'linear-gradient(135deg, #b82105, #4f46e5)',
               color: '#fff',
               border: 'none',
               padding: '8px 12px',
@@ -315,8 +315,8 @@ function EvaluationDetails({
             <span style={{
               fontSize: 10,
               fontWeight: 700,
-              color: requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#6366f1' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b',
-              background: `${requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#6366f1' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
+              color: requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#b82105' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b',
+              background: `${requestForEval.status === 'Completed' ? '#10b981' : requestForEval.status === 'Scheduled' ? '#b82105' : requestForEval.status === 'Declined' ? '#ef4444' : '#f59e0b'}20`,
               padding: '2px 8px',
               borderRadius: 4,
               textTransform: 'uppercase',
@@ -332,8 +332,8 @@ function EvaluationDetails({
         <div style={{
           marginTop: 10,
           padding: '8px 12px',
-          background: requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(99, 102, 241, 0.05)',
-          border: '1px solid ' + (requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(99, 102, 241, 0.15)'),
+          background: requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.05)' : 'rgba(184, 33, 5, 0.05)',
+          border: '1px solid ' + (requestForEval.status === 'Declined' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(184, 33, 5, 0.15)'),
           borderRadius: 8,
           fontSize: 11,
           color: requestForEval.status === 'Declined' ? '#fca5a5' : '#a5b4fc',
@@ -394,7 +394,7 @@ function EvaluationDetails({
                 onRequestFeedback(ev.id)
               }}
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                 color: '#fff',
                 border: 'none',
                 padding: '6px 14px',
@@ -553,7 +553,7 @@ function RequestFeedbackModal({
           padding: '24px 28px',
           maxWidth: 480,
           width: '90%',
-          borderColor: 'rgba(99, 102, 241, 0.25)',
+          borderColor: 'rgba(184, 33, 5, 0.25)',
           background: 'rgba(10, 22, 40, 0.95)',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
         }}
@@ -654,7 +654,7 @@ function RequestFeedbackModal({
               type="submit"
               disabled={submitting || !notes.trim()}
               style={{
-                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                 color: '#fff',
                 border: 'none',
                 padding: '8px 20px',
@@ -810,7 +810,7 @@ export default function QAPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
           <h1 className="fade-in" style={{
             fontSize: 22, fontWeight: 800, margin: 0,
-            background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
+            background: 'linear-gradient(135deg, #b82105, #a78bfa)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>
             📋 QA Scores
@@ -854,7 +854,7 @@ export default function QAPage() {
             {/* Summary Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
               {[
-                { label: 'Total Evaluations', value: evals.length, icon: '📝', color: '#6366f1' },
+                { label: 'Total Evaluations', value: evals.length, icon: '📝', color: '#b82105' },
                 { label: 'Team Avg Score', value: `${teamAvg}%`, icon: '📊', color: tierColor(getTier(teamAvg)) },
                 { label: 'Best Performer', value: bestPerformer?.name || '-', icon: '🏆', color: '#10b981', sub: bestPerformer ? `${bestPerformer.avg}%` : '' },
                 { label: 'Needs Coaching', value: needsCoaching.length, icon: '⚠️', color: needsCoaching.length > 0 ? '#ef4444' : '#10b981' },
@@ -879,12 +879,12 @@ export default function QAPage() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: activeTab === 'breakdown' ? '#6366f1' : '#64748b',
+                  color: activeTab === 'breakdown' ? '#b82105' : '#64748b',
                   fontSize: 13,
                   fontWeight: 700,
                   padding: '6px 12px',
                   cursor: 'pointer',
-                  borderBottom: activeTab === 'breakdown' ? '2px solid #6366f1' : 'none',
+                  borderBottom: activeTab === 'breakdown' ? '2px solid #b82105' : 'none',
                   transition: 'color 0.2s',
                 }}
               >
@@ -1002,10 +1002,10 @@ export default function QAPage() {
                               cursor: 'pointer',
                               borderBottom: '1px solid rgba(255,255,255,0.05)',
                               transition: 'background 0.15s',
-                              background: expandedAgent === a.name ? 'rgba(99,102,241,0.08)' : 'transparent',
+                              background: expandedAgent === a.name ? 'rgba(184, 33, 5, 0.08)' : 'transparent',
                             }}
                             onMouseOver={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                            onMouseOut={(e) => (e.currentTarget.style.background = expandedAgent === a.name ? 'rgba(99,102,241,0.08)' : 'transparent')}
+                            onMouseOut={(e) => (e.currentTarget.style.background = expandedAgent === a.name ? 'rgba(184, 33, 5, 0.08)' : 'transparent')}
                           >
                             <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: 13 }}>{a.name}</td>
                             <td style={{ padding: '12px 14px', fontWeight: 700, fontSize: 14, color: tierColor(a.tier) }}>{a.avg}%</td>
@@ -1128,8 +1128,8 @@ export default function QAPage() {
                   <AreaChart data={trendData}>
                     <defs>
                       <linearGradient id="qaScoreGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                        <stop offset="0%" stopColor="#b82105" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#b82105" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1139,7 +1139,7 @@ export default function QAPage() {
                       contentStyle={{ background: 'rgba(10,22,40,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
                       formatter={(v: any) => [`${v}%`, 'Score']}
                     />
-                    <Area type="monotone" dataKey="score" stroke="#6366f1" fill="url(#qaScoreGrad)" strokeWidth={2} dot={{ r: 3, fill: '#6366f1' }} />
+                    <Area type="monotone" dataKey="score" stroke="#b82105" fill="url(#qaScoreGrad)" strokeWidth={2} dot={{ r: 3, fill: '#b82105' }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

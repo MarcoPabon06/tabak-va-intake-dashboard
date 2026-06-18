@@ -49,7 +49,7 @@ export default function ImportPage() {
           </div>
 
           {/* Instructions card */}
-          <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(99,102,241,0.3)' }}>
+          <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(184, 33, 5, 0.3)' }}>
             <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               What gets imported
             </h3>
@@ -81,8 +81,8 @@ export default function ImportPage() {
               padding: '40px 24px',
               textAlign: 'center',
               cursor: 'pointer',
-              borderColor: dragging ? '#6366f1' : file ? 'rgba(16,185,129,0.5)' : 'var(--border)',
-              background: dragging ? 'rgba(99,102,241,0.06)' : 'var(--bg-card)',
+              borderColor: dragging ? '#b82105' : file ? 'rgba(16,185,129,0.5)' : 'var(--border)',
+              background: dragging ? 'rgba(184, 33, 5, 0.06)' : 'var(--bg-card)',
               transition: 'all 0.2s',
               marginBottom: 20,
             }}

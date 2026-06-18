@@ -201,7 +201,7 @@ export default function UsersPage() {
                     <tr key={user.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #b82105, #5f758e)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
                             {(user.display_name || user.username).charAt(0).toUpperCase()}
                           </div>
                           <span style={{ fontWeight: 600 }}>{user.display_name || user.username}</span>

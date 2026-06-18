@@ -6,11 +6,11 @@ import { useSession, signOut } from 'next-auth/react'
 import NotificationBell from '@/components/NotificationBell'
 
 const AGENT_COLORS: Record<string, string> = {
-  'Daniel Castillo': '#6366f1',
-  'Adriana Soto': '#ec4899',
+  'Daniel Castillo': '#b82105',
+  'Adriana Soto': '#5f758e',
   'Oliver Ortega': '#10b981',
-  'Alejandra NicoleReyes': '#f59e0b',
-  'Omar Soto': '#3b82f6',
+  'Alejandra NicoleReyes': '#f5a524',
+  'Omar Soto': '#0284c7',
 }
 
 export { AGENT_COLORS }
@@ -55,10 +55,10 @@ export default function Navigation() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 36, height: 36,
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            background: 'linear-gradient(135deg, #b82105, #07092d)',
             borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
+            fontSize: 18, boxShadow: '0 4px 12px rgba(184, 33, 5, 0.35)',
             flexShrink: 0,
           }}>⚡</div>
           <div>

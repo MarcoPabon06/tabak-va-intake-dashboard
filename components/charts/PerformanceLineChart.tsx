@@ -13,14 +13,14 @@ import {
 import { format, parseISO } from 'date-fns'
 
 const AGENT_COLORS: Record<string, string> = {
-  'Daniel Castillo': '#6366f1',
+  'Daniel Castillo': '#b82105',
   'Adriana Soto': '#ec4899',
   'Oliver Ortega': '#10b981',
   'Alejandra NicoleReyes': '#f59e0b',
   'Omar Soto': '#3b82f6',
 }
 
-const ALL_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#06b6d4', '#8b5cf6', '#f97316']
+const ALL_COLORS = ['#b82105', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#06b6d4', '#5f758e', '#f97316']
 
 interface Row {
   date: string
@@ -63,7 +63,7 @@ export default function PerformanceLineChart({ data, metric, title }: Props) {
     return (
       <div style={{
         background: 'rgba(10,22,40,0.97)',
-        border: '1px solid rgba(99,102,241,0.3)',
+        border: '1px solid rgba(184, 33, 5, 0.3)',
         borderRadius: 10,
         padding: '10px 14px',
         fontSize: 13,
