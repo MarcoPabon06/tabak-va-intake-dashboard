@@ -48,15 +48,19 @@ export default function LoginPage() {
       <div className="fade-in" style={{ width: '100%', maxWidth: 420 }}>
         {/* Logo / Header */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{
-            width: 64, height: 64, margin: '0 auto 16px',
-            background: 'linear-gradient(135deg, #b82105, #5f758e)',
-            borderRadius: 18,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28, boxShadow: '0 8px 32px rgba(184, 33, 5, 0.4)',
-          }}>
-            ⚡
-          </div>
+          <img
+            src="/logo.png"
+            alt="Tabak LLC Logo"
+            style={{
+              width: 64,
+              height: 64,
+              margin: '0 auto 16px',
+              borderRadius: 18,
+              boxShadow: '0 8px 32px rgba(184, 33, 5, 0.4)',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
           <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em' }}>
             <span className="gradient-text">Tabak LLC</span>
           </h1>

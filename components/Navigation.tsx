@@ -51,24 +51,27 @@ export default function Navigation() {
       }}
     >
       {/* Logo */}
-      <div style={{ padding: '8px 8px 24px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36,
-            background: 'linear-gradient(135deg, #b82105, #07092d)',
-            borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, boxShadow: '0 4px 12px rgba(184, 33, 5, 0.35)',
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 8px 24px', borderBottom: '1px solid var(--border)' }}>
+        <img
+          src="/logo.png"
+          alt="Tabak LLC Logo"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            boxShadow: '0 4px 12px rgba(184, 33, 5, 0.35)',
             flexShrink: 0,
-          }}>⚡</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-0.01em' }}>Tabak LLC</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
-              {isMaster ? 'Intake Management' : ((session?.user as any)?.lob === 'SSD' ? 'SSD Division' : 'Veterans Benefits')}
-            </div>
+            objectFit: 'cover'
+          }}
+        />
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-0.01em' }}>Tabak LLC</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
+            {isMaster ? 'Intake Management' : ((session?.user as any)?.lob === 'SSD' ? 'SSD Division' : 'Veterans Benefits')}
           </div>
         </div>
       </div>
+
 
       {/* Nav links */}
       <nav style={{ marginTop: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
