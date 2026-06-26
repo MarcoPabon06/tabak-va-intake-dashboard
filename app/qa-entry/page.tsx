@@ -12,12 +12,12 @@ interface AgentOption {
 }
 
 const CATEGORIES = [
-  { key: 'professional_introduction', label: 'Professional Introduction & Trust', max: 20, icon: '🤝' },
-  { key: 'pk_application_policies', label: 'PK & Application Policies', max: 25, icon: '📋' },
-  { key: 'eligibility_assessment', label: 'Eligibility Assessment', max: 20, icon: '✅' },
-  { key: 'process_deadline_compliance', label: 'Process & Deadline Compliance', max: 10, icon: '⏰' },
-  { key: 'documentation_crm', label: 'Documentation in CRM', max: 15, icon: '💾' },
-  { key: 'objection_handling', label: 'Objection Handling & Retention', max: 10, icon: '🛡️' },
+  { key: 'score_introduction', label: 'Professional Introduction & Trust', max: 20, icon: '🤝' },
+  { key: 'score_pk_policies', label: 'PK & Application Policies', max: 25, icon: '📋' },
+  { key: 'score_eligibility', label: 'Eligibility Assessment', max: 20, icon: '✅' },
+  { key: 'score_deadline', label: 'Process & Deadline Compliance', max: 10, icon: '⏰' },
+  { key: 'score_documentation', label: 'Documentation in CRM', max: 15, icon: '💾' },
+  { key: 'score_objection', label: 'Objection Handling & Retention', max: 10, icon: '🛡️' },
 ]
 
 const ZERO_TOLERANCE = [
