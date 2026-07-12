@@ -80,10 +80,15 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
 
   const totalCrh = myData.reduce((s, r) => s + (r.crh || 0), 0)
   const totalRejected = myData.reduce((s, r) => s + (r.case_rejected || 0), 0)
-  const presentRows = myData.filter((r) => r.present === 'SI')
+  const presentRows = myData.filter((r) => {
+    if (!r.present) return true
+    const p = r.present.toString().trim().toUpperCase().replace(/[Í]/g, 'I')
+    return p === 'SI' || p === 'TARDY' || p === 'PRESENTE' || p === 'PRESENT' || p === '1' || p === 'YES' || p === 'TRUE'
+  })
   const avgCapd = presentRows.length > 0
     ? Math.round(presentRows.reduce((s, r) => s + (r.capd || 0), 0) / presentRows.length)
     : 0
+
   const daysWorked = new Set(myData.map((r) => r.date)).size
 
   // ── Goals ──
