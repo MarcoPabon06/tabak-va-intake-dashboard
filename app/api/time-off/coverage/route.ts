@@ -5,8 +5,8 @@ import getDb from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { searchParams } = new URL(req.url)

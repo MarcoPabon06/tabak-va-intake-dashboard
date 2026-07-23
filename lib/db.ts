@@ -186,7 +186,7 @@ function initSchema(db: Database.Database) {
       start_date TEXT NOT NULL,
       end_date TEXT NOT NULL,
       reason TEXT,
-      status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Approved', 'Rejected')),
+      status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
       reviewed_by TEXT,
       reviewed_at TEXT,
       manager_notes TEXT,
@@ -223,6 +223,41 @@ function initSchema(db: Database.Database) {
         console.error(`Failed to alter table ${alter.table} add ${alter.column}:`, e.message)
       }
     }
+  }
+
+  // Migrate time_off_requests table schema if it lacks 'Cancelled' status in CHECK constraint
+  try {
+    const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='time_off_requests'").get() as { sql: string } | undefined
+    if (tableInfo && tableInfo.sql && !tableInfo.sql.includes('Cancelled')) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE time_off_requests_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL,
+          agent_name TEXT NOT NULL,
+          lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD')),
+          start_date TEXT NOT NULL,
+          end_date TEXT NOT NULL,
+          reason TEXT,
+          status TEXT DEFAULT 'Pending' CHECK(status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
+          reviewed_by TEXT,
+          reviewed_at TEXT,
+          manager_notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY(username) REFERENCES users(username)
+        );
+        INSERT INTO time_off_requests_tmp SELECT * FROM time_off_requests;
+        DROP TABLE time_off_requests;
+        ALTER TABLE time_off_requests_tmp RENAME TO time_off_requests;
+        CREATE INDEX IF NOT EXISTS idx_timeoff_dates ON time_off_requests(start_date, end_date);
+        CREATE INDEX IF NOT EXISTS idx_timeoff_lob ON time_off_requests(lob);
+        CREATE INDEX IF NOT EXISTS idx_timeoff_status ON time_off_requests(status);
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated time_off_requests table to include Cancelled status CHECK constraint')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate time_off_requests schema:', e.message)
   }
 
   // Seed default settings

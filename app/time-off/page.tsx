@@ -14,7 +14,7 @@ interface TimeOffRequest {
   start_date: string
   end_date: string
   reason: string
-  status: 'Pending' | 'Approved' | 'Rejected'
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'
   reviewed_by?: string
   reviewed_at?: string
   manager_notes?: string
@@ -35,7 +35,7 @@ export default function TimeOffPage() {
   const username = session?.user?.name || ''
 
   // Common State
-  const [activeTab, setActiveTab] = useState<'calendar' | 'pending' | 'history'>('calendar')
+  const [activeTab, setActiveTab] = useState<'calendar' | 'pending' | 'history' | 'request'>('request')
   const [requests, setRequests] = useState<TimeOffRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -48,7 +48,14 @@ export default function TimeOffPage() {
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Manager State
+  // Specialist Edit State
+  const [editingRequest, setEditingRequest] = useState<TimeOffRequest | null>(null)
+  const [editStartDate, setEditStartDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
+  const [editReason, setEditReason] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
+  // Manager & Calendar State
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedLobFilter, setSelectedLobFilter] = useState<'All' | 'VA' | 'SSD'>('All')
   const [activeSpecialists, setActiveSpecialists] = useState<ActiveSpecialist[]>([])
@@ -62,12 +69,14 @@ export default function TimeOffPage() {
   useEffect(() => {
     if (session?.user && userRole === 'master') {
       setSelectedLobFilter('All')
+      setActiveTab('calendar')
     } else if (session?.user) {
       setSelectedLobFilter(userLob as any)
+      setActiveTab('request')
     }
   }, [session, userRole, userLob])
 
-  // Fetch requests (and coverage metadata if manager)
+  // Fetch requests and coverage metadata for calendar
   useEffect(() => {
     async function fetchData() {
       setLoading(true)
@@ -79,14 +88,12 @@ export default function TimeOffPage() {
         const dataRequests = await resRequests.json()
         setRequests(dataRequests)
 
-        // Fetch coverage metadata if manager
-        if (userRole === 'master') {
-          const monthStr = format(currentMonth, 'yyyy-MM')
-          const resCoverage = await fetch(`/api/time-off/coverage?month=${monthStr}`)
-          if (!resCoverage.ok) throw new Error('Failed to fetch coverage info')
-          const dataCoverage = await resCoverage.json()
-          setActiveSpecialists(dataCoverage.activeSpecialists || [])
-        }
+        // Fetch coverage metadata for both regular and master users
+        const monthStr = format(currentMonth, 'yyyy-MM')
+        const resCoverage = await fetch(`/api/time-off/coverage?month=${monthStr}`)
+        if (!resCoverage.ok) throw new Error('Failed to fetch coverage info')
+        const dataCoverage = await resCoverage.json()
+        setActiveSpecialists(dataCoverage.activeSpecialists || [])
       } catch (err: any) {
         setError(err.message || 'An error occurred while loading data.')
       } finally {
@@ -96,7 +103,7 @@ export default function TimeOffPage() {
     fetchData()
   }, [reloadCounter, currentMonth, userRole])
 
-  // Handle Request Submit (Specialist)
+  // Handle Request Submit (Specialist New Request)
   async function handleRequestSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -141,9 +148,66 @@ export default function TimeOffPage() {
     }
   }
 
-  // Handle Request Cancel (Specialist)
-  async function handleRequestCancel(id: number) {
-    if (!confirm('Are you sure you want to cancel this pending time off request?')) return
+  // Open Edit Modal
+  function openEditModal(req: TimeOffRequest) {
+    setEditingRequest(req)
+    setEditStartDate(req.start_date)
+    setEditEndDate(req.end_date)
+    setEditReason(req.reason || '')
+  }
+
+  // Handle Request Edit Submit (Specialist Modify Request)
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingRequest) return
+    setError('')
+    setSuccess('')
+
+    if (!editStartDate || !editEndDate) {
+      setError('Please select both start and end dates.')
+      return
+    }
+
+    if (editStartDate > editEndDate) {
+      setError('Start date cannot be after end date.')
+      return
+    }
+
+    setEditSubmitting(true)
+    try {
+      const res = await fetch('/api/time-off', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingRequest.id,
+          start_date: editStartDate,
+          end_date: editEndDate,
+          reason: editReason
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update request')
+      
+      const statusNotice = json.status === 'Pending' ? ' (Status set to Pending for manager re-approval).' : ''
+      setSuccess(`Request updated successfully!${statusNotice}`)
+      setEditingRequest(null)
+      setReloadCounter(prev => prev + 1)
+      setTimeout(() => setSuccess(''), 5000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  // Handle Request Cancel (Specialist or Manager)
+  async function handleRequestCancel(id: number, currentStatus: string) {
+    const isApproved = currentStatus === 'Approved'
+    const confirmMsg = isApproved
+      ? 'Are you sure you want to cancel this approved time off request? It will remain in your history log as Cancelled, and managers will be notified.'
+      : 'Are you sure you want to cancel this time off request?'
+
+    if (!confirm(confirmMsg)) return
     setError('')
     setSuccess('')
 
@@ -180,10 +244,6 @@ export default function TimeOffPage() {
       setReloadCounter(prev => prev + 1)
       setReviewingId(null)
       setManagerNotes('')
-      // Update local detailed day overlay if open
-      if (selectedDay) {
-        // Triggers coverage refresh in useEffect
-      }
       setTimeout(() => setSuccess(''), 4000)
     } catch (err: any) {
       setError(err.message)
@@ -351,6 +411,14 @@ export default function TimeOffPage() {
     )
   }
 
+  // Render Status Badge
+  function renderStatusBadge(status: string) {
+    if (status === 'Approved') return <span className="badge badge-success">Approved</span>
+    if (status === 'Rejected') return <span className="badge badge-danger">Rejected</span>
+    if (status === 'Cancelled') return <span className="badge" style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8', border: '1px solid rgba(148,163,184,0.3)' }}>Cancelled</span>
+    return <span className="badge badge-accent">Pending</span>
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
@@ -367,7 +435,7 @@ export default function TimeOffPage() {
               <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
                 {userRole === 'master' 
                   ? 'Approve leaves, manage requests, and track daily team coverage ratios.' 
-                  : `Request time off and monitor your approval history (${userLob} Intake Division).`}
+                  : `Request time off, manage your leaves, and check team coverage (${userLob} Intake Division).`}
               </p>
             </div>
           </div>
@@ -384,8 +452,44 @@ export default function TimeOffPage() {
             </div>
           )}
 
-          {/* Specialist View layout */}
+          {/* Regular User Tab Switcher */}
           {userRole === 'regular' && (
+            <div className="glass-card" style={{ padding: '8px 12px', display: 'flex', gap: 8, marginBottom: 20, width: 'fit-content' }}>
+              <button
+                className={`btn-secondary ${activeTab === 'request' ? 'btn-primary' : ''}`}
+                style={{ 
+                  background: activeTab === 'request' ? 'var(--accent-primary)' : 'transparent',
+                  border: 'none',
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  boxShadow: activeTab === 'request' ? '0 4px 12px rgba(184, 33, 5, 0.2)' : 'none'
+                }}
+                onClick={() => setActiveTab('request')}
+              >
+                <span style={{ marginRight: 6 }}>✍️</span>
+                Request & History
+              </button>
+              <button
+                className={`btn-secondary ${activeTab === 'calendar' ? 'btn-primary' : ''}`}
+                style={{ 
+                  background: activeTab === 'calendar' ? 'var(--accent-primary)' : 'transparent',
+                  border: 'none',
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  boxShadow: activeTab === 'calendar' ? '0 4px 12px rgba(184, 33, 5, 0.2)' : 'none'
+                }}
+                onClick={() => setActiveTab('calendar')}
+              >
+                <span style={{ marginRight: 6 }}>📅</span>
+                Coverage Calendar ({userLob})
+              </button>
+            </div>
+          )}
+
+          {/* Specialist View: Tab 1 (Form & History) */}
+          {userRole === 'regular' && activeTab === 'request' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.8fr', gap: 24, alignItems: 'start' }}>
               
               {/* Form Card */}
@@ -438,7 +542,7 @@ export default function TimeOffPage() {
               {/* History Card */}
               <div className="glass-card" style={{ padding: 24 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>📜</span> Request History
+                  <span>📜</span> Request History Log
                 </h2>
                 {loading ? (
                   <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading history...</p>
@@ -466,14 +570,10 @@ export default function TimeOffPage() {
                           <span style={{ fontWeight: 700, fontSize: 14 }}>
                             {format(parseISO(req.start_date), 'MMM d, yyyy')} – {format(parseISO(req.end_date), 'MMM d, yyyy')}
                           </span>
-                          <span className={`badge ${
-                            req.status === 'Approved' ? 'badge-success' : req.status === 'Rejected' ? 'badge-danger' : 'badge-accent'
-                          }`}>
-                            {req.status}
-                          </span>
+                          {renderStatusBadge(req.status)}
                         </div>
                         {req.reason && (
-                          <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
                             <strong>Reason:</strong> {req.reason}
                           </p>
                         )}
@@ -489,20 +589,30 @@ export default function TimeOffPage() {
                             <strong>Manager Response:</strong> {req.manager_notes}
                           </div>
                         )}
-                        {req.status === 'Pending' && (
-                          <button 
-                            className="btn-secondary" 
-                            style={{ 
-                              alignSelf: 'flex-end', 
-                              padding: '4px 12px', 
-                              fontSize: 12, 
-                              borderColor: 'rgba(239,68,68,0.3)',
-                              color: '#f87171'
-                            }}
-                            onClick={() => handleRequestCancel(req.id)}
-                          >
-                            Cancel Request
-                          </button>
+
+                        {/* Specialist Actions: Edit / Cancel */}
+                        {(req.status === 'Pending' || req.status === 'Approved') && (
+                          <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-end', marginTop: 4 }}>
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: '4px 12px', fontSize: 12 }}
+                              onClick={() => openEditModal(req)}
+                            >
+                              ✏️ Edit Request
+                            </button>
+                            <button 
+                              className="btn-secondary" 
+                              style={{ 
+                                padding: '4px 12px', 
+                                fontSize: 12, 
+                                borderColor: 'rgba(239,68,68,0.3)',
+                                color: '#f87171'
+                              }}
+                              onClick={() => handleRequestCancel(req.id, req.status)}
+                            >
+                              ❌ Cancel Request
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -513,7 +623,270 @@ export default function TimeOffPage() {
             </div>
           )}
 
-          {/* Manager View layout */}
+          {/* Calendar View (Shared for Regular and Master) */}
+          {activeTab === 'calendar' && (
+            <div style={{ display: 'grid', gridTemplateColumns: selectedDay ? '2fr 1fr' : '1fr', gap: 24, alignItems: 'start' }}>
+              
+              {/* Calendar main Card */}
+              <div className="glass-card" style={{ padding: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                  {/* Month navigations */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '6px 12px', fontSize: 13 }}
+                      onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                    >
+                      ◀
+                    </button>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, minWidth: 140, textAlign: 'center' }}>
+                      {format(currentMonth, 'MMMM yyyy')}
+                    </h2>
+                    <button 
+                      className="btn-secondary" 
+                      style={{ padding: '6px 12px', fontSize: 13 }}
+                      onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                    >
+                      ▶
+                    </button>
+                  </div>
+
+                  {/* LOB Filters */}
+                  {userRole === 'master' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>Coverage LOB:</span>
+                      <select
+                        className="input-field"
+                        style={{ width: 140, margin: 0, padding: '6px 10px', borderRadius: 8, fontSize: 13, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                        value={selectedLobFilter}
+                        onChange={(e) => setSelectedLobFilter(e.target.value as any)}
+                      >
+                        <option value="All" style={{ background: '#0a1628' }}>All Teams</option>
+                        <option value="VA" style={{ background: '#0a1628' }}>VA Specialists</option>
+                        <option value="SSD" style={{ background: '#0a1628' }}>SSD Specialists</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                      Coverage for: <span style={{ color: '#b82105' }}>{userLob} Intake Division</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Safety indicators legend */}
+                <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                    <span>Safe Coverage (≥ 80%)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                    <span>Caution (60% - 79%)</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                    <span>Shortage (&lt; 60%)</span>
+                  </div>
+                </div>
+
+                {renderCalendar()}
+              </div>
+
+              {/* Day Drawer Overlay (Sidebar style) */}
+              {selectedDay && (() => {
+                const dateStr = format(selectedDay, 'yyyy-MM-dd')
+                
+                // Filter active specs for selected view filter
+                const specs = activeSpecialists.filter(s => selectedLobFilter === 'All' || s.lob === selectedLobFilter)
+                
+                // Approved off for day
+                const approvedList = requests.filter(r => 
+                  r.status === 'Approved' && 
+                  r.start_date <= dateStr && 
+                  r.end_date >= dateStr &&
+                  (selectedLobFilter === 'All' || r.lob === selectedLobFilter)
+                )
+                const approvedUsernames = approvedList.map(r => r.username)
+
+                // Pending requests for day
+                const pendingList = requests.filter(r => 
+                  r.status === 'Pending' && 
+                  r.start_date <= dateStr && 
+                  r.end_date >= dateStr &&
+                  (selectedLobFilter === 'All' || r.lob === selectedLobFilter)
+                )
+
+                // Working list (active specs minus approved off)
+                const workingList = specs.filter(s => !approvedUsernames.includes(s.username))
+
+                return (
+                  <div className="glass-card" style={{ padding: 24, position: 'sticky', top: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 800 }}>
+                        📅 Details: {format(selectedDay, 'MMM d, yyyy')}
+                      </h3>
+                      <button 
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}
+                        onClick={() => setSelectedDay(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Pending requests inline approval (Manager only) */}
+                    {userRole === 'master' && pendingList.length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24', letterSpacing: '0.05em', marginBottom: 10 }}>
+                          ⏳ Pending Decisions ({pendingList.length})
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          {pendingList.map(req => (
+                            <div 
+                              key={req.id} 
+                              style={{ 
+                                padding: 12, 
+                                borderRadius: 10, 
+                                background: 'rgba(245, 158, 11, 0.05)', 
+                                border: '1px solid rgba(245, 158, 11, 0.2)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 6
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 700, fontSize: 13 }}>{req.agent_name} ({req.lob})</span>
+                                <span className="badge badge-accent" style={{ fontSize: 10 }}>Pending</span>
+                              </div>
+                              <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                Range: {req.start_date} to {req.end_date}
+                              </p>
+                              {req.reason && (
+                                <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  &quot;{req.reason}&quot;
+                                </p>
+                              )}
+
+                              {/* Manager note submission */}
+                              {reviewingId === req.id ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder="Add note (optional)"
+                                    style={{ fontSize: 12, padding: 6, margin: 0 }}
+                                    value={managerNotes}
+                                    onChange={(e) => setManagerNotes(e.target.value)}
+                                  />
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button 
+                                      className="btn-primary" 
+                                      style={{ padding: '4px 10px', fontSize: 11, background: '#10b981' }}
+                                      onClick={() => handleReviewSubmit(req.id, 'Approved')}
+                                    >
+                                      Confirm Approve
+                                    </button>
+                                    <button 
+                                      className="btn-secondary" 
+                                      style={{ padding: '4px 10px', fontSize: 11, color: '#f87171', borderColor: 'rgba(239,68,68,0.3)' }}
+                                      onClick={() => handleReviewSubmit(req.id, 'Rejected')}
+                                    >
+                                      Confirm Reject
+                                    </button>
+                                    <button 
+                                      className="btn-secondary" 
+                                      style={{ padding: '4px 10px', fontSize: 11 }}
+                                      onClick={() => { setReviewingId(null); setManagerNotes('') }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button 
+                                  className="btn-primary" 
+                                  style={{ padding: '6px 12px', fontSize: 11, alignSelf: 'flex-start', marginTop: 4 }}
+                                  onClick={() => setReviewingId(req.id)}
+                                >
+                                  Review Request
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pending list for specialists (read-only) */}
+                    {userRole === 'regular' && pendingList.length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24', letterSpacing: '0.05em', marginBottom: 10 }}>
+                          ⏳ Pending Requests ({pendingList.length})
+                        </h4>
+                        <ul style={{ paddingLeft: 16, margin: 0, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {pendingList.map(req => (
+                            <li key={req.id}>
+                              <strong>{req.agent_name}</strong> ({req.lob})
+                              {req.reason && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}> — &quot;{req.reason}&quot;</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Approved Off */}
+                    <div style={{ marginBottom: 20 }}>
+                      <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#f87171', letterSpacing: '0.05em', marginBottom: 10 }}>
+                        🏝️ Approved Out ({approvedList.length})
+                      </h4>
+                      {approvedList.length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No one scheduled out.</p>
+                      ) : (
+                        <ul style={{ paddingLeft: 16, margin: 0, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {approvedList.map(req => (
+                            <li key={req.id}>
+                              <strong>{req.agent_name}</strong> ({req.lob})
+                              {req.reason && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}> — &quot;{req.reason}&quot;</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Working roster */}
+                    <div>
+                      <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#10b981', letterSpacing: '0.05em', marginBottom: 10 }}>
+                        👥 Scheduled Present ({workingList.length})
+                      </h4>
+                      {workingList.length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No active specialists scheduled.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {workingList.map(spec => (
+                            <span 
+                              key={spec.username} 
+                              className="badge" 
+                              style={{ 
+                                padding: '4px 10px', 
+                                background: 'rgba(255,255,255,0.03)', 
+                                border: '1px solid var(--border)',
+                                color: 'var(--text-secondary)',
+                                fontSize: 12
+                              }}
+                            >
+                              {spec.display_name} ({spec.lob})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* Manager View Layout */}
           {userRole === 'master' && (
             <div>
               {/* Tab Selector */}
@@ -550,248 +923,7 @@ export default function TimeOffPage() {
                 </div>
               )}
 
-              {/* TAB 1: COVERAGE CALENDAR */}
-              {activeTab === 'calendar' && (
-                <div style={{ display: 'grid', gridTemplateColumns: selectedDay ? '2fr 1fr' : '1fr', gap: 24, alignItems: 'start' }}>
-                  
-                  {/* Calendar main Card */}
-                  <div className="glass-card" style={{ padding: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-                      {/* Month navigations */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: '6px 12px', fontSize: 13 }}
-                          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                        >
-                          ◀
-                        </button>
-                        <h2 style={{ fontSize: 18, fontWeight: 800, minWidth: 140, textAlign: 'center' }}>
-                          {format(currentMonth, 'MMMM yyyy')}
-                        </h2>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: '6px 12px', fontSize: 13 }}
-                          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                        >
-                          ▶
-                        </button>
-                      </div>
-
-                      {/* LOB Filters */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>Coverage LOB:</span>
-                        <select
-                          className="input-field"
-                          style={{ width: 140, margin: 0, padding: '6px 10px', borderRadius: 8, fontSize: 13, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
-                          value={selectedLobFilter}
-                          onChange={(e) => setSelectedLobFilter(e.target.value as any)}
-                        >
-                          <option value="All" style={{ background: '#0a1628' }}>All Teams</option>
-                          <option value="VA" style={{ background: '#0a1628' }}>VA Specialists</option>
-                          <option value="SSD" style={{ background: '#0a1628' }}>SSD Specialists</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Safety indicators legend */}
-                    <div style={{ display: 'flex', gap: 20, marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
-                        <span>Safe Coverage (≥ 80%)</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
-                        <span>Caution (60% - 79%)</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
-                        <span>Shortage (&lt; 60%)</span>
-                      </div>
-                    </div>
-
-                    {renderCalendar()}
-                  </div>
-
-                  {/* Day Drawer Overlay (Sidebar style) */}
-                  {selectedDay && (() => {
-                    const dateStr = format(selectedDay, 'yyyy-MM-dd')
-                    
-                    // Filter active specs for selected view filter
-                    const specs = activeSpecialists.filter(s => selectedLobFilter === 'All' || s.lob === selectedLobFilter)
-                    
-                    // Approved off for day
-                    const approvedList = requests.filter(r => 
-                      r.status === 'Approved' && 
-                      r.start_date <= dateStr && 
-                      r.end_date >= dateStr &&
-                      (selectedLobFilter === 'All' || r.lob === selectedLobFilter)
-                    )
-                    const approvedUsernames = approvedList.map(r => r.username)
-
-                    // Pending requests for day
-                    const pendingList = requests.filter(r => 
-                      r.status === 'Pending' && 
-                      r.start_date <= dateStr && 
-                      r.end_date >= dateStr &&
-                      (selectedLobFilter === 'All' || r.lob === selectedLobFilter)
-                    )
-                    const pendingUsernames = pendingList.map(r => r.username)
-
-                    // Working list (active specs minus approved off)
-                    const workingList = specs.filter(s => !approvedUsernames.includes(s.username))
-
-                    return (
-                      <div className="glass-card" style={{ padding: 24, position: 'sticky', top: 20 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                          <h3 style={{ fontSize: 16, fontWeight: 800 }}>
-                            📅 Details: {format(selectedDay, 'MMM d, yyyy')}
-                          </h3>
-                          <button 
-                            style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}
-                            onClick={() => setSelectedDay(null)}
-                          >
-                            ✕
-                          </button>
-                        </div>
-
-                        {/* Pending requests inline approval */}
-                        {pendingList.length > 0 && (
-                          <div style={{ marginBottom: 20 }}>
-                            <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24', letterSpacing: '0.05em', marginBottom: 10 }}>
-                              ⏳ Pending Decisions ({pendingList.length})
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                              {pendingList.map(req => (
-                                <div 
-                                  key={req.id} 
-                                  style={{ 
-                                    padding: 12, 
-                                    borderRadius: 10, 
-                                    background: 'rgba(245, 158, 11, 0.05)', 
-                                    border: '1px solid rgba(245, 158, 11, 0.2)',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: 6
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontWeight: 700, fontSize: 13 }}>{req.agent_name} ({req.lob})</span>
-                                    <span className="badge badge-accent" style={{ fontSize: 10 }}>Pending</span>
-                                  </div>
-                                  <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                    Range: {req.start_date} to {req.end_date}
-                                  </p>
-                                  {req.reason && (
-                                    <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                      &quot;{req.reason}&quot;
-                                    </p>
-                                  )}
-
-                                  {/* Manager note submission */}
-                                  {reviewingId === req.id ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
-                                      <input
-                                        type="text"
-                                        className="input-field"
-                                        placeholder="Add note (optional)"
-                                        style={{ fontSize: 12, padding: 6, margin: 0 }}
-                                        value={managerNotes}
-                                        onChange={(e) => setManagerNotes(e.target.value)}
-                                      />
-                                      <div style={{ display: 'flex', gap: 6 }}>
-                                        <button 
-                                          className="btn-primary" 
-                                          style={{ padding: '4px 10px', fontSize: 11, background: '#10b981' }}
-                                          onClick={() => handleReviewSubmit(req.id, 'Approved')}
-                                        >
-                                          Confirm Approve
-                                        </button>
-                                        <button 
-                                          className="btn-secondary" 
-                                          style={{ padding: '4px 10px', fontSize: 11, color: '#f87171', borderColor: 'rgba(239,68,68,0.3)' }}
-                                          onClick={() => handleReviewSubmit(req.id, 'Rejected')}
-                                        >
-                                          Confirm Reject
-                                        </button>
-                                        <button 
-                                          className="btn-secondary" 
-                                          style={{ padding: '4px 10px', fontSize: 11 }}
-                                          onClick={() => { setReviewingId(null); setManagerNotes('') }}
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <button 
-                                      className="btn-primary" 
-                                      style={{ padding: '6px 12px', fontSize: 11, alignSelf: 'flex-start', marginTop: 4 }}
-                                      onClick={() => setReviewingId(req.id)}
-                                    >
-                                      Review Request
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Approved Off */}
-                        <div style={{ marginBottom: 20 }}>
-                          <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#f87171', letterSpacing: '0.05em', marginBottom: 10 }}>
-                            🏝️ Approved Out ({approvedList.length})
-                          </h4>
-                          {approvedList.length === 0 ? (
-                            <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No one scheduled out.</p>
-                          ) : (
-                            <ul style={{ paddingLeft: 16, margin: 0, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {approvedList.map(req => (
-                                <li key={req.id}>
-                                  <strong>{req.agent_name}</strong> ({req.lob})
-                                  {req.reason && <span style={{ color: 'var(--text-muted)', fontSize: 11 }}> — &quot;{req.reason}&quot;</span>}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-
-                        {/* Working roster */}
-                        <div>
-                          <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#10b981', letterSpacing: '0.05em', marginBottom: 10 }}>
-                            👥 Scheduled Present ({workingList.length})
-                          </h4>
-                          {workingList.length === 0 ? (
-                            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No active specialists scheduled.</p>
-                          ) : (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                              {workingList.map(spec => (
-                                <span 
-                                  key={spec.username} 
-                                  className="badge" 
-                                  style={{ 
-                                    padding: '4px 10px', 
-                                    background: 'rgba(255,255,255,0.03)', 
-                                    border: '1px solid var(--border)',
-                                    color: 'var(--text-secondary)',
-                                    fontSize: 12
-                                  }}
-                                >
-                                  {spec.display_name} ({spec.lob})
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-
-              {/* TAB 2: PENDING QUEUE */}
+              {/* TAB 2: PENDING QUEUE (Manager) */}
               {activeTab === 'pending' && (
                 <div className="glass-card" style={{ padding: 24 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>
@@ -890,7 +1022,7 @@ export default function TimeOffPage() {
                 </div>
               )}
 
-              {/* TAB 3: ALL HISTORY */}
+              {/* TAB 3: ALL HISTORY (Manager) */}
               {activeTab === 'history' && (
                 <div className="glass-card" style={{ padding: 24 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>
@@ -926,9 +1058,7 @@ export default function TimeOffPage() {
                                 {req.reason || '—'}
                               </td>
                               <td style={{ padding: 12, fontSize: 13 }}>
-                                <span className={`badge ${req.status === 'Approved' ? 'badge-success' : 'badge-danger'}`}>
-                                  {req.status}
-                                </span>
+                                {renderStatusBadge(req.status)}
                               </td>
                               <td style={{ padding: 12, fontSize: 13, color: 'var(--text-muted)' }}>{req.reviewed_by || '—'}</td>
                               <td style={{ padding: 12, fontSize: 13, color: 'var(--text-secondary)' }}>{req.manager_notes || '—'}</td>
@@ -941,6 +1071,94 @@ export default function TimeOffPage() {
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* Edit Request Modal Overlay for Specialists */}
+          {editingRequest && (
+            <div 
+              style={{
+                position: 'fixed',
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 20
+              }}
+              onClick={() => setEditingRequest(null)}
+            >
+              <div 
+                className="glass-card" 
+                style={{ maxWidth: 480, width: '100%', padding: 28, background: '#0a1628', border: '1px solid var(--border)' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>✏️ Modify Time Off Request</h3>
+                  <button 
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}
+                    onClick={() => setEditingRequest(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {editingRequest.status === 'Approved' && (
+                  <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', padding: '10px 14px', borderRadius: 8, fontSize: 12, color: '#fbbf24', marginBottom: 16 }}>
+                    ⚠️ <strong>Note:</strong> Modifying the start or end dates of an approved request will reset its status back to <strong>Pending</strong> for manager re-approval.
+                  </div>
+                )}
+
+                <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Start Date</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">End Date</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      value={editEndDate}
+                      onChange={(e) => setEditEndDate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">Reason / Notes</label>
+                    <textarea
+                      className="input-field"
+                      style={{ height: 90, resize: 'none' }}
+                      value={editReason}
+                      onChange={(e) => setEditReason(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      onClick={() => setEditingRequest(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn-primary" 
+                      disabled={editSubmitting}
+                    >
+                      {editSubmitting ? 'Saving Changes...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
 

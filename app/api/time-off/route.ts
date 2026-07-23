@@ -133,7 +133,106 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/time-off — approve/reject request
+// PUT /api/time-off — modify existing request
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const body = await req.json()
+    const { id, start_date, end_date, reason } = body
+
+    if (!id || !start_date || !end_date) {
+      return NextResponse.json({ error: 'Missing request ID, start date, or end date.' }, { status: 400 })
+    }
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+    if (!dateRegex.test(start_date) || !dateRegex.test(end_date)) {
+      return NextResponse.json({ error: 'Dates must be in YYYY-MM-DD format.' }, { status: 400 })
+    }
+
+    if (start_date > end_date) {
+      return NextResponse.json({ error: 'Start date cannot be after end date.' }, { status: 400 })
+    }
+
+    const sessionUsername = session.user?.email || ''
+    const userRole = (session.user as any)?.role || 'regular'
+    const db = getDb()
+
+    const requestRecord = db
+      .prepare('SELECT * FROM time_off_requests WHERE id = ?')
+      .get(id) as any
+
+    if (!requestRecord) {
+      return NextResponse.json({ error: 'Time off request not found.' }, { status: 404 })
+    }
+
+    if (userRole === 'regular' && requestRecord.username !== sessionUsername) {
+      return NextResponse.json({ error: 'Forbidden. You can only modify your own requests.' }, { status: 403 })
+    }
+
+    // Check overlap with other requests (excluding current request id)
+    const overlap = db
+      .prepare(`
+        SELECT count(*) as count 
+        FROM time_off_requests 
+        WHERE username = ? 
+          AND id != ?
+          AND status IN ('Pending', 'Approved') 
+          AND (start_date <= ? AND end_date >= ?)
+      `)
+      .get(requestRecord.username, id, end_date, start_date) as { count: number }
+
+    if (overlap && overlap.count > 0) {
+      return NextResponse.json({
+        error: 'You have another overlapping pending or approved request for this time period.'
+      }, { status: 400 })
+    }
+
+    const dateChanged = requestRecord.start_date !== start_date || requestRecord.end_date !== end_date
+    let newStatus = requestRecord.status
+
+    // If an approved request's dates are modified, reset status to Pending for manager re-approval
+    if (requestRecord.status === 'Approved' && dateChanged) {
+      newStatus = 'Pending'
+    } else if (requestRecord.status === 'Cancelled' || requestRecord.status === 'Rejected') {
+      newStatus = 'Pending'
+    }
+
+    db.prepare(`
+      UPDATE time_off_requests 
+      SET start_date = ?, 
+          end_date = ?, 
+          reason = ?, 
+          status = ?,
+          reviewed_by = ${newStatus === 'Pending' ? 'NULL' : 'reviewed_by'},
+          reviewed_at = ${newStatus === 'Pending' ? 'NULL' : 'reviewed_at'},
+          manager_notes = ${newStatus === 'Pending' ? 'NULL' : 'manager_notes'}
+      WHERE id = ?
+    `).run(start_date, end_date, reason || '', newStatus, id)
+
+    // Send notifications to managers if modified by regular user
+    if (userRole === 'regular') {
+      const managers = db.prepare("SELECT username FROM users WHERE role = 'master'").all() as { username: string }[]
+      for (const mgr of managers) {
+        sendNotification({
+          username: mgr.username,
+          title: 'Time Off Request Modified',
+          message: `${requestRecord.agent_name} (${requestRecord.lob}) updated their time off request (${start_date} to ${end_date}).${newStatus === 'Pending' ? ' Status reset to Pending for review.' : ''}`,
+          link: '/time-off'
+        })
+      }
+    }
+
+    return NextResponse.json({ success: true, status: newStatus })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
+// PATCH /api/time-off — approve/reject request (manager only)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.role !== 'master') {
@@ -148,7 +247,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Missing request ID or status.' }, { status: 400 })
     }
 
-    if (!['Approved', 'Rejected'].includes(status)) {
+    if (!['Approved', 'Rejected', 'Cancelled'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status value.' }, { status: 400 })
     }
 
@@ -185,7 +284,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE /api/time-off?id=X — cancel pending request
+// DELETE /api/time-off?id=X — cancel request (mark status as Cancelled)
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
@@ -204,17 +303,32 @@ export async function DELETE(req: NextRequest) {
     const userRole = (session.user as any)?.role || 'regular'
 
     // Find original request
-    const request = db.prepare('SELECT username, status FROM time_off_requests WHERE id = ?').get(id) as { username: string; status: string } | undefined
+    const request = db.prepare('SELECT username, agent_name, lob, start_date, end_date, status FROM time_off_requests WHERE id = ?').get(id) as { username: string; agent_name: string; lob: string; start_date: string; end_date: string; status: string } | undefined
     if (!request) {
       return NextResponse.json({ error: 'Time off request not found.' }, { status: 404 })
     }
 
-    // Regular users can only cancel their own pending requests
-    if (userRole === 'regular' && (request.username !== sessionUsername || request.status !== 'Pending')) {
-      return NextResponse.json({ error: 'Forbidden. You can only cancel your own pending requests.' }, { status: 403 })
+    // Regular users can cancel their own requests (Pending, Approved, or Rejected)
+    if (userRole === 'regular' && request.username !== sessionUsername) {
+      return NextResponse.json({ error: 'Forbidden. You can only cancel your own requests.' }, { status: 403 })
     }
 
-    db.prepare('DELETE FROM time_off_requests WHERE id = ?').run(id)
+    // Update status to Cancelled so it remains in history log
+    db.prepare("UPDATE time_off_requests SET status = 'Cancelled' WHERE id = ?").run(id)
+
+    // If cancelled by regular user, notify managers
+    if (userRole === 'regular') {
+      const managers = db.prepare("SELECT username FROM users WHERE role = 'master'").all() as { username: string }[]
+      for (const mgr of managers) {
+        sendNotification({
+          username: mgr.username,
+          title: 'Time Off Canceled',
+          message: `${request.agent_name} (${request.lob}) canceled their time off request for ${request.start_date} to ${request.end_date}.`,
+          link: '/time-off'
+        })
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
