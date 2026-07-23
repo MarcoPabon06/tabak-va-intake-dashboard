@@ -10,6 +10,7 @@ import PerformanceLineChart from '@/components/charts/PerformanceLineChart'
 import CAPDBarChart from '@/components/charts/CAPDBarChart'
 import WeekdayHeatmap from '@/components/charts/WeekdayHeatmap'
 import ConversionChart from '@/components/charts/ConversionChart'
+import { generateEODReportHtml } from '@/lib/eodReport'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
 
 const PRESETS = [
@@ -29,9 +30,35 @@ export default function DashboardPage() {
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [activePreset, setActivePreset] = useState('This month')
   const [selectedLob, setSelectedLob] = useState<string>('')
+  const [copyToast, setCopyToast] = useState(false)
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userName = session?.user?.name || ''
+
+  async function handleCopyEODReport() {
+    const { html, text } = generateEODReportHtml({
+      lob: selectedLob,
+      from,
+      to,
+      perfData: data,
+      appsData: appsData,
+    })
+
+    try {
+      const htmlBlob = new Blob([html], { type: 'text/html' })
+      const textBlob = new Blob([text], { type: 'text/plain' })
+      const item = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob,
+      })
+      await navigator.clipboard.write([item])
+    } catch {
+      await navigator.clipboard.writeText(text)
+    }
+
+    setCopyToast(true)
+    setTimeout(() => setCopyToast(false), 4000)
+  }
 
   useEffect(() => {
     if (session?.user) {
@@ -183,8 +210,45 @@ export default function DashboardPage() {
             <button id="btn-refresh" className="btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={fetchData}>
               Refresh
             </button>
+            <button
+              id="btn-copy-eod"
+              className="btn-secondary"
+              style={{
+                padding: '8px 16px',
+                fontSize: 13,
+                background: 'rgba(59,130,246,0.15)',
+                borderColor: 'rgba(59,130,246,0.35)',
+                color: '#60a5fa',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+              onClick={handleCopyEODReport}
+            >
+              <span>📋</span> Copy EOD Report for Outlook
+            </button>
           </div>
         </div>
+
+        {copyToast && (
+          <div className="fade-in" style={{
+            background: 'rgba(16,185,129,0.12)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: 10,
+            padding: '12px 18px',
+            marginBottom: 20,
+            color: '#10b981',
+            fontSize: 14,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10
+          }}>
+            <span style={{ fontSize: 18 }}>📋</span>
+            <span>EOD Report copied to clipboard! Open Outlook and press <strong>Ctrl+V</strong> to paste the formatted HTML table.</span>
+          </div>
+        )}
 
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, gap: 12, color: 'var(--text-secondary)' }}>

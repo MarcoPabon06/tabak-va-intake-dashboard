@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Navigation from '@/components/Navigation'
 import { useSession } from 'next-auth/react'
 import { format } from 'date-fns'
+import { generateEODReportHtml } from '@/lib/eodReport'
 
 interface AppEntry {
   id: number
@@ -239,6 +240,31 @@ export default function AppsTeamPage() {
   // Unique list of Reps for filtering
   const availableReps = Array.from(new Set(entries.map(e => e.rep_name))).filter(Boolean)
 
+  async function handleCopyEODReport() {
+    const { html, text } = generateEODReportHtml({
+      lob: 'APPS',
+      from: '',
+      to: '',
+      perfData: [],
+      appsData: entries,
+    })
+
+    try {
+      const htmlBlob = new Blob([html], { type: 'text/html' })
+      const textBlob = new Blob([text], { type: 'text/plain' })
+      const item = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob,
+      })
+      await navigator.clipboard.write([item])
+    } catch {
+      await navigator.clipboard.writeText(text)
+    }
+
+    setSuccess('EOD Report copied to clipboard! Open Outlook and press Ctrl+V to paste.')
+    setTimeout(() => setSuccess(''), 4000)
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
@@ -261,6 +287,13 @@ export default function AppsTeamPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
+              <button 
+                className="btn-secondary" 
+                style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(59,130,246,0.15)', borderColor: 'rgba(59,130,246,0.35)', color: '#60a5fa', fontWeight: 700 }}
+                onClick={handleCopyEODReport}
+              >
+                📋 Copy EOD Report
+              </button>
               <button 
                 className="btn-secondary" 
                 style={{ padding: '8px 16px', fontSize: 13 }}
