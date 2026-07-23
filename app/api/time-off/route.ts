@@ -173,6 +173,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden. You can only modify your own requests.' }, { status: 403 })
     }
 
+    const todayStr = new Date().toISOString().slice(0, 10)
+    if (userRole === 'regular' && requestRecord.end_date < todayStr) {
+      return NextResponse.json({ error: 'Cannot modify past time off requests that have already passed.' }, { status: 400 })
+    }
+
     // Check overlap with other requests (excluding current request id)
     const overlap = db
       .prepare(`
@@ -308,9 +313,14 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Time off request not found.' }, { status: 404 })
     }
 
-    // Regular users can cancel their own requests (Pending, Approved, or Rejected)
+    // Regular users can cancel their own requests (Pending, Approved, or Rejected) if not in the past
     if (userRole === 'regular' && request.username !== sessionUsername) {
       return NextResponse.json({ error: 'Forbidden. You can only cancel your own requests.' }, { status: 403 })
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10)
+    if (userRole === 'regular' && request.end_date < todayStr) {
+      return NextResponse.json({ error: 'Cannot cancel past time off requests that have already passed.' }, { status: 400 })
     }
 
     // Update status to Cancelled so it remains in history log

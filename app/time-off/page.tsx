@@ -590,30 +590,35 @@ export default function TimeOffPage() {
                           </div>
                         )}
 
-                        {/* Specialist Actions: Edit / Cancel */}
-                        {(req.status === 'Pending' || req.status === 'Approved') && (
-                          <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-end', marginTop: 4 }}>
-                            <button
-                              className="btn-secondary"
-                              style={{ padding: '4px 12px', fontSize: 12 }}
-                              onClick={() => openEditModal(req)}
-                            >
-                              ✏️ Edit Request
-                            </button>
-                            <button 
-                              className="btn-secondary" 
-                              style={{ 
-                                padding: '4px 12px', 
-                                fontSize: 12, 
-                                borderColor: 'rgba(239,68,68,0.3)',
-                                color: '#f87171'
-                              }}
-                              onClick={() => handleRequestCancel(req.id, req.status)}
-                            >
-                              ❌ Cancel Request
-                            </button>
-                          </div>
-                        )}
+                        {/* Specialist Actions: Edit / Cancel (Only for current or future requests) */}
+                        {(() => {
+                          const todayStr = format(new Date(), 'yyyy-MM-dd')
+                          const isPast = req.end_date < todayStr
+                          if (isPast || (req.status !== 'Pending' && req.status !== 'Approved')) return null
+                          return (
+                            <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-end', marginTop: 4 }}>
+                              <button
+                                className="btn-secondary"
+                                style={{ padding: '4px 12px', fontSize: 12 }}
+                                onClick={() => openEditModal(req)}
+                              >
+                                ✏️ Edit Request
+                              </button>
+                              <button 
+                                className="btn-secondary" 
+                                style={{ 
+                                  padding: '4px 12px', 
+                                  fontSize: 12, 
+                                  borderColor: 'rgba(239,68,68,0.3)',
+                                  color: '#f87171'
+                                }}
+                                onClick={() => handleRequestCancel(req.id, req.status)}
+                              >
+                                ❌ Cancel Request
+                              </button>
+                            </div>
+                          )
+                        })()}
                       </div>
                     ))}
                   </div>
