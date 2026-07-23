@@ -344,6 +344,12 @@ function initSchema(db: Database.Database) {
   defaults.run('goal_conversion_rate_apps', '75')
   defaults.run('goal_converted_cases_apps', '20')
 
+  // Standardize case-sensitivity on rep names in apps_team_entries
+  try {
+    db.prepare("UPDATE apps_team_entries SET rep_name = 'Estefani Cubides', rep_username = 'ecubides' WHERE LOWER(rep_name) LIKE '%estefani%'").run()
+    db.prepare("UPDATE apps_team_entries SET rep_name = 'Samantha Benavides', rep_username = 'sbenavides' WHERE LOWER(rep_name) LIKE '%samantha%'").run()
+  } catch {}
+
   // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
   const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
   const allowedAgents = users.map(u => u.display_name?.trim()).filter(Boolean)

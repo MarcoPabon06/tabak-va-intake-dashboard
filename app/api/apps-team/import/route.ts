@@ -20,12 +20,21 @@ function parseExcelDate(val: any): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function getRepUsername(name: string): string {
-  if (!name) return 'apps_rep'
-  const trimmed = name.trim().toLowerCase()
-  if (trimmed.includes('estefani')) return 'ecubides'
-  if (trimmed.includes('samantha')) return 'sbenavides'
-  return trimmed.replace(/[^a-z0-9]/g, '')
+function normalizeRepInfo(rawName: string): { rep_name: string; rep_username: string } {
+  if (!rawName) return { rep_name: 'Apps Rep', rep_username: 'apps_rep' }
+  const trimmed = String(rawName).trim()
+  const lower = trimmed.toLowerCase()
+
+  if (lower.includes('estefani')) {
+    return { rep_name: 'Estefani Cubides', rep_username: 'ecubides' }
+  }
+  if (lower.includes('samantha')) {
+    return { rep_name: 'Samantha Benavides', rep_username: 'sbenavides' }
+  }
+
+  const titleCased = trimmed.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+  const username = titleCased.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return { rep_name: titleCased, rep_username: username }
 }
 
 function standardizeReason(rawReason: any): { category: string; other: string } {
@@ -102,8 +111,8 @@ export async function POST(req: NextRequest) {
 
         const leadId = String(leadIdRaw).trim()
         const clientName = String(r["Lead's Name"] || 'Unknown Client').trim()
-        const repName = String(r['Apps Representative'] || 'Apps Rep').trim()
-        const repUsername = getRepUsername(repName)
+        const rawRepName = String(r['Apps Representative'] || 'Apps Rep').trim()
+        const { rep_name: repName, rep_username: repUsername } = normalizeRepInfo(rawRepName)
         const dateCompleted = parseExcelDate(r['Date'])
         
         const convRaw = String(r['Converted'] || 'No').trim().toUpperCase()

@@ -3,13 +3,22 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 
-// Helper: Normalize Username from display name
-function normalizeRepUsername(name: string): string {
-  if (!name) return 'apps_rep'
-  const trimmed = name.trim().toLowerCase()
-  if (trimmed.includes('estefani')) return 'ecubides'
-  if (trimmed.includes('samantha')) return 'sbenavides'
-  return trimmed.replace(/[^a-z0-9]/g, '')
+// Helper: Normalize Rep Name & Username (case-insensitive & Title Case)
+export function normalizeRepInfo(rawName: string): { rep_name: string; rep_username: string } {
+  if (!rawName) return { rep_name: 'Apps Rep', rep_username: 'apps_rep' }
+  const trimmed = rawName.trim()
+  const lower = trimmed.toLowerCase()
+
+  if (lower.includes('estefani')) {
+    return { rep_name: 'Estefani Cubides', rep_username: 'ecubides' }
+  }
+  if (lower.includes('samantha')) {
+    return { rep_name: 'Samantha Benavides', rep_username: 'sbenavides' }
+  }
+
+  const titleCased = trimmed.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+  const username = titleCased.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return { rep_name: titleCased, rep_username: username }
 }
 
 // GET /api/apps-team — Fetch entries & summary analytics
@@ -123,9 +132,8 @@ export async function POST(req: NextRequest) {
     }
 
     const sessionUsername = session.user?.email || ''
-    const defaultRepName = session.user?.name || sessionUsername
-    const finalRepName = rep_name || defaultRepName
-    const repUsername = normalizeRepUsername(finalRepName)
+    const rawRepName = rep_name || session.user?.name || sessionUsername
+    const { rep_name: finalRepName, rep_username: repUsername } = normalizeRepInfo(rawRepName)
 
     const db = getDb()
 
