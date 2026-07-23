@@ -18,6 +18,7 @@ interface Row {
 interface Props {
   data: Row[]
   lob?: string
+  appsData?: any[]
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -26,6 +27,8 @@ const AGENT_COLORS: Record<string, string> = {
   'Oliver Ortega': '#10b981',
   'Alejandra NicoleReyes': '#f59e0b',
   'Omar Soto': '#3b82f6',
+  'Estefani Cubides': '#10b981',
+  'Samantha Benavides': '#3b82f6',
 }
 const ALL_COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#3b82f6']
 
@@ -33,10 +36,100 @@ function getRateColor(rate: number) {
   if (rate >= 0.75) return '#10b981'
   if (rate >= 0.5) return '#6366f1'
   if (rate >= 0.25) return '#f59e0b'
-  return '#ef4444'
+  if (rate > 0) return '#ef4444'
+  return '#94a3b8'
 }
 
-export default function Leaderboard({ data, lob = 'VA' }: Props) {
+export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) {
+  if (lob === 'APPS') {
+    const byRep: Record<string, { total: number; converted: number; pending: number }> = {}
+    for (const item of appsData) {
+      const rep = item.rep_name || 'Apps Rep'
+      if (!byRep[rep]) byRep[rep] = { total: 0, converted: 0, pending: 0 }
+      byRep[rep].total++
+      if (item.converted === 'YES') byRep[rep].converted++
+      else byRep[rep].pending++
+    }
+
+    const appRows = Object.entries(byRep)
+      .map(([agent, vals]) => ({
+        agent,
+        total: vals.total,
+        converted: vals.converted,
+        pending: vals.pending,
+        rate: vals.total > 0 ? vals.converted / vals.total : 0
+      }))
+      .sort((a, b) => b.converted - a.converted || b.rate - a.rate)
+
+    return (
+      <div className="glass-card" style={{ padding: '20px 0' }}>
+        <div style={{ padding: '0 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Apps Team Leaderboard
+          </h3>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{appRows.length} representatives</span>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Representative</th>
+                <th style={{ textAlign: 'right' }}>Apps Filed</th>
+                <th style={{ textAlign: 'right' }}>Converted (YES)</th>
+                <th style={{ textAlign: 'right' }}>Pending (NO)</th>
+                <th style={{ textAlign: 'right' }}>Conv. Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appRows.map((row, i) => {
+                const color = AGENT_COLORS[row.agent] || ALL_COLORS[i % ALL_COLORS.length]
+                return (
+                  <tr key={row.agent}>
+                    <td>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 24, height: 24, borderRadius: 6, fontSize: 12, fontWeight: 700,
+                        background: i === 0 ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.05)',
+                        color: i === 0 ? '#f59e0b' : '#94a3b8',
+                      }}>
+                        {i + 1}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          background: color, flexShrink: 0,
+                          boxShadow: `0 0 6px ${color}`,
+                        }} />
+                        <span style={{ fontWeight: 600 }}>{row.agent}</span>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{row.total}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{row.converted}</td>
+                    <td style={{ textAlign: 'right', color: '#f59e0b' }}>{row.pending}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <span style={{
+                        fontWeight: 700,
+                        color: getRateColor(row.rate),
+                        background: `${getRateColor(row.rate)}18`,
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontSize: 13,
+                      }}>
+                        {(row.rate * 100).toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
   // Aggregate per agent
   const byAgent: Record<string, {
     signed: number; unsigned: number; total: number

@@ -8,6 +8,8 @@ import { computeBadges } from '@/lib/badges'
 import BadgeShelf from '@/components/BadgeShelf'
 import PersonalQA from '@/components/PersonalQA'
 
+import { useState, useEffect } from 'react'
+
 export interface GoalSettings {
   goal_signed_retainers?: number
   goal_conversion_rate?: number
@@ -20,6 +22,21 @@ export interface GoalSettings {
   goal_converted_cases_ssd?: number
   goal_conversion_rate_ssd?: number
   goal_avg_capd_ssd?: number
+  // APPS
+  goal_apps_filed_apps?: number
+  goal_conversion_rate_apps?: number
+  goal_converted_cases_apps?: number
+}
+
+interface AppEntry {
+  id: number
+  lead_id: string
+  client_name: string
+  date_completed: string
+  converted: 'YES' | 'NO'
+  reason_not_converted?: string
+  other_reason?: string
+  rep_name: string
 }
 
 interface Row {
@@ -54,6 +71,41 @@ function progressColor(pct: number) {
 
 export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA' }: Props) {
   const isSSD = lob === 'SSD'
+  const isAPPS = lob === 'APPS'
+
+  // Apps Team State
+  const [appsData, setAppsData] = useState<AppEntry[]>([])
+  const [appsLoading, setAppsLoading] = useState(false)
+  const [appsMsg, setAppsMsg] = useState('')
+
+  useEffect(() => {
+    if (isAPPS) {
+      setAppsLoading(true)
+      fetch(`/api/apps-team?rep=${encodeURIComponent(agentName)}`)
+        .then(res => res.json())
+        .then(data => {
+          setAppsData(data.entries || [])
+          setAppsLoading(false)
+        })
+        .catch(() => setAppsLoading(false))
+    }
+  }, [isAPPS, agentName])
+
+  // Quick Convert Handler for Apps Reps
+  async function handleQuickConvert(id: number, leadId: string) {
+    try {
+      const res = await fetch('/api/apps-team', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, converted: 'YES' }),
+      })
+      if (res.ok) {
+        setAppsMsg(`Lead ID "${leadId}" converted successfully! 🎉`)
+        setAppsData(prev => prev.map(e => e.id === id ? { ...e, converted: 'YES' } : e))
+        setTimeout(() => setAppsMsg(''), 4000)
+      }
+    } catch {}
+  }
   const g = {
     goal_signed_retainers: isSSD
       ? (goals?.goal_converted_cases_ssd ?? goals?.goal_signed_retainers ?? 35)
@@ -151,6 +203,162 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
     if (dow === 0 || dow === 6) { checkDate.setDate(checkDate.getDate() - 1); continue }
     if (uniqueDates.includes(ds)) { streak++; checkDate.setDate(checkDate.getDate() - 1) }
     else break
+  }
+
+  // ── APPS Team Dedicated View ──
+  if (isAPPS) {
+    const totalApps = appsData.length
+    const convertedApps = appsData.filter(e => e.converted === 'YES').length
+    const pendingApps = appsData.filter(e => e.converted === 'NO')
+    const pendingCount = pendingApps.length
+    const appsConvRate = totalApps > 0 ? (convertedApps / totalApps) * 100 : 0
+
+    const targetAppsFiled = goals?.goal_apps_filed_apps ?? 30
+    const targetAppsRate = goals?.goal_conversion_rate_apps ?? 75
+    const targetAppsConverted = goals?.goal_converted_cases_apps ?? 20
+
+    const filedPct = Math.min(Math.round((totalApps / targetAppsFiled) * 100), 150)
+    const ratePct = Math.min(Math.round((appsConvRate / targetAppsRate) * 100), 150)
+    const convertedPct = Math.min(Math.round((convertedApps / targetAppsConverted) * 100), 150)
+
+    const reasonsBreakdown: Record<string, number> = {}
+    pendingApps.forEach(e => {
+      const r = e.reason_not_converted || 'Other'
+      reasonsBreakdown[r] = (reasonsBreakdown[r] || 0) + 1
+    })
+
+    return (
+      <div style={{ marginBottom: 28 }}>
+        {/* Welcome banner */}
+        <div className="glass-card fade-in" style={{
+          padding: '24px 28px',
+          marginBottom: 16,
+          background: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(59,130,246,0.08) 100%)',
+          borderColor: 'rgba(16,185,129,0.25)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
+                Welcome back, {agentName.split(' ')[0]}! 📲
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                Apps Team Specialist &nbsp;|&nbsp; {totalApps} SSA applications logged
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ textAlign: 'center', padding: '8px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Conversion Rate</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#10b981' }}>{appsConvRate.toFixed(1)}%</div>
+              </div>
+              <div style={{ textAlign: 'center', padding: '8px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pending Reminders</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#f59e0b' }}>{pendingCount}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {appsMsg && (
+          <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#10b981', fontSize: 14, fontWeight: 600 }}>
+            ✅ {appsMsg}
+          </div>
+        )}
+
+        {/* Goal Progress Bars */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
+          <div className="glass-card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>📝 Apps Filed</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: progressColor(filedPct) }}>{totalApps} / {targetAppsFiled}</span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(filedPct, 100)}%`, height: '100%', background: progressColor(filedPct), borderRadius: 3 }} />
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>📈 Conversion Rate</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: progressColor(ratePct) }}>{appsConvRate.toFixed(1)}% / {targetAppsRate}%</span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(ratePct, 100)}%`, height: '100%', background: progressColor(ratePct), borderRadius: 3 }} />
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>✅ Converted Cases</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: progressColor(convertedPct) }}>{convertedApps} / {targetAppsConverted}</span>
+            </div>
+            <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(convertedPct, 100)}%`, height: '100%', background: progressColor(convertedPct), borderRadius: 3 }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Embedded Pending Reminder Queue */}
+        <div className="glass-card" style={{ padding: 24, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>⏳ Your Pending Conversion Reminder Queue</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0' }}>Clear pending cases as soon as wet signatures, 827 forms, or scheduled yellow screens are resolved.</p>
+            </div>
+            <span className="badge" style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', fontSize: 12 }}>
+              {pendingCount} Pending Action
+            </span>
+          </div>
+
+          {appsLoading ? (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading pending queue...</p>
+          ) : pendingApps.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>🎉</div>
+              <p style={{ fontSize: 13 }}>No pending applications! All your filings are converted.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              {pendingApps.map(entry => (
+                <div key={entry.id} style={{ padding: 14, borderRadius: 10, background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{entry.client_name}</span>
+                      <span className="badge" style={{ fontSize: 10, background: 'rgba(255,255,255,0.06)' }}>Lead ID: {entry.lead_id}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Filed: {entry.date_completed}</div>
+                    <div style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid var(--border)', fontSize: 11 }}>
+                      <span style={{ color: '#fbbf24', fontWeight: 600 }}>Reason: </span>
+                      <span>{entry.reason_not_converted}</span>
+                      {entry.other_reason && <span style={{ color: 'var(--text-muted)' }}> (&quot;{entry.other_reason}&quot;)</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                    <button className="btn-primary" style={{ padding: '4px 12px', fontSize: 11, background: '#10b981' }} onClick={() => handleQuickConvert(entry.id, entry.lead_id)}>
+                      ✅ Mark Converted (YES)
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Non-Conversion Reason Breakdown Cards */}
+        {Object.keys(reasonsBreakdown).length > 0 && (
+          <div className="glass-card" style={{ padding: 24 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14 }}>📊 Your Pending Cases by Reason</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {Object.entries(reasonsBreakdown).map(([r, count]) => (
+                <div key={r} style={{ padding: 14, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 4 }}>{r}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b' }}>{count} <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>cases</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   // ── No data ──

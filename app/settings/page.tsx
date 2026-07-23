@@ -73,6 +73,36 @@ const SSD_GOAL_FIELDS: GoalConfig[] = [
   },
 ]
 
+const APPS_GOAL_FIELDS: GoalConfig[] = [
+  {
+    key: 'goal_apps_filed_apps',
+    label: 'Monthly Applications Filed (Apps)',
+    icon: '📝',
+    unit: 'apps',
+    description: 'Target completed SSA applications per Apps agent per month',
+    min: 1,
+    max: 200,
+  },
+  {
+    key: 'goal_conversion_rate_apps',
+    label: 'Conversion Rate (Apps)',
+    icon: '📈',
+    unit: '%',
+    description: 'Target conversion rate for Apps team (Converted ÷ Total Apps)',
+    min: 1,
+    max: 100,
+  },
+  {
+    key: 'goal_converted_cases_apps',
+    label: 'Monthly Converted Cases (Apps)',
+    icon: '✅',
+    unit: 'cases',
+    description: 'Target converted cases per Apps agent per month',
+    min: 1,
+    max: 200,
+  },
+]
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -251,6 +281,66 @@ export default function SettingsPage() {
                                 height: 6,
                                 appearance: 'none',
                                 background: `linear-gradient(to right, #ec4899 0%, #ec4899 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
+                                borderRadius: 4,
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <input
+                                type="number"
+                                className="input-field"
+                                min={field.min}
+                                max={field.max}
+                                value={val}
+                                onChange={(e) => updateSetting(field.key, e.target.value)}
+                                style={{ width: 80, textAlign: 'center', fontWeight: 700, fontSize: 16 }}
+                              />
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 60 }}>{field.unit}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Apps Team Goals Card */}
+                <div className="glass-card" style={{ padding: '24px 28px', borderColor: 'rgba(16,185,129,0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                    <span style={{ fontSize: 20 }}>📲</span>
+                    <div>
+                      <h2 style={{ fontSize: 16, fontWeight: 700 }}>Apps Team Goals</h2>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Target settings for the SSA Applications Filing LOB</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {APPS_GOAL_FIELDS.map((field) => {
+                      const defVal = field.key === 'goal_apps_filed_apps' ? '30' : field.key === 'goal_conversion_rate_apps' ? '75' : '20'
+                      const val = settings[field.key] ?? defVal
+                      const numVal = parseInt(val) || 0
+                      return (
+                        <div key={field.key}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 16 }}>{field.icon}</span>
+                            <label className="field-label" style={{ marginBottom: 0 }}>{field.label}</label>
+                          </div>
+                          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 24 }}>{field.description}</p>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, paddingLeft: 24 }}>
+                            <input
+                              id={`setting-${field.key}`}
+                              type="range"
+                              min={field.min}
+                              max={field.max}
+                              value={numVal}
+                              onChange={(e) => updateSetting(field.key, e.target.value)}
+                              style={{
+                                flex: 1,
+                                height: 6,
+                                appearance: 'none',
+                                background: `linear-gradient(to right, #10b981 0%, #10b981 ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) ${((numVal - field.min) / (field.max - field.min)) * 100}%, rgba(255,255,255,0.08) 100%)`,
                                 borderRadius: 4,
                                 outline: 'none',
                                 cursor: 'pointer',

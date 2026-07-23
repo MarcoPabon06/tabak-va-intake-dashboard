@@ -340,6 +340,9 @@ function initSchema(db: Database.Database) {
   defaults.run('goal_converted_cases_ssd', '35')
   defaults.run('goal_conversion_rate_ssd', '65')
   defaults.run('goal_avg_capd_ssd', '40')
+  defaults.run('goal_apps_filed_apps', '30')
+  defaults.run('goal_conversion_rate_apps', '75')
+  defaults.run('goal_converted_cases_apps', '20')
 
   // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
   const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]

@@ -22,6 +22,7 @@ const PRESETS = [
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const [data, setData] = useState<any[]>([])
+  const [appsData, setAppsData] = useState<any[]>([])
   const [goals, setGoals] = useState<GoalSettings | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
@@ -43,12 +44,21 @@ export default function DashboardPage() {
     if (status === 'loading' || !selectedLob) return
     setLoading(true)
     try {
-      const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
-      const res = await fetch(`/api/performance?from=${from}&to=${to}${lobParam}`)
-      const json = await res.json()
-      setData(Array.isArray(json) ? json : [])
+      if (selectedLob === 'APPS') {
+        const res = await fetch(`/api/apps-team?from=${from}&to=${to}`)
+        const json = await res.json()
+        setAppsData(json.entries || [])
+        setData([])
+      } else {
+        const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
+        const res = await fetch(`/api/performance?from=${from}&to=${to}${lobParam}`)
+        const json = await res.json()
+        setData(Array.isArray(json) ? json : [])
+        setAppsData([])
+      }
     } catch {
       setData([])
+      setAppsData([])
     } finally {
       setLoading(false)
     }
@@ -181,7 +191,7 @@ export default function DashboardPage() {
             <span style={{ width: 24, height: 24, border: '3px solid rgba(99,102,241,0.3)', borderTopColor: '#6366f1', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
             Loading performance data…
           </div>
-        ) : data.length === 0 ? (
+        ) : data.length === 0 && appsData.length === 0 ? (
           <div className="glass-card" style={{ padding: 48, textAlign: 'center' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📂</div>
             <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No data for this period</h2>
@@ -207,28 +217,32 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ── Team Dashboard (always shown) ── */}
-            <SummaryCards data={data} lob={selectedLob} />
+            {/* ── Team Dashboard ── */}
+            {selectedLob !== 'APPS' && (
+              <>
+                <SummaryCards data={data} lob={selectedLob} />
 
-            {/* Charts Row 1 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
-              <PerformanceLineChart
-                data={data}
-                metric={selectedLob === 'SSD' ? 'converted_cases' : 'signed_retainers'}
-                title={selectedLob === 'SSD' ? 'Converted Cases Over Time' : 'Signed Retainers Over Time'}
-              />
-              <ConversionChart data={data} lob={selectedLob} />
-            </div>
+                {/* Charts Row 1 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
+                  <PerformanceLineChart
+                    data={data}
+                    metric={selectedLob === 'SSD' ? 'converted_cases' : 'signed_retainers'}
+                    title={selectedLob === 'SSD' ? 'Converted Cases Over Time' : 'Signed Retainers Over Time'}
+                  />
+                  <ConversionChart data={data} lob={selectedLob} />
+                </div>
 
-            {/* Charts Row 2 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-              <CAPDBarChart data={data} />
-              <WeekdayHeatmap data={data} />
-            </div>
+                {/* Charts Row 2 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+                  <CAPDBarChart data={data} />
+                  <WeekdayHeatmap data={data} />
+                </div>
+              </>
+            )}
 
             {/* Leaderboard */}
-            <div style={{ marginTop: 16 }}>
-              <Leaderboard data={data} lob={selectedLob} />
+            <div style={{ marginTop: selectedLob === 'APPS' ? 0 : 16 }}>
+              <Leaderboard data={data} lob={selectedLob} appsData={appsData} />
             </div>
           </>
         )}
