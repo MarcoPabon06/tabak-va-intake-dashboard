@@ -132,6 +132,7 @@ export default function DashboardPage() {
               >
                 <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake Specialists</option>
                 <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake Specialists</option>
+                <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team (SSA Filings)</option>
                 <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All LOBs</option>
               </select>
             </div>

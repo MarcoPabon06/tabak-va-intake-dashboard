@@ -182,7 +182,7 @@ function initSchema(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL,
       agent_name TEXT NOT NULL,
-      lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD')),
+      lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD', 'APPS')),
       start_date TEXT NOT NULL,
       end_date TEXT NOT NULL,
       reason TEXT,
@@ -196,14 +196,33 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_timeoff_dates ON time_off_requests(start_date, end_date);
     CREATE INDEX IF NOT EXISTS idx_timeoff_lob ON time_off_requests(lob);
     CREATE INDEX IF NOT EXISTS idx_timeoff_status ON time_off_requests(status);
+
+    CREATE TABLE IF NOT EXISTS apps_team_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id TEXT UNIQUE NOT NULL,
+      client_name TEXT NOT NULL,
+      date_completed TEXT NOT NULL,
+      converted TEXT NOT NULL CHECK(converted IN ('YES', 'NO')),
+      reason_not_converted TEXT,
+      other_reason TEXT,
+      rep_username TEXT NOT NULL,
+      rep_name TEXT NOT NULL,
+      converted_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_apps_lead ON apps_team_entries(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_apps_date ON apps_team_entries(date_completed);
+    CREATE INDEX IF NOT EXISTS idx_apps_converted ON apps_team_entries(converted);
+    CREATE INDEX IF NOT EXISTS idx_apps_rep ON apps_team_entries(rep_username);
   `)
 
   // Run self-healing schema migrations for new columns
   const alterColumns = [
     { table: 'users', column: 'display_name', definition: 'TEXT' },
     { table: 'users', column: 'active', definition: 'INTEGER DEFAULT 1' },
-    { table: 'users', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD'))" },
-    { table: 'agents', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD'))" },
+    { table: 'users', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS'))" },
+    { table: 'agents', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS'))" },
     { table: 'daily_performance', column: 'converted_cases', definition: 'INTEGER DEFAULT 0' },
     { table: 'daily_performance', column: 'rfc_sent', definition: 'INTEGER DEFAULT 0' },
     { table: 'qa_evaluations', column: 'status', definition: "TEXT DEFAULT 'Pending Acknowledgement'" },

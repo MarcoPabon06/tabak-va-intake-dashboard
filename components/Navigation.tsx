@@ -17,6 +17,7 @@ export { AGENT_COLORS }
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/apps-team', label: 'Apps Team', icon: '📲' },
   { href: '/entry', label: 'Daily Entry', icon: '✏️', masterOnly: true },
   { href: '/qa-entry', label: 'QA Entry', icon: '📋', masterOnly: true },
   { href: '/qa', label: 'QA Scores', icon: '🏅' },
