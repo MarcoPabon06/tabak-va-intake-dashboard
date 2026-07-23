@@ -19,8 +19,8 @@ export async function GET(req: NextRequest) {
     agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
   }
 
-  // Fail-safe filtering for allowed agents (must exist as regular user in users table)
-  const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
+  // Fail-safe filtering for allowed agents (must exist as active regular user in users table)
+  const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string }[]
   const allowedAgents = users.map(u => u.display_name).filter(Boolean)
   const filteredAgents = agents.filter((a: any) => {
     const normalized = a.name.trim().replace(/\s+/g, '').toLowerCase()

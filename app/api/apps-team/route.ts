@@ -43,13 +43,20 @@ export async function GET(req: NextRequest) {
   let query = 'SELECT * FROM apps_team_entries WHERE 1=1'
   const params: any[] = []
 
-  // Regular user restriction if assigned to APPS lob
+  // Scoping & Active user filtering
   if (userRole === 'regular' && sessionLob === 'APPS') {
     query += ' AND (rep_username = ? OR rep_name LIKE ?)'
     params.push(sessionUsername, `%${session.user?.name || ''}%`)
   } else if (rep && rep !== 'All') {
     query += ' AND (rep_name = ? OR rep_username = ?)'
     params.push(rep, rep)
+  } else {
+    // Master view: exclude entries from deactivated representatives
+    query += ` AND (
+      rep_username IN (SELECT username FROM users WHERE active = 1)
+      OR rep_name IN (SELECT display_name FROM users WHERE active = 1)
+      OR rep_name IN (SELECT name FROM agents WHERE active = 1)
+    )`
   }
 
   if (from) {
