@@ -154,6 +154,7 @@ export default function UsersPage() {
                   <select id="new-lob" className="input-field" value={newUser.lob} onChange={(e) => setNewUser({ ...newUser, lob: e.target.value })}>
                     <option value="VA">VA Intake Specialist</option>
                     <option value="SSD">SSD Intake Specialist</option>
+                    <option value="APPS">Apps Team Representative</option>
                   </select>
                 </div>
               </div>
@@ -232,6 +233,7 @@ export default function UsersPage() {
                         >
                           <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake</option>
                           <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake</option>
+                          <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team</option>
                         </select>
                       </td>
                       <td>

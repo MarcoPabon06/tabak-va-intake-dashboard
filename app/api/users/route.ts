@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
-  const userLob = lob === 'SSD' ? 'SSD' : 'VA'
+  const userLob = ['SSD', 'APPS'].includes(lob) ? lob : 'VA'
   const db = getDb()
   const hash = await bcrypt.hash(password, 10)
 
@@ -114,7 +114,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (lob) {
-    if (!['VA', 'SSD'].includes(lob)) {
+    if (!['VA', 'SSD', 'APPS'].includes(lob)) {
       return NextResponse.json({ error: 'Invalid LOB value' }, { status: 400 })
     }
     db.prepare('UPDATE users SET lob = ? WHERE id = ?').run(lob, id)
