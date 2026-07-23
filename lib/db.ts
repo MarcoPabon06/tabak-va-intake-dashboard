@@ -244,17 +244,67 @@ function initSchema(db: Database.Database) {
     }
   }
 
-  // Migrate time_off_requests table schema if it lacks 'Cancelled' status in CHECK constraint
+  // Migrate users table schema if it lacks 'APPS' in CHECK constraint
+  try {
+    const userTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as { sql: string } | undefined
+    if (userTableInfo && userTableInfo.sql && !userTableInfo.sql.includes("'APPS'")) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE users_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('master', 'regular')),
+          display_name TEXT,
+          active INTEGER DEFAULT 1,
+          lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS')),
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        INSERT INTO users_tmp SELECT id, username, password_hash, role, display_name, active, lob, created_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_tmp RENAME TO users;
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated users table to include APPS LOB CHECK constraint')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate users schema:', e.message)
+  }
+
+  // Migrate agents table schema if it lacks 'APPS' in CHECK constraint
+  try {
+    const agentTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'").get() as { sql: string } | undefined
+    if (agentTableInfo && agentTableInfo.sql && !agentTableInfo.sql.includes("'APPS'")) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE agents_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT UNIQUE NOT NULL,
+          active INTEGER DEFAULT 1,
+          lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS'))
+        );
+        INSERT INTO agents_tmp SELECT id, name, active, lob FROM agents;
+        DROP TABLE agents;
+        ALTER TABLE agents_tmp RENAME TO agents;
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated agents table to include APPS LOB CHECK constraint')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate agents schema:', e.message)
+  }
+
+  // Migrate time_off_requests table schema if it lacks 'APPS' or 'Cancelled' status in CHECK constraint
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='time_off_requests'").get() as { sql: string } | undefined
-    if (tableInfo && tableInfo.sql && !tableInfo.sql.includes('Cancelled')) {
+    if (tableInfo && tableInfo.sql && (!tableInfo.sql.includes('Cancelled') || !tableInfo.sql.includes("'APPS'"))) {
       db.pragma('foreign_keys = OFF')
       db.exec(`
         CREATE TABLE time_off_requests_tmp (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT NOT NULL,
           agent_name TEXT NOT NULL,
-          lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD')),
+          lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD', 'APPS')),
           start_date TEXT NOT NULL,
           end_date TEXT NOT NULL,
           reason TEXT,
@@ -273,7 +323,7 @@ function initSchema(db: Database.Database) {
         CREATE INDEX IF NOT EXISTS idx_timeoff_status ON time_off_requests(status);
       `)
       db.pragma('foreign_keys = ON')
-      console.log('[db] Migrated time_off_requests table to include Cancelled status CHECK constraint')
+      console.log('[db] Migrated time_off_requests table to include APPS LOB & Cancelled status CHECK constraint')
     }
   } catch (e: any) {
     console.error('Failed to migrate time_off_requests schema:', e.message)

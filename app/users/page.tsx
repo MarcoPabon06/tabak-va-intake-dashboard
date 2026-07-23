@@ -76,7 +76,8 @@ export default function UsersPage() {
       showMsg('success', 'LOB updated successfully.')
       fetchUsers()
     } else {
-      showMsg('error', 'Failed to update LOB.')
+      const json = await res.json().catch(() => ({}))
+      showMsg('error', json.error || 'Failed to update LOB.')
     }
   }
 
