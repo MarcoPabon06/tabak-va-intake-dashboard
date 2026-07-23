@@ -239,8 +239,8 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
         </div>
       </div>
 
-      {/* Achievement Badges */}
-      <BadgeShelf badges={computeBadges(allData, agentName)} />
+      {/* Achievement Badges (VA Intake only) */}
+      {!isSSD && <BadgeShelf badges={computeBadges(allData, agentName)} />}
 
       {/* QA Score Summary */}
       <PersonalQA agentName={agentName} />
