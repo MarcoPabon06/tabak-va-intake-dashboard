@@ -287,13 +287,15 @@ export default function AppsTeamPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button 
-                className="btn-secondary" 
-                style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(59,130,246,0.15)', borderColor: 'rgba(59,130,246,0.35)', color: '#60a5fa', fontWeight: 700 }}
-                onClick={handleCopyEODReport}
-              >
-                📋 Copy EOD Report
-              </button>
+              {userRole !== 'regular' && (
+                <button 
+                  className="btn-secondary" 
+                  style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(59,130,246,0.15)', borderColor: 'rgba(59,130,246,0.35)', color: '#60a5fa', fontWeight: 700 }}
+                  onClick={handleCopyEODReport}
+                >
+                  📋 Copy EOD Report
+                </button>
+              )}
               <button 
                 className="btn-secondary" 
                 style={{ padding: '8px 16px', fontSize: 13 }}

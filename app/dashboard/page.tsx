@@ -210,24 +210,26 @@ export default function DashboardPage() {
             <button id="btn-refresh" className="btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={fetchData}>
               Refresh
             </button>
-            <button
-              id="btn-copy-eod"
-              className="btn-secondary"
-              style={{
-                padding: '8px 16px',
-                fontSize: 13,
-                background: 'rgba(59,130,246,0.15)',
-                borderColor: 'rgba(59,130,246,0.35)',
-                color: '#60a5fa',
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}
-              onClick={handleCopyEODReport}
-            >
-              <span>📋</span> Copy EOD Report for Outlook
-            </button>
+            {!isRegular && (
+              <button
+                id="btn-copy-eod"
+                className="btn-secondary"
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  background: 'rgba(59,130,246,0.15)',
+                  borderColor: 'rgba(59,130,246,0.35)',
+                  color: '#60a5fa',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onClick={handleCopyEODReport}
+              >
+                <span>📋</span> Copy EOD Report for Outlook
+              </button>
+            )}
           </div>
         </div>
 
