@@ -158,14 +158,17 @@ export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) 
   const rows = Object.entries(byAgent)
     .map(([agent, vals]) => {
       let rate = 0
+      let signedRate = 0
       if (lob === 'SSD') {
         rate = vals.signed > 0 ? vals.converted / vals.signed : 0
+        const totalCases = vals.signed + vals.unsigned
+        signedRate = totalCases > 0 ? vals.signed / totalCases : 0
       } else {
         const total = vals.signed + vals.unsigned
         rate = total > 0 ? vals.signed / total : 0
       }
       const avgCapd = vals.capd_days > 0 ? Math.round(vals.capd_total / vals.capd_days) : 0
-      return { agent, rate, avgCapd, ...vals }
+      return { agent, rate, signedRate, avgCapd, ...vals }
     })
     .sort((a, b) => {
       if (lob === 'SSD') {
@@ -192,8 +195,10 @@ export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) 
                 <>
                   <th style={{ textAlign: 'right' }}>Converted</th>
                   <th style={{ textAlign: 'right' }}>Signed</th>
+                  <th style={{ textAlign: 'right' }}>Unsigned</th>
+                  <th style={{ textAlign: 'right' }}>Signed Rate</th>
+                  <th style={{ textAlign: 'right' }}>Case Conv. Rate</th>
                   <th style={{ textAlign: 'right' }}>RFC Sent</th>
-                  <th style={{ textAlign: 'right' }}>Conv. Rate</th>
                 </>
               ) : lob === 'VA' ? (
                 <>
@@ -244,7 +249,19 @@ export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) 
                     <>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{row.converted}</td>
                       <td style={{ textAlign: 'right', color: '#3b82f6' }}>{row.signed}</td>
-                      <td style={{ textAlign: 'right', color: '#ec4899' }}>{row.rfc}</td>
+                      <td style={{ textAlign: 'right', color: '#f59e0b' }}>{row.unsigned}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: getRateColor(row.signedRate),
+                          background: `${getRateColor(row.signedRate)}18`,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}>
+                          {(row.signedRate * 100).toFixed(1)}%
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'right' }}>
                         <span style={{
                           fontWeight: 700,
@@ -257,6 +274,7 @@ export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) 
                           {(row.rate * 100).toFixed(1)}%
                         </span>
                       </td>
+                      <td style={{ textAlign: 'right', color: '#ec4899' }}>{row.rfc}</td>
                     </>
                   ) : lob === 'VA' ? (
                     <>

@@ -56,6 +56,8 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
   const cards: Card[] = []
 
   if (lob === 'SSD') {
+    const totalCases = totalSigned + totalUnsigned
+    const signedRate = totalCases > 0 ? (totalSigned / totalCases) * 100 : 0
     const convRate = totalSigned > 0 ? (totalConverted / totalSigned) * 100 : 0
     cards.push(
       {
@@ -67,21 +69,30 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
         icon: '💼',
       },
       {
+        id: 'card-signed',
+        label: 'Signed Retainers',
+        value: totalSigned,
+        sub: `Base pool for conversion`,
+        color: '#3b82f6',
+        icon: '✅',
+      },
+      {
+        id: 'card-signed-rate',
+        label: 'Signed Rate',
+        value: `${signedRate.toFixed(1)}%`,
+        sub: `${totalSigned} signed / ${totalCases} retainers`,
+        color: '#6366f1',
+        icon: '📝',
+        trend: signedRate >= 65 ? 'up' : signedRate >= 50 ? 'neutral' : 'down',
+      },
+      {
         id: 'card-conversion',
-        label: 'SSD Conversion Rate',
+        label: 'Case Conv. Rate',
         value: `${convRate.toFixed(1)}%`,
         sub: `${totalConverted} converted / ${totalSigned} signed`,
         color: '#b82105',
         icon: '📈',
         trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
-      },
-      {
-        id: 'card-signed',
-        label: 'Signed Retainers (Base)',
-        value: totalSigned,
-        sub: `Base pool for conversion`,
-        color: '#3b82f6',
-        icon: '✅',
       },
       {
         id: 'card-rfc',

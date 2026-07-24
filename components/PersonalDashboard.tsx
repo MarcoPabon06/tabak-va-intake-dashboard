@@ -125,6 +125,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
   const totalConverted = myData.reduce((s, r) => s + (r.converted_cases || 0), 0)
   const totalRfc = myData.reduce((s, r) => s + (r.rfc_sent || 0), 0)
   const totalCases = totalSigned + totalUnsigned
+  const signedRate = totalCases > 0 ? (totalSigned / totalCases) * 100 : 0
   
   const convRate = lob === 'SSD'
     ? (totalSigned > 0 ? (totalConverted / totalSigned) * 100 : 0)
@@ -376,16 +377,23 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
 
   const streakLabel = lob === 'SSD' ? 'conversion streak' : 'signing streak'
 
-  const goalCards = [
-    { label: lob === 'SSD' ? 'Converted Cases' : 'Signed Retainers', value: primaryVolume, goal: g.goal_signed_retainers, pct: signedPct, icon: lob === 'SSD' ? '💼' : '✅', unit: '' },
-    { label: 'Conversion Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
+  const goalCards = lob === 'SSD' ? [
+    { label: 'Converted Cases', value: primaryVolume, goal: g.goal_signed_retainers, pct: signedPct, icon: '💼', unit: '' },
+    { label: 'Case Conv. Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
+    { label: 'Signed Rate', value: signedRate.toFixed(1), goal: 65, pct: Math.min(Math.round((signedRate / 65) * 100), 150), icon: '📝', unit: '%' },
+    { label: 'Avg CAPD', value: avgCapd, goal: g.goal_avg_capd, pct: capdPct, icon: '📞', unit: '' },
+  ] : [
+    { label: 'Signed Retainers', value: primaryVolume, goal: g.goal_signed_retainers, pct: signedPct, icon: '✅', unit: '' },
+    { label: 'Signing Rate', value: convRate.toFixed(1), goal: g.goal_conversion_rate, pct: convPct, icon: '📈', unit: '%' },
     { label: 'Avg CAPD', value: avgCapd, goal: g.goal_avg_capd, pct: capdPct, icon: '📞', unit: '' },
   ]
 
   const kpiCards = lob === 'SSD' ? [
     { label: 'Total Converted', value: totalConverted, color: '#10b981', icon: '💼' },
     { label: 'Total Signed', value: totalSigned, color: '#3b82f6', icon: '✅' },
-    { label: 'Conversion Rate', value: `${convRate.toFixed(1)}%`, color: '#b82105', icon: '📈' },
+    { label: 'Total Unsigned', value: totalUnsigned, color: '#f59e0b', icon: '⏳' },
+    { label: 'Signed Rate', value: `${signedRate.toFixed(1)}%`, color: '#6366f1', icon: '📝' },
+    { label: 'Case Conv. Rate', value: `${convRate.toFixed(1)}%`, color: '#b82105', icon: '📈' },
     { label: 'Avg CAPD', value: avgCapd, color: avgCapd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b', icon: '📞' },
     { label: 'RFC Sent', value: totalRfc, color: '#ec4899', icon: '📄' },
     { label: 'CRH', value: totalCrh, color: '#ef4444', icon: '🚫' },
@@ -454,7 +462,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
       <PersonalQA agentName={agentName} />
 
       {/* Goal Progress Bars */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 16 }}>
         {goalCards.map((g) => (
           <div key={g.label} className="glass-card fade-in" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>

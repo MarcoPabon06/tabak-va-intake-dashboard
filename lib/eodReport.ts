@@ -193,18 +193,22 @@ export function generateEODReportHtml(params: {
   const agentRows = Object.entries(agentStats)
     .map(([agent, s]) => {
       let rate = '0.0'
+      let signedRate = '0.0'
       if (isSSD) {
         rate = s.signed > 0 ? ((s.converted / s.signed) * 100).toFixed(1) : '0.0'
+        const total = s.signed + s.unsigned
+        signedRate = total > 0 ? ((s.signed / total) * 100).toFixed(1) : '0.0'
       } else {
         const total = s.signed + s.unsigned
         rate = total > 0 ? ((s.signed / total) * 100).toFixed(1) : '0.0'
       }
       const capdAvg = s.days > 0 ? Math.round(s.capd_total / s.days) : 0
-      return { agent, signed: s.signed, unsigned: s.unsigned, converted: s.converted, rfc: s.rfc, rate, capdAvg }
+      return { agent, signed: s.signed, unsigned: s.unsigned, converted: s.converted, rfc: s.rfc, rate, signedRate, capdAvg }
     })
     .sort((a, b) => isSSD ? b.converted - a.converted : b.signed - a.signed)
 
   const mvp = agentRows[0]
+  const teamSignedRate = totalCases > 0 ? ((totalSigned / totalCases) * 100).toFixed(1) : '0.0'
 
   const html = `
   <div style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #1e293b; line-height: 1.5; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
@@ -220,21 +224,25 @@ export function generateEODReportHtml(params: {
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
       <tr>
         ${isSSD ? `
-        <td style="width: 25%; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #166534; font-weight: bold; text-transform: uppercase;">Converted Cases</div>
-          <div style="font-size: 22px; font-weight: bold; color: #15803d; margin-top: 4px;">${totalConverted}</div>
+        <td style="width: 20%; padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #166534; font-weight: bold; text-transform: uppercase;">Converted Cases</div>
+          <div style="font-size: 20px; font-weight: bold; color: #15803d; margin-top: 4px;">${totalConverted}</div>
         </td>
-        <td style="width: 25%; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #1e40af; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
-          <div style="font-size: 22px; font-weight: bold; color: #1d4ed8; margin-top: 4px;">${totalSigned}</div>
+        <td style="width: 20%; padding: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #1e40af; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
+          <div style="font-size: 20px; font-weight: bold; color: #1d4ed8; margin-top: 4px;">${totalSigned}</div>
         </td>
-        <td style="width: 25%; padding: 12px; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #9d174d; font-weight: bold; text-transform: uppercase;">RFC Sent</div>
-          <div style="font-size: 22px; font-weight: bold; color: #be185d; margin-top: 4px;">${totalRfc}</div>
+        <td style="width: 20%; padding: 10px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #6b21a8; font-weight: bold; text-transform: uppercase;">Signed Rate</div>
+          <div style="font-size: 20px; font-weight: bold; color: #7e22ce; margin-top: 4px;">${teamSignedRate}%</div>
         </td>
-        <td style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
-          <div style="font-size: 22px; font-weight: bold; color: #0f172a; margin-top: 4px;">${teamConvRate}%</div>
+        <td style="width: 20%; padding: 10px; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #9d174d; font-weight: bold; text-transform: uppercase;">Case Conv. Rate</div>
+          <div style="font-size: 20px; font-weight: bold; color: #be185d; margin-top: 4px;">${teamConvRate}%</div>
+        </td>
+        <td style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center;">
+          <div style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">RFC Sent</div>
+          <div style="font-size: 20px; font-weight: bold; color: #0f172a; margin-top: 4px;">${totalRfc}</div>
         </td>
         ` : `
         <td style="width: 25%; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
@@ -261,7 +269,7 @@ export function generateEODReportHtml(params: {
     <!-- MVP Highlight -->
     <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
       <span style="font-size: 14px; font-weight: bold; color: #86198f;">🏆 Top Performer: ${mvp.agent}</span>
-      <span style="font-size: 13px; color: #701a75; margin-left: 12px;">${isSSD ? `${mvp.converted} Converted Cases` : `${mvp.signed} Signed Retainers`} (${mvp.rate}% Conversion)</span>
+      <span style="font-size: 13px; color: #701a75; margin-left: 12px;">${isSSD ? `${mvp.converted} Converted Cases | ${mvp.signedRate}% Signed Rate | ${mvp.rate}% Case Conv. Rate` : `${mvp.signed} Signed Retainers (${mvp.rate}% Conversion)`}</span>
     </div>
     ` : ''}
 
@@ -274,8 +282,10 @@ export function generateEODReportHtml(params: {
           ${isSSD ? `
             <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Converted</th>
             <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed</th>
+            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Unsigned</th>
+            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed Rate</th>
+            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Case Conv. Rate</th>
             <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">RFC Sent</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Conv. Rate</th>
           ` : `
             <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed</th>
             <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Unsigned</th>
@@ -291,8 +301,10 @@ export function generateEODReportHtml(params: {
             ${isSSD ? `
               <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #15803d; font-weight: bold;">${r.converted}</td>
               <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #1d4ed8;">${r.signed}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #be185d;">${r.rfc}</td>
+              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #b45309;">${r.unsigned}</td>
+              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.signedRate}%</td>
               <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.rate}%</td>
+              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #be185d;">${r.rfc}</td>
             ` : `
               <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #15803d; font-weight: bold;">${r.signed}</td>
               <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #b45309;">${r.unsigned}</td>
@@ -313,11 +325,11 @@ export function generateEODReportHtml(params: {
 
   const text = `📊 EOD REPORT - ${lobLabel}\nPeriod: ${dateRangeStr}\n\nSummary:\n` +
     (isSSD 
-      ? `- Converted Cases: ${totalConverted}\n- Signed Retainers: ${totalSigned}\n- RFC Sent: ${totalRfc}\n- Conv. Rate: ${teamConvRate}%\n`
+      ? `- Converted Cases: ${totalConverted}\n- Signed Retainers: ${totalSigned}\n- Signed Rate: ${teamSignedRate}%\n- Case Conv. Rate: ${teamConvRate}%\n- RFC Sent: ${totalRfc}\n`
       : `- Signed Retainers: ${totalSigned}\n- Unsigned: ${totalUnsigned}\n- Conv. Rate: ${teamConvRate}%\n- Avg CAPD: ${avgCapd}\n`) +
     `\nSpecialist Breakdown:\n` +
     agentRows.map(r => isSSD 
-      ? `• ${r.agent}: ${r.converted} Converted | ${r.signed} Signed | ${r.rate}% Rate` 
+      ? `• ${r.agent}: ${r.converted} Converted | ${r.signed} Signed | ${r.signedRate}% Signed Rate | ${r.rate}% Case Conv. Rate` 
       : `• ${r.agent}: ${r.signed} Signed | ${r.unsigned} Unsigned | ${r.rate}% Rate | ${r.capdAvg} CAPD`
     ).join('\n')
 
