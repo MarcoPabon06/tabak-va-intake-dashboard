@@ -45,6 +45,46 @@ export function generateEODReportHtml(params: {
   if (lob === 'SSD') lobLabel = 'Social Security Disability Division (SSD Intake)'
   if (lob === 'APPS') lobLabel = 'Applications Team (SSA Filings)'
 
+  const themeColor = lob === 'SSD' ? '#be185d' : lob === 'APPS' ? '#1d4ed8' : '#b82105'
+
+  // Outlook Dark Mode CSS Overrides snippet
+  const headStyle = `
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <style>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+      @media (prefers-color-scheme: dark) {
+        .eod-container { background-color: #0f172a !important; color: #ffffff !important; border-color: #334155 !important; }
+        .eod-title { color: #ffffff !important; }
+        .eod-sub { color: #cbd5e1 !important; }
+        .eod-card { background-color: #1e293b !important; border-color: #475569 !important; }
+        .eod-card-label { color: #cbd5e1 !important; }
+        .eod-card-val-green { color: #34d399 !important; }
+        .eod-card-val-blue { color: #60a5fa !important; }
+        .eod-card-val-purple { color: #c084fc !important; }
+        .eod-card-val-pink { color: #f472b6 !important; }
+        .eod-card-val-amber { color: #fbbf24 !important; }
+        .eod-card-val-dark { color: #ffffff !important; }
+        .eod-mvp { background-color: #31103f !important; border-color: #a855f7 !important; color: #f5d0fe !important; }
+        .eod-mvp-text { color: #f0abfc !important; }
+        .eod-table-th { background-color: #1e293b !important; color: #ffffff !important; border-color: #475569 !important; }
+        .eod-row-even { background-color: #0f172a !important; color: #ffffff !important; }
+        .eod-row-odd { background-color: #1e293b !important; color: #ffffff !important; }
+        .eod-td { border-color: #334155 !important; color: #ffffff !important; }
+        .eod-td-bold { color: #ffffff !important; }
+        .eod-td-green { color: #34d399 !important; }
+        .eod-td-blue { color: #60a5fa !important; }
+        .eod-td-amber { color: #fbbf24 !important; }
+        .eod-td-pink { color: #f472b6 !important; }
+      }
+      [data-ogsc] .eod-container { background-color: #0f172a !important; color: #ffffff !important; }
+      [data-ogsc] .eod-card { background-color: #1e293b !important; border-color: #475569 !important; }
+      [data-ogsc] .eod-card-label { color: #cbd5e1 !important; }
+      [data-ogsc] .eod-table-th { background-color: #1e293b !important; color: #ffffff !important; }
+      [data-ogsc] .eod-td { color: #ffffff !important; }
+    </style>
+  `
+
   // ── APPS TEAM REPORT ──
   if (lob === 'APPS') {
     const totalApps = appsData.length
@@ -75,75 +115,84 @@ export function generateEODReportHtml(params: {
     const mvp = repRows[0]
 
     const html = `
-    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #1e293b; line-height: 1.5; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-      <!-- Header -->
-      <div style="border-bottom: 2px solid #3b82f6; padding-bottom: 12px; margin-bottom: 16px;">
-        <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px;">📲 End of Day (EOD) Performance Report</h2>
-        <div style="color: #475569; font-size: 13px;">
-          <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
+    <!DOCTYPE html>
+    <html>
+    <head>
+      ${headStyle}
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #ffffff;">
+      <div class="eod-container" style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #0f172a; line-height: 1.5; background: #ffffff; padding: 22px; border-radius: 8px; border: 1px solid #cbd5e1; margin: 0 auto;">
+        
+        <!-- Header -->
+        <div style="border-bottom: 3px solid ${themeColor}; padding-bottom: 12px; margin-bottom: 18px;">
+          <h2 class="eod-title" style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px; font-weight: 800;">📲 End of Day (EOD) Performance Report</h2>
+          <div class="eod-sub" style="color: #475569; font-size: 13px; font-weight: 600;">
+            <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
+          </div>
+        </div>
+
+        <!-- Executive Summary Cards -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Total Apps</div>
+              <div class="eod-card-val-dark" style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px;">${totalApps}</div>
+            </td>
+            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Converted (YES)</div>
+              <div class="eod-card-val-green" style="font-size: 22px; font-weight: 800; color: #047857; margin-top: 4px;">${convertedApps}</div>
+            </td>
+            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Pending (NO)</div>
+              <div class="eod-card-val-amber" style="font-size: 22px; font-weight: 800; color: #b45309; margin-top: 4px;">${pendingApps}</div>
+            </td>
+            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
+              <div class="eod-card-val-blue" style="font-size: 22px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${rate}%</div>
+            </td>
+          </tr>
+        </table>
+
+        ${mvp ? `
+        <!-- MVP Highlight -->
+        <div class="eod-mvp" style="background: #fdf4ff; border: 1px solid #d8b4fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
+          <span style="font-size: 14px; font-weight: bold; color: #7e22ce;">🏆 Top Performer: ${mvp.rep}</span>
+          <span class="eod-mvp-text" style="font-size: 13px; color: #6b21a8; font-weight: 600; margin-left: 12px;">${mvp.converted} Converted Cases (${mvp.rate}% Conversion)</span>
+        </div>
+        ` : ''}
+
+        <!-- Detailed Breakdown Table -->
+        <h3 class="eod-title" style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0; font-weight: 800;">Representative Breakdown</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
+          <thead>
+            <tr>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: left;">Representative</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Apps Filed</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Converted</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Pending</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Conv. Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${repRows.map((r, i) => `
+              <tr class="${i % 2 === 0 ? 'eod-row-even' : 'eod-row-odd'}" style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                <td class="eod-td eod-td-bold" style="padding: 9px 12px; border: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${r.rep}</td>
+                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.total}</td>
+                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.converted}</td>
+                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.pending}</td>
+                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #1d4ed8;">${r.rate}%</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <!-- Footer -->
+        <div class="eod-sub" style="font-size: 11px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 10px; text-align: center;">
+          Report generated from Tabak LLC Dashboard · Confidential Internal Report
         </div>
       </div>
-
-      <!-- Executive Summary Cards -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <tr>
-          <td style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center;">
-            <div style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase;">Total Apps</div>
-            <div style="font-size: 22px; font-weight: bold; color: #0f172a; margin-top: 4px;">${totalApps}</div>
-          </td>
-          <td style="width: 25%; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
-            <div style="font-size: 11px; color: #166534; font-weight: bold; text-transform: uppercase;">Converted (YES)</div>
-            <div style="font-size: 22px; font-weight: bold; color: #15803d; margin-top: 4px;">${convertedApps}</div>
-          </td>
-          <td style="width: 25%; padding: 12px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; text-align: center;">
-            <div style="font-size: 11px; color: #92400e; font-weight: bold; text-transform: uppercase;">Pending (NO)</div>
-            <div style="font-size: 22px; font-weight: bold; color: #b45309; margin-top: 4px;">${pendingApps}</div>
-          </td>
-          <td style="width: 25%; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; text-align: center;">
-            <div style="font-size: 11px; color: #1e40af; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
-            <div style="font-size: 22px; font-weight: bold; color: #1d4ed8; margin-top: 4px;">${rate}%</div>
-          </td>
-        </tr>
-      </table>
-
-      ${mvp ? `
-      <!-- MVP Highlight -->
-      <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
-        <span style="font-size: 14px; font-weight: bold; color: #86198f;">🏆 Top Performer: ${mvp.rep}</span>
-        <span style="font-size: 13px; color: #701a75; margin-left: 12px;">${mvp.converted} Converted Cases (${mvp.rate}% Conversion)</span>
-      </div>
-      ` : ''}
-
-      <!-- Detailed Breakdown Table -->
-      <h3 style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0;">Representative Breakdown</h3>
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
-        <thead>
-          <tr style="background: #0f172a; color: #ffffff; text-align: left;">
-            <th style="padding: 8px 12px; border: 1px solid #0f172a;">Representative</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Apps Filed</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Converted</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Pending</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Conv. Rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${repRows.map((r, i) => `
-            <tr style="background: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-weight: bold; color: #0f172a;">${r.rep}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right;">${r.total}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #15803d; font-weight: bold;">${r.converted}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #b45309;">${r.pending}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.rate}%</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <!-- Footer -->
-      <div style="font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px;">
-        Report generated from Tabak LLC Dashboard · Confidential Internal Report
-      </div>
-    </div>
+    </body>
+    </html>
     `
 
     const text = `📊 EOD REPORT - ${lobLabel}\nPeriod: ${dateRangeStr}\n\nSummary:\n- Total Apps Filed: ${totalApps}\n- Converted (YES): ${convertedApps}\n- Pending (NO): ${pendingApps}\n- Conversion Rate: ${rate}%\n\nRepresentative Breakdown:\n` +
@@ -211,116 +260,125 @@ export function generateEODReportHtml(params: {
   const teamSignedRate = totalCases > 0 ? ((totalSigned / totalCases) * 100).toFixed(1) : '0.0'
 
   const html = `
-  <div style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #1e293b; line-height: 1.5; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-    <!-- Header -->
-    <div style="border-bottom: 2px solid ${isSSD ? '#ec4899' : '#b82105'}; padding-bottom: 12px; margin-bottom: 16px;">
-      <h2 style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px;">📊 End of Day (EOD) Performance Report</h2>
-      <div style="color: #475569; font-size: 13px;">
-        <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
+  <!DOCTYPE html>
+  <html>
+  <head>
+    ${headStyle}
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #ffffff;">
+    <div class="eod-container" style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #0f172a; line-height: 1.5; background: #ffffff; padding: 22px; border-radius: 8px; border: 1px solid #cbd5e1; margin: 0 auto;">
+      
+      <!-- Header -->
+      <div style="border-bottom: 3px solid ${themeColor}; padding-bottom: 12px; margin-bottom: 18px;">
+        <h2 class="eod-title" style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px; font-weight: 800;">📊 End of Day (EOD) Performance Report</h2>
+        <div class="eod-sub" style="color: #475569; font-size: 13px; font-weight: 600;">
+          <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
+        </div>
+      </div>
+
+      <!-- Executive Summary Cards -->
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <tr>
+          ${isSSD ? `
+          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Converted Cases</div>
+            <div class="eod-card-val-green" style="font-size: 20px; font-weight: 800; color: #047857; margin-top: 4px;">${totalConverted}</div>
+          </td>
+          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
+            <div class="eod-card-val-blue" style="font-size: 20px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${totalSigned}</div>
+          </td>
+          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Rate</div>
+            <div class="eod-card-val-purple" style="font-size: 20px; font-weight: 800; color: #7e22ce; margin-top: 4px;">${teamSignedRate}%</div>
+          </td>
+          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Case Conv. Rate</div>
+            <div class="eod-card-val-pink" style="font-size: 20px; font-weight: 800; color: #be185d; margin-top: 4px;">${teamConvRate}%</div>
+          </td>
+          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">RFC Sent</div>
+            <div class="eod-card-val-dark" style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px;">${totalRfc}</div>
+          </td>
+          ` : `
+          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
+            <div class="eod-card-val-green" style="font-size: 22px; font-weight: 800; color: #047857; margin-top: 4px;">${totalSigned}</div>
+          </td>
+          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Unsigned</div>
+            <div class="eod-card-val-amber" style="font-size: 22px; font-weight: 800; color: #b45309; margin-top: 4px;">${totalUnsigned}</div>
+          </td>
+          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
+            <div class="eod-card-val-blue" style="font-size: 22px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${teamConvRate}%</div>
+          </td>
+          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
+            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Avg CAPD</div>
+            <div class="eod-card-val-dark" style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px;">${avgCapd}</div>
+          </td>
+          `}
+        </tr>
+      </table>
+
+      ${mvp ? `
+      <!-- MVP Highlight -->
+      <div class="eod-mvp" style="background: #fdf4ff; border: 1px solid #d8b4fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
+        <span style="font-size: 14px; font-weight: bold; color: #7e22ce;">🏆 Top Performer: ${mvp.agent}</span>
+        <span class="eod-mvp-text" style="font-size: 13px; color: #6b21a8; font-weight: 600; margin-left: 12px;">${isSSD ? `${mvp.converted} Converted Cases (${mvp.signedRate}% Signed | ${mvp.rate}% Case Conv.)` : `${mvp.signed} Signed Retainers (${mvp.rate}% Conversion)`}</span>
+      </div>
+      ` : ''}
+
+      <!-- Detailed Breakdown Table -->
+      <h3 class="eod-title" style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0; font-weight: 800;">Specialist Performance Breakdown</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
+        <thead>
+          <tr>
+            <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: left;">Specialist</th>
+            ${isSSD ? `
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Converted</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Unsigned</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed Rate</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Case Conv. Rate</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">RFC Sent</th>
+            ` : `
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Unsigned</th>
+              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Conv. Rate</th>
+            `}
+            <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Avg CAPD</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${agentRows.map((r, i) => `
+            <tr class="${i % 2 === 0 ? 'eod-row-even' : 'eod-row-odd'}" style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+              <td class="eod-td eod-td-bold" style="padding: 9px 12px; border: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${r.agent}</td>
+              ${isSSD ? `
+                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.converted}</td>
+                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #1d4ed8;">${r.signed}</td>
+                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.unsigned}</td>
+                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #7e22ce;">${r.signedRate}%</td>
+                <td class="eod-td eod-td-pink" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #be185d;">${r.rate}%</td>
+                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.rfc}</td>
+              ` : `
+                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.signed}</td>
+                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.unsigned}</td>
+                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #1d4ed8;">${r.rate}%</td>
+              `}
+              <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.capdAvg}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      <!-- Footer -->
+      <div class="eod-sub" style="font-size: 11px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 10px; text-align: center;">
+        Report generated from Tabak LLC Dashboard · Confidential Internal Report
       </div>
     </div>
-
-    <!-- Executive Summary Cards -->
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-      <tr>
-        ${isSSD ? `
-        <td style="width: 20%; padding: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 10px; color: #166534; font-weight: bold; text-transform: uppercase;">Converted Cases</div>
-          <div style="font-size: 20px; font-weight: bold; color: #15803d; margin-top: 4px;">${totalConverted}</div>
-        </td>
-        <td style="width: 20%; padding: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; text-align: center;">
-          <div style="font-size: 10px; color: #1e40af; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
-          <div style="font-size: 20px; font-weight: bold; color: #1d4ed8; margin-top: 4px;">${totalSigned}</div>
-        </td>
-        <td style="width: 20%; padding: 10px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 6px; text-align: center;">
-          <div style="font-size: 10px; color: #6b21a8; font-weight: bold; text-transform: uppercase;">Signed Rate</div>
-          <div style="font-size: 20px; font-weight: bold; color: #7e22ce; margin-top: 4px;">${teamSignedRate}%</div>
-        </td>
-        <td style="width: 20%; padding: 10px; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 6px; text-align: center;">
-          <div style="font-size: 10px; color: #9d174d; font-weight: bold; text-transform: uppercase;">Case Conv. Rate</div>
-          <div style="font-size: 20px; font-weight: bold; color: #be185d; margin-top: 4px;">${teamConvRate}%</div>
-        </td>
-        <td style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">RFC Sent</div>
-          <div style="font-size: 20px; font-weight: bold; color: #0f172a; margin-top: 4px;">${totalRfc}</div>
-        </td>
-        ` : `
-        <td style="width: 25%; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #166534; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
-          <div style="font-size: 22px; font-weight: bold; color: #15803d; margin-top: 4px;">${totalSigned}</div>
-        </td>
-        <td style="width: 25%; padding: 12px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #92400e; font-weight: bold; text-transform: uppercase;">Unsigned</div>
-          <div style="font-size: 22px; font-weight: bold; color: #b45309; margin-top: 4px;">${totalUnsigned}</div>
-        </td>
-        <td style="width: 25%; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #1e40af; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
-          <div style="font-size: 22px; font-weight: bold; color: #1d4ed8; margin-top: 4px;">${teamConvRate}%</div>
-        </td>
-        <td style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center;">
-          <div style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Avg CAPD</div>
-          <div style="font-size: 22px; font-weight: bold; color: #0f172a; margin-top: 4px;">${avgCapd}</div>
-        </td>
-        `}
-      </tr>
-    </table>
-
-    ${mvp ? `
-    <!-- MVP Highlight -->
-    <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
-      <span style="font-size: 14px; font-weight: bold; color: #86198f;">🏆 Top Performer: ${mvp.agent}</span>
-      <span style="font-size: 13px; color: #701a75; margin-left: 12px;">${isSSD ? `${mvp.converted} Converted Cases | ${mvp.signedRate}% Signed Rate | ${mvp.rate}% Case Conv. Rate` : `${mvp.signed} Signed Retainers (${mvp.rate}% Conversion)`}</span>
-    </div>
-    ` : ''}
-
-    <!-- Detailed Breakdown Table -->
-    <h3 style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0;">Specialist Performance Breakdown</h3>
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
-      <thead>
-        <tr style="background: #0f172a; color: #ffffff; text-align: left;">
-          <th style="padding: 8px 12px; border: 1px solid #0f172a;">Specialist</th>
-          ${isSSD ? `
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Converted</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Unsigned</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed Rate</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Case Conv. Rate</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">RFC Sent</th>
-          ` : `
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Signed</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Unsigned</th>
-            <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Conv. Rate</th>
-          `}
-          <th style="padding: 8px 12px; border: 1px solid #0f172a; text-align: right;">Avg CAPD</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${agentRows.map((r, i) => `
-          <tr style="background: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-            <td style="padding: 8px 12px; border: 1px solid #e2e8f0; font-weight: bold; color: #0f172a;">${r.agent}</td>
-            ${isSSD ? `
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #15803d; font-weight: bold;">${r.converted}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #1d4ed8;">${r.signed}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #b45309;">${r.unsigned}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.signedRate}%</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.rate}%</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #be185d;">${r.rfc}</td>
-            ` : `
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #15803d; font-weight: bold;">${r.signed}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; color: #b45309;">${r.unsigned}</td>
-              <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold;">${r.rate}%</td>
-            `}
-            <td style="padding: 8px 12px; border: 1px solid #e2e8f0; text-align: right;">${r.capdAvg}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <!-- Footer -->
-    <div style="font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px;">
-      Report generated from Tabak LLC Dashboard · Confidential Internal Report
-    </div>
-  </div>
+  </body>
+  </html>
   `
 
   const text = `📊 EOD REPORT - ${lobLabel}\nPeriod: ${dateRangeStr}\n\nSummary:\n` +
