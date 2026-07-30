@@ -430,17 +430,85 @@ export default function SettingsPage() {
 
               </div>
 
-              {/* Save */}
-              <button
-                id="btn-save-settings"
-                className="btn-primary"
-                onClick={handleSave}
-                disabled={saving}
-                style={{ padding: '13px 28px', fontSize: 15, width: '100%' }}
-              >
-                {saving ? 'Saving…' : '💾 Save Settings'}
-              </button>
-            </>
+              {/* Section 4: Email Notifications (Resend API) */}
+                <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <span style={{ fontSize: 24 }}>📬</span>
+                    <div>
+                      <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#10b981' }}>Automated Email Notifications (Resend API)</h2>
+                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                        Automatically notify Super Admins and Team Lead Admins via Microsoft 365 Outlook when Time-Off requests or Coaching sessions are submitted.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div>
+                      <label className="field-label">Resend API Key</label>
+                      <input
+                        type="password"
+                        className="input-field"
+                        placeholder="e.g. re_123456789abcdef..."
+                        value={settings.resend_api_key || ''}
+                        onChange={(e) => updateSetting('resend_api_key', e.target.value)}
+                      />
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Create a free API key at <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>Resend.com</a> (Includes 3,000 free emails/month).
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="field-label">Manager & Admin Alert Email Recipients</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="e.g. manager@tabaklaw.com, supervisor@tabaklaw.com"
+                        value={settings.admin_notification_emails || ''}
+                        onChange={(e) => updateSetting('admin_notification_emails', e.target.value)}
+                      />
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                        Comma-separated list of email addresses to receive instant Time-Off and Coaching alerts. (All active Admins with valid email usernames are also notified automatically).
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                      <div>
+                        <label className="field-label">Sender Email / Name</label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="Tabak LLC Dashboard <onboarding@resend.dev>"
+                          value={settings.resend_from_email || ''}
+                          onChange={(e) => updateSetting('resend_from_email', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="field-label">Dashboard Base URL (For Links in Email)</label>
+                        <input
+                          type="text"
+                          className="input-field"
+                          placeholder="https://tabak-dashboard.up.railway.app"
+                          value={settings.app_base_url || ''}
+                          onChange={(e) => updateSetting('app_base_url', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button
+                    id="btn-save-settings"
+                    className="btn-primary"
+                    style={{ padding: '10px 24px', fontSize: 14 }}
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? 'Saving…' : 'Save Target Settings & Email Config'}
+                  </button>
+                </div>
+              </>
           )}
         </div>
       </main>

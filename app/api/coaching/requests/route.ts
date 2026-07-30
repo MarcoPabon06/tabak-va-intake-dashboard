@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendCoachingNotificationEmail } from '@/lib/email'
 
 // GET /api/coaching/requests
 export async function GET(req: NextRequest) {
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       agent_notes.trim()
     )
 
-    // Notify all Master coaches in real-time
+    // Notify all Master coaches in real-time via SSE
     const masters = db.prepare("SELECT username FROM users WHERE role = 'master' AND active = 1").all() as { username: string }[]
     for (const master of masters) {
       sendNotification({
@@ -96,6 +97,14 @@ export async function POST(req: NextRequest) {
         link: '/coaching'
       })
     }
+
+    // Email notification: send email to Admins via Resend
+    sendCoachingNotificationEmail({
+      agentName,
+      preferredDate: preferred_date || undefined,
+      agentNotes: agent_notes.trim(),
+      linkedCallId: linked_evaluation_id ? String(linked_evaluation_id) : undefined,
+    }).catch((err) => console.error('[coaching] Failed to send email:', err))
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {

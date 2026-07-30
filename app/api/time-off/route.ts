@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendTimeOffNotificationEmail, sendTimeOffStatusUpdateEmail } from '@/lib/email'
 
 // GET /api/time-off — list requests
 export async function GET(req: NextRequest) {
@@ -127,6 +128,15 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Email notification: send email to Admins via Resend
+    sendTimeOffNotificationEmail({
+      agentName,
+      lob,
+      startDate: start_date,
+      endDate: end_date,
+      reason: reason || '',
+    }).catch((err) => console.error('[time-off] Failed to send email:', err))
+
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -237,10 +247,12 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// PATCH /api/time-off — approve/reject request (manager only)
+// PATCH /api/time-off — approve/reject request (manager or admin with canApproveTimeOff)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
+  const role = (session?.user as any)?.role
+  const perms = (session?.user as any)?.permissions
+  if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canApproveTimeOff)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -260,8 +272,8 @@ export async function PATCH(req: NextRequest) {
     
     // Retrieve original request to send user notification
     const requestRecord = db
-      .prepare('SELECT username, start_date, end_date FROM time_off_requests WHERE id = ?')
-      .get(id) as { username: string; start_date: string; end_date: string } | undefined
+      .prepare('SELECT username, agent_name, start_date, end_date FROM time_off_requests WHERE id = ?')
+      .get(id) as { username: string; agent_name: string; start_date: string; end_date: string } | undefined
 
     if (!requestRecord) {
       return NextResponse.json({ error: 'Time off request not found.' }, { status: 404 })
@@ -275,13 +287,24 @@ export async function PATCH(req: NextRequest) {
       WHERE id = ?
     `).run(status, sessionUsername, manager_notes || '', id)
 
-    // Notify requesting specialist
+    // Notify requesting specialist via in-app SSE
     sendNotification({
       username: requestRecord.username,
       title: `Time Off ${status}`,
       message: `Your time off request for ${requestRecord.start_date} to ${requestRecord.end_date} has been ${status.toLowerCase()}.`,
       link: '/time-off'
     })
+
+    // Notify requesting specialist via Email
+    sendTimeOffStatusUpdateEmail({
+      toEmail: requestRecord.username,
+      agentName: requestRecord.agent_name || requestRecord.username,
+      startDate: requestRecord.start_date,
+      endDate: requestRecord.end_date,
+      status: status as any,
+      reviewedBy: sessionUsername,
+      managerNotes: manager_notes || '',
+    }).catch((err) => console.error('[time-off] Failed to send status email:', err))
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
