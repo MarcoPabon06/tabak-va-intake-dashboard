@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendTimeOffWebhookNotification, sendTimeOffStatusWebhookNotification } from '@/lib/webhook'
 
 // GET /api/time-off — list requests
 export async function GET(req: NextRequest) {
@@ -126,6 +127,15 @@ export async function POST(req: NextRequest) {
         link: '/time-off'
       })
     }
+
+    // Power Automate M365 Webhook notification
+    sendTimeOffWebhookNotification({
+      agentName,
+      lob,
+      startDate: start_date,
+      endDate: end_date,
+      reason: reason || '',
+    }).catch((err) => console.error('[time-off] Failed to trigger webhook:', err))
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {
@@ -284,6 +294,16 @@ export async function PATCH(req: NextRequest) {
       message: `Your time off request for ${requestRecord.start_date} to ${requestRecord.end_date} has been ${status.toLowerCase()}.`,
       link: '/time-off'
     })
+
+    // Power Automate M365 Webhook notification
+    sendTimeOffStatusWebhookNotification({
+      agentName: requestRecord.agent_name || requestRecord.username,
+      startDate: requestRecord.start_date,
+      endDate: requestRecord.end_date,
+      status,
+      reviewedBy: sessionUsername,
+      managerNotes: manager_notes || '',
+    }).catch((err) => console.error('[time-off] Failed to trigger webhook status update:', err))
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

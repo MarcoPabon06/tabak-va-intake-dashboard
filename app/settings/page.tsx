@@ -107,6 +107,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testingWebhook, setTestingWebhook] = useState(false)
+  const [testWebhookResult, setTestWebhookResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
@@ -147,6 +149,31 @@ export default function SettingsPage() {
       setError(err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleTestWebhook() {
+    setTestingWebhook(true)
+    setTestWebhookResult(null)
+    try {
+      // First save current settings
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+
+      const res = await fetch('/api/test-webhook', { method: 'POST' })
+      const json = await res.json()
+      if (!json.success) {
+        setTestWebhookResult({ success: false, message: json.error || 'Failed to trigger test webhook' })
+      } else {
+        setTestWebhookResult({ success: true, message: 'Power Automate Webhook executed successfully! Check your M365 Outlook inbox.' })
+      }
+    } catch (err: any) {
+      setTestWebhookResult({ success: false, message: err.message })
+    } finally {
+      setTestingWebhook(false)
     }
   }
 
@@ -430,16 +457,70 @@ export default function SettingsPage() {
 
               </div>
 
+              {/* Section 4: Microsoft 365 Power Automate Webhook (Option 2) */}
+              <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 24 }}>⚡</span>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#3b82f6' }}>Microsoft 365 Power Automate Webhook (Internal M365 Email)</h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                      Sends instant notifications directly through your Microsoft 365 work account via Power Automate. 100% internal M365 email delivery with 0% spam filtering!
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Power Automate HTTP POST Webhook URL</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. https://prod-123.westus.logic.azure.com:443/workflows/..."
+                      value={settings.power_automate_webhook_url || ''}
+                      onChange={(e) => updateSetting('power_automate_webhook_url', e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Copy your HTTP POST URL from your Power Automate flow at <a href="https://make.powerautomate.com" target="_blank" rel="noreferrer" style={{ color: '#3b82f6', textDecoration: 'underline' }}>make.powerautomate.com</a>.
+                    </div>
+                  </div>
+
+                  {testWebhookResult && (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: testWebhookResult.success ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                        border: testWebhookResult.success ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                        color: testWebhookResult.success ? '#10b981' : '#ef4444',
+                      }}
+                    >
+                      {testWebhookResult.success ? '✅ ' : '❌ '} {testWebhookResult.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '10px 20px', fontSize: 14, background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.3)' }}
+                  onClick={handleTestWebhook}
+                  disabled={testingWebhook || saving}
+                >
+                  {testingWebhook ? 'Testing Webhook…' : '🧪 Send Test Webhook'}
+                </button>
                 <button
                   id="btn-save-settings"
                   className="btn-primary"
                   style={{ padding: '10px 24px', fontSize: 14 }}
                   onClick={handleSave}
-                  disabled={saving}
+                  disabled={saving || testingWebhook}
                 >
-                  {saving ? 'Saving…' : 'Save Target Settings'}
+                  {saving ? 'Saving…' : 'Save Target Settings & Webhook Config'}
                 </button>
               </div>
             </>

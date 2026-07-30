@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendCoachingWebhookNotification } from '@/lib/webhook'
 
 // GET /api/coaching/requests
 export async function GET(req: NextRequest) {
@@ -96,6 +97,13 @@ export async function POST(req: NextRequest) {
         link: '/coaching'
       })
     }
+
+    // Power Automate M365 Webhook notification
+    sendCoachingWebhookNotification({
+      agentName,
+      preferredDate: preferred_date || undefined,
+      agentNotes: agent_notes.trim(),
+    }).catch((err) => console.error('[coaching] Failed to trigger webhook:', err))
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {
