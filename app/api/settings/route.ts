@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 
 // GET /api/settings — returns all settings as key-value object
@@ -14,10 +16,17 @@ export async function GET() {
   }
 }
 
-// PUT /api/settings — update settings (master only)
+// PUT /api/settings — update settings (master, superadmin, or admin with canChangeSettings)
 // Body: { "goal_signed_retainers": "35", "goal_conversion_rate": "65", ... }
 export async function PUT(req: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    const role = (session?.user as any)?.role
+    const perms = (session?.user as any)?.permissions
+    if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canChangeSettings)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await req.json()
     const db = getDb()
 

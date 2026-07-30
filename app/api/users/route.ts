@@ -7,13 +7,15 @@ import bcrypt from 'bcryptjs'
 // GET /api/users
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
+  const uRole = (session?.user as any)?.role
+  const uPerms = (session?.user as any)?.permissions
+  if (!session || (uRole !== 'master' && uRole !== 'superadmin' && !uPerms?.canManageUsers)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const db = getDb()
   const users = db
-    .prepare('SELECT id, username, display_name, role, active, lob, created_at FROM users ORDER BY id')
+    .prepare('SELECT id, username, display_name, role, active, lob, permissions, created_at FROM users ORDER BY id')
     .all()
 
   return NextResponse.json(users)
@@ -22,30 +24,33 @@ export async function GET(req: NextRequest) {
 // POST /api/users  — create user
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
+  const uRole = (session?.user as any)?.role
+  const uPerms = (session?.user as any)?.permissions
+  if (!session || (uRole !== 'master' && uRole !== 'superadmin' && !uPerms?.canManageUsers)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const body = await req.json()
-  const { username, password, role, display_name, lob } = body
+  const { username, password, role, display_name, lob, permissions } = body
 
   if (!username || !password || !role) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
-  if (!['master', 'regular'].includes(role)) {
+  if (!['master', 'superadmin', 'admin', 'regular'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 
   const userLob = ['SSD', 'APPS'].includes(lob) ? lob : 'VA'
+  const permissionsJson = permissions ? JSON.stringify(permissions) : null
   const db = getDb()
   const hash = await bcrypt.hash(password, 10)
 
   try {
     const result = db
       .prepare(
-        'INSERT INTO users (username, password_hash, role, display_name, lob) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO users (username, password_hash, role, display_name, lob, permissions) VALUES (?, ?, ?, ?, ?, ?)'
       )
-      .run(username, hash, role, display_name || username, userLob)
+      .run(username, hash, role, display_name || username, userLob, permissionsJson)
 
     // Sync to agents table: auto-add as active agent
     const actualDisplayName = (display_name || username).trim()
@@ -60,15 +65,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/users  — update user (reset password, toggle active, change role)
+// PATCH /api/users  — update user (reset password, toggle active, change role, update permissions)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
+  const uRole = (session?.user as any)?.role
+  const uPerms = (session?.user as any)?.permissions
+  if (!session || (uRole !== 'master' && uRole !== 'superadmin' && !uPerms?.canManageUsers)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const body = await req.json()
-  const { id, password, active, role, display_name, lob } = body
+  const { id, password, active, role, display_name, lob, permissions } = body
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
@@ -103,6 +110,11 @@ export async function PATCH(req: NextRequest) {
 
   if (role) {
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id)
+  }
+
+  if (permissions !== undefined) {
+    const permissionsJson = permissions ? JSON.stringify(permissions) : null
+    db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(permissionsJson, id)
   }
 
   if (display_name) {

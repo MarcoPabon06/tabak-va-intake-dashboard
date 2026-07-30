@@ -1,7 +1,7 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
-import getDb from './db'
+import getDb, { parseUserPermissions } from './db'
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
@@ -27,12 +27,15 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.password_hash)
         if (!valid) return null
 
+        const permissions = parseUserPermissions(user.role, user.permissions)
+
         return {
           id: String(user.id),
           name: user.display_name || user.username,
           email: user.username,
           role: user.role,
           lob: user.lob || 'VA',
+          permissions,
         }
       },
     }),
@@ -43,14 +46,16 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role
         token.id = user.id
         token.lob = (user as any).lob || 'VA'
+        token.permissions = (user as any).permissions
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role
+        ;(session.user as any).role = token.role
         ;(session.user as any).id = token.id
         ;(session.user as any).lob = token.lob || 'VA'
+        ;(session.user as any).permissions = token.permissions
       }
       return session
     },

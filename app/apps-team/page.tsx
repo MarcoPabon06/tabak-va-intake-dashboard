@@ -39,6 +39,11 @@ const REASON_OPTIONS = [
 export default function AppsTeamPage() {
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role || 'regular'
+  const isSuper = userRole === 'master' || userRole === 'superadmin'
+  const isAdmin = userRole === 'admin'
+  const perms = (session?.user as any)?.permissions
+  const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
+
   const userLob = (session?.user as any)?.lob || 'VA'
   const userName = session?.user?.name || ''
 
@@ -287,7 +292,7 @@ export default function AppsTeamPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              {userRole !== 'regular' && (
+              {canCopyEOD && (
                 <button 
                   className="btn-secondary" 
                   style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(59,130,246,0.15)', borderColor: 'rgba(59,130,246,0.35)', color: '#60a5fa', fontWeight: 700 }}

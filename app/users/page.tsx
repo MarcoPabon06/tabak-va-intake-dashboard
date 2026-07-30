@@ -3,6 +3,19 @@
 import { useState, useEffect } from 'react'
 import Navigation from '@/components/Navigation'
 
+interface UserPermissions {
+  allowedLobs: ('VA' | 'SSD' | 'APPS')[]
+  canManageDailyEntry: boolean
+  canCopyEOD: boolean
+  canViewQA: boolean
+  canPerformQA: boolean
+  canManageCoaching: boolean
+  canViewTimeOff: boolean
+  canApproveTimeOff: boolean
+  canManageUsers: boolean
+  canChangeSettings: boolean
+}
+
 interface User {
   id: number
   username: string
@@ -10,14 +23,38 @@ interface User {
   role: string
   active: number
   lob?: string
+  permissions?: string | null
   created_at: string
+}
+
+const DEFAULT_ADMIN_PERMISSIONS: UserPermissions = {
+  allowedLobs: ['VA', 'SSD'],
+  canManageDailyEntry: true,
+  canCopyEOD: true,
+  canViewQA: true,
+  canPerformQA: true,
+  canManageCoaching: true,
+  canViewTimeOff: true,
+  canApproveTimeOff: true,
+  canManageUsers: false,
+  canChangeSettings: false,
 }
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
-  const [newUser, setNewUser] = useState({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA' })
+  
+  const [newUser, setNewUser] = useState({
+    username: '',
+    password: '',
+    display_name: '',
+    role: 'regular',
+    lob: 'VA',
+    permissions: DEFAULT_ADMIN_PERMISSIONS,
+  })
+
+  const [editPermsUser, setEditPermsUser] = useState<{ id: number; username: string; role: string; perms: UserPermissions } | null>(null)
   const [resetPwd, setResetPwd] = useState<{ id: number; pwd: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -26,7 +63,9 @@ export default function UsersPage() {
     setLoading(true)
     const res = await fetch('/api/users')
     const json = await res.json()
-    setUsers(json)
+    if (Array.isArray(json)) {
+      setUsers(json)
+    }
     setLoading(false)
   }
 
@@ -37,19 +76,57 @@ export default function UsersPage() {
     setTimeout(() => setMsg(null), 4000)
   }
 
+  function parsePerms(permStr?: string | null, role?: string): UserPermissions {
+    if (role === 'master' || role === 'superadmin') {
+      return {
+        allowedLobs: ['VA', 'SSD', 'APPS'],
+        canManageDailyEntry: true,
+        canCopyEOD: true,
+        canViewQA: true,
+        canPerformQA: true,
+        canManageCoaching: true,
+        canViewTimeOff: true,
+        canApproveTimeOff: true,
+        canManageUsers: true,
+        canChangeSettings: true,
+      }
+    }
+    if (permStr) {
+      try {
+        const p = JSON.parse(permStr)
+        return {
+          allowedLobs: Array.isArray(p.allowedLobs) ? p.allowedLobs : ['VA'],
+          canManageDailyEntry: Boolean(p.canManageDailyEntry),
+          canCopyEOD: Boolean(p.canCopyEOD),
+          canViewQA: Boolean(p.canViewQA),
+          canPerformQA: Boolean(p.canPerformQA),
+          canManageCoaching: Boolean(p.canManageCoaching),
+          canViewTimeOff: Boolean(p.canViewTimeOff),
+          canApproveTimeOff: Boolean(p.canApproveTimeOff),
+          canManageUsers: Boolean(p.canManageUsers),
+          canChangeSettings: Boolean(p.canChangeSettings),
+        }
+      } catch {}
+    }
+    return DEFAULT_ADMIN_PERMISSIONS
+  }
+
   async function createUser() {
     if (!newUser.username || !newUser.password) return
     setSaving(true)
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
+      body: JSON.stringify({
+        ...newUser,
+        permissions: newUser.role === 'admin' ? newUser.permissions : null,
+      }),
     })
     const json = await res.json()
     setSaving(false)
     if (res.ok) {
       showMsg('success', `User "${newUser.username}" created successfully.`)
-      setNewUser({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA' })
+      setNewUser({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA', permissions: DEFAULT_ADMIN_PERMISSIONS })
       setShowAdd(false)
       fetchUsers()
     } else {
@@ -66,6 +143,27 @@ export default function UsersPage() {
     fetchUsers()
   }
 
+  async function updateRole(userId: number, role: string) {
+    const user = users.find(u => u.id === userId)
+    const perms = user ? parsePerms(user.permissions, role) : DEFAULT_ADMIN_PERMISSIONS
+
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: userId,
+        role,
+        permissions: role === 'admin' ? perms : null,
+      }),
+    })
+    if (res.ok) {
+      showMsg('success', 'User role updated successfully.')
+      fetchUsers()
+    } else {
+      showMsg('error', 'Failed to update user role.')
+    }
+  }
+
   async function updateLob(userId: number, lob: string) {
     const res = await fetch('/api/users', {
       method: 'PATCH',
@@ -78,6 +176,27 @@ export default function UsersPage() {
     } else {
       const json = await res.json().catch(() => ({}))
       showMsg('error', json.error || 'Failed to update LOB.')
+    }
+  }
+
+  async function savePermissions() {
+    if (!editPermsUser) return
+    setSaving(true)
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: editPermsUser.id,
+        permissions: editPermsUser.perms,
+      }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      showMsg('success', `Permissions updated for ${editPermsUser.username}.`)
+      setEditPermsUser(null)
+      fetchUsers()
+    } else {
+      showMsg('error', 'Failed to update permissions.')
     }
   }
 
@@ -102,11 +221,11 @@ export default function UsersPage() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
       <main style={{ marginLeft: 'var(--sidebar-width)', flex: 1, padding: '32px 28px', background: 'var(--bg-primary)' }}>
-        <div style={{ maxWidth: 900 }}>
+        <div style={{ maxWidth: 1000 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
             <div>
-              <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>User Management</h1>
-              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Manage dashboard access for your team</p>
+              <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>User Management & Role Permissions</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Assign Super Admin, Admin (Team Lead), and Regular Specialist roles with granular LOB & feature access</p>
             </div>
             <button id="btn-add-user" className="btn-primary" onClick={() => setShowAdd(!showAdd)}>
               + Add User
@@ -128,12 +247,12 @@ export default function UsersPage() {
 
           {/* Add user form */}
           {showAdd && (
-            <div className="glass-card" style={{ padding: '20px 24px', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>New User</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid var(--accent-color)' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>New User Registration</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
                 <div>
                   <label className="field-label">Username</label>
-                  <input id="new-username" type="text" className="input-field" placeholder="e.g. dcasillo" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+                  <input id="new-username" type="text" className="input-field" placeholder="e.g. dcastillo" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
                 </div>
                 <div>
                   <label className="field-label">Display Name</label>
@@ -146,12 +265,13 @@ export default function UsersPage() {
                 <div>
                   <label className="field-label">Role</label>
                   <select id="new-role" className="input-field" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>
-                    <option value="regular">Regular (View only)</option>
-                    <option value="master">Master (Full access)</option>
+                    <option value="regular">Regular Specialist (View only)</option>
+                    <option value="admin">Admin / Team Lead (Custom Permissions)</option>
+                    <option value="superadmin">Super Admin (Full Unrestricted Access)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="field-label">Line of Business (LOB)</label>
+                  <label className="field-label">Primary LOB</label>
                   <select id="new-lob" className="input-field" value={newUser.lob} onChange={(e) => setNewUser({ ...newUser, lob: e.target.value })}>
                     <option value="VA">VA Intake Specialist</option>
                     <option value="SSD">SSD Intake Specialist</option>
@@ -159,9 +279,148 @@ export default function UsersPage() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+
+              {/* Permission Configurator Matrix for Admin role */}
+              {newUser.role === 'admin' && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-color)', marginBottom: 12 }}>⚙️ Configure Admin Permissions & LOB Access</h3>
+                  
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Permitted Lines of Business (LOBs)</label>
+                    <div style={{ display: 'flex', gap: 16 }}>
+                      {(['VA', 'SSD', 'APPS'] as const).map(lob => (
+                        <label key={lob} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={newUser.permissions.allowedLobs.includes(lob)}
+                            onChange={(e) => {
+                              const curr = newUser.permissions.allowedLobs
+                              const updated = e.target.checked ? [...curr, lob] : curr.filter(l => l !== lob)
+                              setNewUser({ ...newUser, permissions: { ...newUser.permissions, allowedLobs: updated.length ? updated : ['VA'] } })
+                            }}
+                          />
+                          <span>{lob === 'VA' ? 'VA Intake' : lob === 'SSD' ? 'SSD Intake' : 'Apps Team'}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Feature Access Capabilities</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canManageDailyEntry} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canManageDailyEntry: e.target.checked } })} />
+                        <span>📝 Log & Edit Daily Performance Entries</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canCopyEOD} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canCopyEOD: e.target.checked } })} />
+                        <span>📋 Copy EOD Reports for Outlook</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canViewQA} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canViewQA: e.target.checked } })} />
+                        <span>📊 View QA Performance Analytics</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canPerformQA} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canPerformQA: e.target.checked } })} />
+                        <span>📝 Conduct QA Call Evaluations</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canManageCoaching} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canManageCoaching: e.target.checked } })} />
+                        <span>🎓 Manage Coaching & PIP Plans</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canViewTimeOff} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canViewTimeOff: e.target.checked } })} />
+                        <span>🌴 View Team Time-Off Calendar</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canApproveTimeOff} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canApproveTimeOff: e.target.checked } })} />
+                        <span>✅ Approve / Reject Time-Off Requests</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <input type="checkbox" checked={newUser.permissions.canChangeSettings} onChange={e => setNewUser({ ...newUser, permissions: { ...newUser.permissions, canChangeSettings: e.target.checked } })} />
+                        <span>⚙️ Edit Monthly Target Goals</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
                 <button id="btn-create-user" className="btn-primary" onClick={createUser} disabled={saving}>{saving ? 'Creating…' : 'Create User'}</button>
                 <button className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Permissions Modal */}
+          {editPermsUser && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="glass-card" style={{ padding: '28px 32px', maxWidth: 600, width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>⚙️ Configure Admin Permissions</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 20 }}>User: <strong>{editPermsUser.username}</strong> ({editPermsUser.role})</p>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Permitted Lines of Business (LOBs)</label>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    {(['VA', 'SSD', 'APPS'] as const).map(lob => (
+                      <label key={lob} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={editPermsUser.perms.allowedLobs.includes(lob)}
+                          onChange={(e) => {
+                            const curr = editPermsUser.perms.allowedLobs
+                            const updated = e.target.checked ? [...curr, lob] : curr.filter(l => l !== lob)
+                            setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, allowedLobs: updated.length ? updated : ['VA'] } })
+                          }}
+                        />
+                        <span>{lob === 'VA' ? 'VA Intake' : lob === 'SSD' ? 'SSD Intake' : 'Apps Team'}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Feature Capabilities</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canManageDailyEntry} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canManageDailyEntry: e.target.checked } })} />
+                      <span>📝 Log & Edit Performance</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canCopyEOD} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canCopyEOD: e.target.checked } })} />
+                      <span>📋 Copy EOD Reports</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canViewQA} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canViewQA: e.target.checked } })} />
+                      <span>📊 View QA Analytics</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canPerformQA} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canPerformQA: e.target.checked } })} />
+                      <span>📝 Conduct QA Evaluations</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canManageCoaching} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canManageCoaching: e.target.checked } })} />
+                      <span>🎓 Manage Coaching & PIP</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canViewTimeOff} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canViewTimeOff: e.target.checked } })} />
+                      <span>🌴 View Time-Off Calendar</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canApproveTimeOff} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canApproveTimeOff: e.target.checked } })} />
+                      <span>✅ Approve Time-Off</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                      <input type="checkbox" checked={editPermsUser.perms.canChangeSettings} onChange={e => setEditPermsUser({ ...editPermsUser, perms: { ...editPermsUser.perms, canChangeSettings: e.target.checked } })} />
+                      <span>⚙️ Edit Target Goals</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button className="btn-primary" onClick={savePermissions} disabled={saving}>{saving ? 'Saving…' : 'Save Permissions'}</button>
+                  <button className="btn-secondary" onClick={() => setEditPermsUser(null)}>Cancel</button>
+                </div>
               </div>
             </div>
           )}
@@ -199,74 +458,113 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #b82105, #5f758e)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                            {(user.display_name || user.username).charAt(0).toUpperCase()}
+                  {users.map((user) => {
+                    const isSuper = user.role === 'master' || user.role === 'superadmin'
+                    const isAdmin = user.role === 'admin'
+                    const parsed = parsePerms(user.permissions, user.role)
+
+                    return (
+                      <tr key={user.id}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: isSuper ? 'linear-gradient(135deg, #b82105, #e11d48)' : isAdmin ? 'linear-gradient(135deg, #7c3aed, #2563eb)' : 'linear-gradient(135deg, #475569, #64748b)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0, color: '#fff' }}>
+                              {(user.display_name || user.username).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{user.display_name || user.username}</div>
+                              {isAdmin && (
+                                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                  LOBs: {parsed.allowedLobs.join(', ')}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <span style={{ fontWeight: 600 }}>{user.display_name || user.username}</span>
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 13 }}>{user.username}</td>
-                      <td>
-                        <span className={user.role === 'master' ? 'badge badge-accent' : 'badge badge-success'}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td>
-                        <select
-                          value={user.lob || 'VA'}
-                          onChange={(e) => updateLob(user.id, e.target.value)}
-                          className="input-field"
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: 12,
-                            width: 'auto',
-                            height: 'auto',
-                            marginBottom: 0,
-                            borderRadius: '6px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            color: 'var(--text-primary)',
-                          }}
-                        >
-                          <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake</option>
-                          <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake</option>
-                          <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team</option>
-                        </select>
-                      </td>
-                      <td>
-                        <span className={user.active ? 'badge badge-success' : 'badge badge-danger'}>
-                          {user.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                          <button
-                            id={`btn-reset-pwd-${user.id}`}
-                            className="btn-secondary"
-                            style={{ fontSize: 12, padding: '5px 12px' }}
-                            onClick={() => setResetPwd({ id: user.id, pwd: '' })}
+                        </td>
+                        <td style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 13 }}>{user.username}</td>
+                        <td>
+                          <select
+                            value={user.role === 'master' ? 'superadmin' : user.role}
+                            onChange={(e) => updateRole(user.id, e.target.value)}
+                            className="input-field"
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              width: 'auto',
+                              height: 'auto',
+                              marginBottom: 0,
+                              borderRadius: '6px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                              color: 'var(--text-primary)',
+                            }}
                           >
-                            Reset Password
-                          </button>
-                          <button
-                            id={`btn-toggle-${user.id}`}
-                            className={user.active ? 'btn-danger' : 'btn-secondary'}
-                            style={{ fontSize: 12, padding: '5px 12px' }}
-                            onClick={() => toggleActive(user)}
+                            <option value="regular" style={{ background: '#1e1b4b', color: '#fff' }}>Regular Specialist</option>
+                            <option value="admin" style={{ background: '#1e1b4b', color: '#fff' }}>Admin / Team Lead</option>
+                            <option value="superadmin" style={{ background: '#1e1b4b', color: '#fff' }}>Super Admin</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select
+                            value={user.lob || 'VA'}
+                            onChange={(e) => updateLob(user.id, e.target.value)}
+                            className="input-field"
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 12,
+                              width: 'auto',
+                              height: 'auto',
+                              marginBottom: 0,
+                              borderRadius: '6px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                              color: 'var(--text-primary)',
+                            }}
                           >
-                            {user.active ? 'Deactivate' : 'Activate'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake</option>
+                            <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake</option>
+                            <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team</option>
+                          </select>
+                        </td>
+                        <td>
+                          <span className={user.active ? 'badge badge-success' : 'badge badge-danger'}>
+                            {user.active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+                            {isAdmin && (
+                              <button
+                                className="btn-secondary"
+                                style={{ fontSize: 12, padding: '5px 12px', background: 'rgba(124, 58, 237, 0.2)', border: '1px solid rgba(124, 58, 237, 0.4)', color: '#c084fc' }}
+                                onClick={() => setEditPermsUser({ id: user.id, username: user.username, role: user.role, perms: parsePerms(user.permissions, user.role) })}
+                              >
+                                ⚙️ Permissions
+                              </button>
+                            )}
+                            <button
+                              id={`btn-reset-pwd-${user.id}`}
+                              className="btn-secondary"
+                              style={{ fontSize: 12, padding: '5px 12px' }}
+                              onClick={() => setResetPwd({ id: user.id, pwd: '' })}
+                            >
+                              Reset Password
+                            </button>
+                            <button
+                              id={`btn-toggle-${user.id}`}
+                              className={user.active ? 'btn-danger' : 'btn-secondary'}
+                              style={{ fontSize: 12, padding: '5px 12px' }}
+                              onClick={() => toggleActive(user)}
+                            >
+                              {user.active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

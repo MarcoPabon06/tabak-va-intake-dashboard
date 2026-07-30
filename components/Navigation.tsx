@@ -32,8 +32,35 @@ const navLinks = [
 export default function Navigation() {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const isMaster = (session?.user as any)?.role === 'master'
+  const user = session?.user as any
+  const role = user?.role || 'regular'
+  const isSuper = role === 'master' || role === 'superadmin'
+  const isAdmin = role === 'admin'
+  const perms = user?.permissions
+
   const userName = session?.user?.name || 'User'
+
+  // Permission evaluation helper
+  function canAccessLink(link: typeof navLinks[0]): boolean {
+    if (isSuper) return true
+    if (role === 'regular') {
+      if (['/dashboard', '/apps-team', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      return false
+    }
+    if (isAdmin) {
+      if (link.href === '/dashboard' || link.href === '/guide') return true
+      if (link.href === '/apps-team') return perms?.allowedLobs?.includes('APPS') ?? true
+      if (link.href === '/entry') return perms?.canManageDailyEntry ?? true
+      if (link.href === '/qa-entry') return perms?.canPerformQA ?? true
+      if (link.href === '/qa') return perms?.canViewQA ?? true
+      if (link.href === '/coaching') return perms?.canManageCoaching ?? true
+      if (link.href === '/time-off') return perms?.canViewTimeOff ?? true
+      if (link.href === '/import') return perms?.canManageDailyEntry ?? true
+      if (link.href === '/users') return perms?.canManageUsers ?? false
+      if (link.href === '/settings') return perms?.canChangeSettings ?? false
+    }
+    return false
+  }
 
   return (
     <aside
@@ -69,11 +96,10 @@ export default function Navigation() {
         <div>
           <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-0.01em' }}>Tabak LLC</div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
-            {isMaster ? 'Intake Management' : ((session?.user as any)?.lob === 'SSD' ? 'SSD Division' : 'Veterans Benefits')}
+            {isSuper ? 'Super Admin' : isAdmin ? 'Team Lead Admin' : 'Specialist View'}
           </div>
         </div>
       </div>
-
 
       {/* Nav links */}
       <nav style={{ marginTop: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -81,7 +107,7 @@ export default function Navigation() {
           Navigation
         </div>
         {navLinks.map((link) => {
-          if (link.masterOnly && !isMaster) return null
+          if (!canAccessLink(link)) return null
           const isActive = pathname === link.href
           return (
             <Link
@@ -103,17 +129,17 @@ export default function Navigation() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
             <div style={{
               width: 32, height: 32, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #6366f1, #ec4899)',
+              background: isSuper ? 'linear-gradient(135deg, #b82105, #e11d48)' : isAdmin ? 'linear-gradient(135deg, #7c3aed, #2563eb)' : 'linear-gradient(135deg, #475569, #64748b)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, flexShrink: 0,
+              fontSize: 13, fontWeight: 700, flexShrink: 0, color: '#fff',
             }}>
               {userName.charAt(0).toUpperCase()}
             </div>
             <div style={{ overflow: 'hidden' }}>
               <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName}</div>
               <div style={{ fontSize: 11 }}>
-                <span className={`badge ${isMaster ? 'badge-accent' : 'badge-success'}`} style={{ padding: '1px 7px', fontSize: 10 }}>
-                  {isMaster ? 'Master' : 'Viewer'}
+                <span className={`badge ${isSuper ? 'badge-accent' : isAdmin ? 'badge-primary' : 'badge-success'}`} style={{ padding: '1px 7px', fontSize: 10 }}>
+                  {isSuper ? 'Super Admin' : isAdmin ? 'Admin' : 'Specialist'}
                 </span>
               </div>
             </div>

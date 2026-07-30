@@ -32,8 +32,18 @@ export default function DashboardPage() {
   const [selectedLob, setSelectedLob] = useState<string>('')
   const [copyToast, setCopyToast] = useState(false)
 
-  const userRole = (session?.user as any)?.role || 'regular'
+  const role = (session?.user as any)?.role || 'regular'
+  const isSuper = role === 'master' || role === 'superadmin'
+  const isAdmin = role === 'admin'
+  const isRegular = role === 'regular'
+  const perms = (session?.user as any)?.permissions
   const userName = session?.user?.name || ''
+
+  const allowedLobs: string[] = isSuper
+    ? ['VA', 'SSD', 'APPS', 'All']
+    : (perms?.allowedLobs ? [...perms.allowedLobs, ...(perms.allowedLobs.length > 1 ? ['All'] : [])] : ['VA'])
+
+  const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
 
   async function handleCopyEODReport() {
     const { html, text } = generateEODReportHtml({
@@ -63,9 +73,13 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user) {
       const u = session.user as any
-      setSelectedLob(u.lob || 'VA')
+      if (allowedLobs.length > 0 && !allowedLobs.includes(selectedLob)) {
+        setSelectedLob(allowedLobs[0])
+      } else if (!selectedLob) {
+        setSelectedLob(u.lob || 'VA')
+      }
     }
-  }, [session])
+  }, [session, allowedLobs])
 
   const fetchData = useCallback(async () => {
     if (status === 'loading' || !selectedLob) return
@@ -125,8 +139,6 @@ export default function DashboardPage() {
     setActivePreset(preset.label)
   }
 
-  const isRegular = userRole === 'regular'
-
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Navigation />
@@ -167,10 +179,10 @@ export default function DashboardPage() {
                   fontWeight: 600
                 }}
               >
-                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake Specialists</option>
-                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake Specialists</option>
-                <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team (SSA Filings)</option>
-                <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All LOBs</option>
+                {allowedLobs.includes('VA') && <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Intake Specialists</option>}
+                {allowedLobs.includes('SSD') && <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Intake Specialists</option>}
+                {allowedLobs.includes('APPS') && <option value="APPS" style={{ background: '#1e1b4b', color: '#fff' }}>Apps Team (SSA Filings)</option>}
+                {allowedLobs.includes('All') && <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All LOBs</option>}
               </select>
             </div>
           )}
@@ -210,7 +222,7 @@ export default function DashboardPage() {
             <button id="btn-refresh" className="btn-primary" style={{ padding: '8px 16px', fontSize: 13 }} onClick={fetchData}>
               Refresh
             </button>
-            {!isRegular && (
+            {canCopyEOD && (
               <button
                 id="btn-copy-eod"
                 className="btn-secondary"

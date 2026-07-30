@@ -42,10 +42,11 @@ function initSchema(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('master', 'regular')),
+      role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
       display_name TEXT,
       active INTEGER DEFAULT 1,
-      lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD')),
+      lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS')),
+      permissions TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -329,6 +330,35 @@ function initSchema(db: Database.Database) {
     console.error('Failed to migrate time_off_requests schema:', e.message)
   }
 
+  // Migrate users table schema if it lacks 'permissions' column or 'admin' role CHECK constraint
+  try {
+    const userTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as { sql: string } | undefined
+    if (userTableInfo && userTableInfo.sql && (!userTableInfo.sql.includes('permissions') || !userTableInfo.sql.includes('admin'))) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE users_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
+          display_name TEXT,
+          active INTEGER DEFAULT 1,
+          lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS')),
+          permissions TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        INSERT INTO users_tmp (id, username, password_hash, role, display_name, active, lob, created_at)
+        SELECT id, username, password_hash, role, display_name, active, lob, created_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_tmp RENAME TO users;
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated users table to include permissions column & superadmin/admin role CHECK constraints')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate users schema:', e.message)
+  }
+
   // Seed default settings
   const defaults = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   defaults.run('goal_signed_retainers', '35')
@@ -365,6 +395,85 @@ function initSchema(db: Database.Database) {
 
   // Clean up any daily performance records with invalid date formats (e.g. MM/DD/YYYY)
   db.exec("DELETE FROM daily_performance WHERE date NOT LIKE '____-__-__'")
+}
+
+export interface UserPermissions {
+  allowedLobs: ('VA' | 'SSD' | 'APPS')[]
+  canManageDailyEntry: boolean
+  canCopyEOD: boolean
+  canViewQA: boolean
+  canPerformQA: boolean
+  canManageCoaching: boolean
+  canViewTimeOff: boolean
+  canApproveTimeOff: boolean
+  canManageUsers: boolean
+  canChangeSettings: boolean
+}
+
+export const DEFAULT_MASTER_PERMISSIONS: UserPermissions = {
+  allowedLobs: ['VA', 'SSD', 'APPS'],
+  canManageDailyEntry: true,
+  canCopyEOD: true,
+  canViewQA: true,
+  canPerformQA: true,
+  canManageCoaching: true,
+  canViewTimeOff: true,
+  canApproveTimeOff: true,
+  canManageUsers: true,
+  canChangeSettings: true,
+}
+
+export const DEFAULT_REGULAR_PERMISSIONS: UserPermissions = {
+  allowedLobs: ['VA', 'SSD', 'APPS'],
+  canManageDailyEntry: false,
+  canCopyEOD: false,
+  canViewQA: false,
+  canPerformQA: false,
+  canManageCoaching: false,
+  canViewTimeOff: false,
+  canApproveTimeOff: false,
+  canManageUsers: false,
+  canChangeSettings: false,
+}
+
+export function parseUserPermissions(role: string, permissionsJson?: string | null): UserPermissions {
+  if (role === 'master' || role === 'superadmin') {
+    return DEFAULT_MASTER_PERMISSIONS
+  }
+  if (role === 'regular') {
+    return DEFAULT_REGULAR_PERMISSIONS
+  }
+  if (permissionsJson) {
+    try {
+      const parsed = JSON.parse(permissionsJson)
+      return {
+        allowedLobs: Array.isArray(parsed.allowedLobs) && parsed.allowedLobs.length > 0 ? parsed.allowedLobs : ['VA'],
+        canManageDailyEntry: Boolean(parsed.canManageDailyEntry),
+        canCopyEOD: Boolean(parsed.canCopyEOD),
+        canViewQA: Boolean(parsed.canViewQA),
+        canPerformQA: Boolean(parsed.canPerformQA),
+        canManageCoaching: Boolean(parsed.canManageCoaching),
+        canViewTimeOff: Boolean(parsed.canViewTimeOff),
+        canApproveTimeOff: Boolean(parsed.canApproveTimeOff),
+        canManageUsers: Boolean(parsed.canManageUsers),
+        canChangeSettings: Boolean(parsed.canChangeSettings),
+      }
+    } catch {
+      // Fallback
+    }
+  }
+  return {
+    allowedLobs: ['VA'],
+    canManageDailyEntry: true,
+    canCopyEOD: true,
+    canViewQA: true,
+    canPerformQA: true,
+    canManageCoaching: true,
+    canViewTimeOff: true,
+    canApproveTimeOff: true,
+    canManageUsers: false,
+    canChangeSettings: false,
+  }
 }
 
 export default getDb
