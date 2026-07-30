@@ -26,7 +26,16 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 
     // 2. Get Sender Email / From Name
     const fromRow = db.prepare("SELECT value FROM settings WHERE key = 'resend_from_email'").get() as { value: string } | undefined
-    const fromEmail = fromRow?.value || process.env.RESEND_FROM_EMAIL || 'Tabak LLC Dashboard <onboarding@resend.dev>'
+    const rawFrom = fromRow?.value?.trim() || process.env.RESEND_FROM_EMAIL || 'Tabak LLC Dashboard Notification Center'
+    
+    let fromEmail = rawFrom
+    if (!rawFrom.includes('@')) {
+      // User typed a display name without email address (e.g. "Tabak Law Dashboard Notification Center")
+      fromEmail = `"${rawFrom.replace(/"/g, '')}" <onboarding@resend.dev>`
+    } else if (!rawFrom.includes('<') && rawFrom.includes('@')) {
+      // User typed just an email address (e.g. "onboarding@resend.dev")
+      fromEmail = `Tabak Law Dashboard <${rawFrom}>`
+    }
 
     // 3. Filter valid email addresses
     const validRecipients = params.to
@@ -35,7 +44,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
 
     if (validRecipients.length === 0) {
       console.warn('[email] No valid recipient email addresses specified.')
-      return { success: false, error: 'No valid recipient email addresses.' }
+      return { success: false, error: 'No valid recipient email addresses specified.' }
     }
 
     // 4. Send request to Resend API
@@ -57,8 +66,33 @@ export async function sendEmail(params: SendEmailParams): Promise<{ success: boo
     const data = await res.json()
 
     if (!res.ok) {
-      console.error('[email] Resend API Error:', data)
-      return { success: false, error: data.message || 'Failed to send email via Resend' }
+      const errMsg = data.message || data.error || JSON.stringify(data)
+      console.error('[email] Resend API Error:', errMsg)
+      
+      // If batch sending failed (e.g. Resend testing mode only allowing registered account email), try sending individually to first recipient
+      if (validRecipients.length > 1 && errMsg.includes('onboarding')) {
+        console.log('[email] Retrying email send individually to primary recipient:', validRecipients[0])
+        const singleRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey.trim()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: [validRecipients[0]],
+            subject: params.subject,
+            html: params.html,
+            text: params.text || '',
+          }),
+        })
+        const singleData = await singleRes.json()
+        if (singleRes.ok) {
+          return { success: true }
+        }
+      }
+
+      return { success: false, error: errMsg }
     }
 
     console.log(`[email] Email sent successfully to ${validRecipients.join(', ')} (ID: ${data.id})`)

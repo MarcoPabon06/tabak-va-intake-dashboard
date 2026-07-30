@@ -107,6 +107,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testingEmail, setTestingEmail] = useState(false)
+  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
@@ -147,6 +149,31 @@ export default function SettingsPage() {
       setError(err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleTestEmail() {
+    setTestingEmail(true)
+    setTestResult(null)
+    try {
+      // First save current settings
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+
+      const res = await fetch('/api/test-email', { method: 'POST' })
+      const json = await res.json()
+      if (!json.success) {
+        setTestResult({ success: false, message: json.error || 'Failed to send test email' })
+      } else {
+        setTestResult({ success: true, message: `Test email sent successfully to: ${json.recipients.join(', ')}!` })
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: err.message })
+    } finally {
+      setTestingEmail(false)
     }
   }
 
@@ -431,84 +458,110 @@ export default function SettingsPage() {
               </div>
 
               {/* Section 4: Email Notifications (Resend API) */}
-                <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 24 }}>📬</span>
-                    <div>
-                      <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#10b981' }}>Automated Email Notifications (Resend API)</h2>
-                      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                        Automatically notify Super Admins and Team Lead Admins via Microsoft 365 Outlook when Time-Off requests or Coaching sessions are submitted.
-                      </p>
+              <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 24 }}>📬</span>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#10b981' }}>Automated Email Notifications (Resend API)</h2>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                      Automatically notify Super Admins and Team Lead Admins via Microsoft 365 Outlook when Time-Off requests or Coaching sessions are submitted.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div>
+                    <label className="field-label">Resend API Key</label>
+                    <input
+                      type="password"
+                      className="input-field"
+                      placeholder="e.g. re_123456789abcdef..."
+                      value={settings.resend_api_key || ''}
+                      onChange={(e) => updateSetting('resend_api_key', e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Create a free API key at <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>Resend.com</a> (Includes 3,000 free emails/month).
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <div>
-                      <label className="field-label">Resend API Key</label>
-                      <input
-                        type="password"
-                        className="input-field"
-                        placeholder="e.g. re_123456789abcdef..."
-                        value={settings.resend_api_key || ''}
-                        onChange={(e) => updateSetting('resend_api_key', e.target.value)}
-                      />
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                        Create a free API key at <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: '#10b981', textDecoration: 'underline' }}>Resend.com</a> (Includes 3,000 free emails/month).
-                      </div>
+                  <div>
+                    <label className="field-label">Manager & Admin Alert Email Recipients</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="e.g. manager@tabaklaw.com, supervisor@tabaklaw.com"
+                      value={settings.admin_notification_emails || ''}
+                      onChange={(e) => updateSetting('admin_notification_emails', e.target.value)}
+                    />
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Comma-separated list of email addresses to receive instant Time-Off and Coaching alerts. (All active Admins with valid email usernames are also notified automatically).
                     </div>
+                  </div>
 
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                     <div>
-                      <label className="field-label">Manager & Admin Alert Email Recipients</label>
+                      <label className="field-label">Sender Email / Name</label>
                       <input
                         type="text"
                         className="input-field"
-                        placeholder="e.g. manager@tabaklaw.com, supervisor@tabaklaw.com"
-                        value={settings.admin_notification_emails || ''}
-                        onChange={(e) => updateSetting('admin_notification_emails', e.target.value)}
+                        placeholder="Tabak LLC Dashboard Notification Center"
+                        value={settings.resend_from_email || ''}
+                        onChange={(e) => updateSetting('resend_from_email', e.target.value)}
                       />
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                        Comma-separated list of email addresses to receive instant Time-Off and Coaching alerts. (All active Admins with valid email usernames are also notified automatically).
-                      </div>
                     </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                      <div>
-                        <label className="field-label">Sender Email / Name</label>
-                        <input
-                          type="text"
-                          className="input-field"
-                          placeholder="Tabak LLC Dashboard <onboarding@resend.dev>"
-                          value={settings.resend_from_email || ''}
-                          onChange={(e) => updateSetting('resend_from_email', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="field-label">Dashboard Base URL (For Links in Email)</label>
-                        <input
-                          type="text"
-                          className="input-field"
-                          placeholder="https://tabak-dashboard.up.railway.app"
-                          value={settings.app_base_url || ''}
-                          onChange={(e) => updateSetting('app_base_url', e.target.value)}
-                        />
-                      </div>
+                    <div>
+                      <label className="field-label">Dashboard Base URL (For Links in Email)</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="https://tabak-dashboard.up.railway.app"
+                        value={settings.app_base_url || ''}
+                        onChange={(e) => updateSetting('app_base_url', e.target.value)}
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button
-                    id="btn-save-settings"
-                    className="btn-primary"
-                    style={{ padding: '10px 24px', fontSize: 14 }}
-                    onClick={handleSave}
-                    disabled={saving}
-                  >
-                    {saving ? 'Saving…' : 'Save Target Settings & Email Config'}
-                  </button>
+                  {testResult && (
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: '12px 16px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: testResult.success ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                        border: testResult.success ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)',
+                        color: testResult.success ? '#10b981' : '#ef4444',
+                      }}
+                    >
+                      {testResult.success ? '✅ ' : '❌ '} {testResult.message}
+                    </div>
+                  )}
                 </div>
-              </>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '10px 20px', fontSize: 14, background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' }}
+                  onClick={handleTestEmail}
+                  disabled={testingEmail || saving}
+                >
+                  {testingEmail ? 'Sending Test Email…' : '🧪 Send Test Email'}
+                </button>
+                <button
+                  id="btn-save-settings"
+                  className="btn-primary"
+                  style={{ padding: '10px 24px', fontSize: 14 }}
+                  onClick={handleSave}
+                  disabled={saving || testingEmail}
+                >
+                  {saving ? 'Saving…' : 'Save Target Settings & Email Config'}
+                </button>
+              </div>
+            </>
           )}
         </div>
       </main>
