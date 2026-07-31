@@ -34,6 +34,14 @@ export async function sendPowerAutomateWebhook(payload: WebhookPayload): Promise
     if (!res.ok) {
       const text = await res.text()
       console.error('[webhook] Power Automate Webhook Error:', res.status, text)
+
+      if (res.status === 401) {
+        return {
+          success: false,
+          error: `Webhook returned 401 Unauthorized. In Power Automate, click the 'When an HTTP request is received' trigger -> Change 'Who can trigger the flow?' to 'Anyone'.`
+        }
+      }
+
       return { success: false, error: `Webhook returned status ${res.status}: ${text || res.statusText}` }
     }
 
