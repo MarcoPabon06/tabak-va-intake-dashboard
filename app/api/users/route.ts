@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   const db = getDb()
   const users = db
-    .prepare('SELECT id, username, display_name, role, active, lob, permissions, created_at FROM users ORDER BY id')
+    .prepare('SELECT id, username, email, display_name, role, active, lob, permissions, created_at FROM users ORDER BY id')
     .all()
 
   return NextResponse.json(users)
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { username, password, role, display_name, lob, permissions } = body
+  const { username, email, password, role, display_name, lob, permissions } = body
 
   if (!username || !password || !role) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -48,9 +48,9 @@ export async function POST(req: NextRequest) {
   try {
     const result = db
       .prepare(
-        'INSERT INTO users (username, password_hash, role, display_name, lob, permissions) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO users (username, email, password_hash, role, display_name, lob, permissions) VALUES (?, ?, ?, ?, ?, ?, ?)'
       )
-      .run(username, hash, role, display_name || username, userLob, permissionsJson)
+      .run(username, email || null, hash, role, display_name || username, userLob, permissionsJson)
 
     // Sync to agents table: auto-add as active agent
     const actualDisplayName = (display_name || username).trim()
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/users  — update user (reset password, toggle active, change role, update permissions)
+// PATCH /api/users  — update user (reset password, toggle active, change role, update permissions, update email)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const uRole = (session?.user as any)?.role
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { id, password, active, role, display_name, lob, permissions } = body
+  const { id, password, active, role, display_name, email, lob, permissions } = body
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
@@ -110,6 +110,10 @@ export async function PATCH(req: NextRequest) {
 
   if (role) {
     db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id)
+  }
+
+  if (email !== undefined) {
+    db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email || null, id)
   }
 
   if (permissions !== undefined) {

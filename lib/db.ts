@@ -44,6 +44,7 @@ function initSchema(db: Database.Database) {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
       display_name TEXT,
+      email TEXT,
       active INTEGER DEFAULT 1,
       lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS')),
       permissions TEXT,
@@ -330,8 +331,15 @@ function initSchema(db: Database.Database) {
     console.error('Failed to migrate time_off_requests schema:', e.message)
   }
 
-  // Migrate users table schema if it lacks 'permissions' column or 'admin' role CHECK constraint
+  // Migrate users table schema if it lacks 'permissions' or 'email' column or 'admin' role CHECK constraint
   try {
+    const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[]
+    const hasEmail = userCols.some(c => c.name === 'email')
+    if (!hasEmail) {
+      db.exec("ALTER TABLE users ADD COLUMN email TEXT")
+      console.log('[db] Added email column to users table')
+    }
+
     const userTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as { sql: string } | undefined
     if (userTableInfo && userTableInfo.sql && (!userTableInfo.sql.includes('permissions') || !userTableInfo.sql.includes('admin'))) {
       db.pragma('foreign_keys = OFF')
@@ -342,13 +350,14 @@ function initSchema(db: Database.Database) {
           password_hash TEXT NOT NULL,
           role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
           display_name TEXT,
+          email TEXT,
           active INTEGER DEFAULT 1,
           lob TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS')),
           permissions TEXT,
           created_at TEXT DEFAULT (datetime('now'))
         );
-        INSERT INTO users_tmp (id, username, password_hash, role, display_name, active, lob, created_at)
-        SELECT id, username, password_hash, role, display_name, active, lob, created_at FROM users;
+        INSERT INTO users_tmp (id, username, password_hash, role, display_name, email, active, lob, permissions, created_at)
+        SELECT id, username, password_hash, role, display_name, email, active, lob, permissions, created_at FROM users;
         DROP TABLE users;
         ALTER TABLE users_tmp RENAME TO users;
       `)

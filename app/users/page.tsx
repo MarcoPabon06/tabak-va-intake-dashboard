@@ -20,6 +20,7 @@ interface User {
   id: number
   username: string
   display_name: string
+  email?: string | null
   role: string
   active: number
   lob?: string
@@ -47,6 +48,7 @@ export default function UsersPage() {
   
   const [newUser, setNewUser] = useState({
     username: '',
+    email: '',
     password: '',
     display_name: '',
     role: 'regular',
@@ -126,7 +128,7 @@ export default function UsersPage() {
     setSaving(false)
     if (res.ok) {
       showMsg('success', `User "${newUser.username}" created successfully.`)
-      setNewUser({ username: '', password: '', display_name: '', role: 'regular', lob: 'VA', permissions: DEFAULT_ADMIN_PERMISSIONS })
+      setNewUser({ username: '', email: '', password: '', display_name: '', role: 'regular', lob: 'VA', permissions: DEFAULT_ADMIN_PERMISSIONS })
       setShowAdd(false)
       fetchUsers()
     } else {
@@ -176,6 +178,20 @@ export default function UsersPage() {
     } else {
       const json = await res.json().catch(() => ({}))
       showMsg('error', json.error || 'Failed to update LOB.')
+    }
+  }
+
+  async function updateEmail(userId: number, email: string) {
+    const res = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, email }),
+    })
+    if (res.ok) {
+      showMsg('success', 'Work Email updated successfully.')
+      fetchUsers()
+    } else {
+      showMsg('error', 'Failed to update Work Email.')
     }
   }
 
@@ -249,7 +265,7 @@ export default function UsersPage() {
           {showAdd && (
             <div className="glass-card" style={{ padding: '24px 28px', marginBottom: 24, border: '1px solid var(--accent-color)' }}>
               <h2 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>New User Registration</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
                 <div>
                   <label className="field-label">Username</label>
                   <input id="new-username" type="text" className="input-field" placeholder="e.g. dcastillo" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
@@ -257,6 +273,10 @@ export default function UsersPage() {
                 <div>
                   <label className="field-label">Display Name</label>
                   <input id="new-displayname" type="text" className="input-field" placeholder="e.g. Daniel Castillo" value={newUser.display_name} onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="field-label">Work Email Address</label>
+                  <input id="new-email" type="email" className="input-field" placeholder="e.g. dcastillo@tabakattorneys.com" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
                 </div>
                 <div>
                   <label className="field-label">Password</label>
@@ -450,6 +470,7 @@ export default function UsersPage() {
                   <tr>
                     <th>User</th>
                     <th>Username</th>
+                    <th>Work Email (M365 Alerts)</th>
                     <th>Role</th>
                     <th>Line of Business</th>
                     <th>Status</th>
@@ -481,6 +502,30 @@ export default function UsersPage() {
                           </div>
                         </td>
                         <td style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 13 }}>{user.username}</td>
+                        <td>
+                          <input
+                            type="email"
+                            placeholder="Add M365 Email..."
+                            defaultValue={user.email || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== (user.email || '')) {
+                                updateEmail(user.id, e.target.value)
+                              }
+                            }}
+                            className="input-field"
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: 12,
+                              width: '190px',
+                              height: 'auto',
+                              marginBottom: 0,
+                              borderRadius: '6px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: user.email ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                              color: user.email ? '#10b981' : 'var(--text-muted)',
+                            }}
+                          />
+                        </td>
                         <td>
                           <select
                             value={user.role === 'master' ? 'superadmin' : user.role}

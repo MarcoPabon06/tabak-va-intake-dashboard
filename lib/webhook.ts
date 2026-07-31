@@ -30,13 +30,14 @@ export function getAdminNotificationEmails(lob: string, capability: string): str
   }
 
   // 2. Query users table for active superadmins and admins
-  const users = db.prepare("SELECT username, role, permissions FROM users WHERE active = 1 AND role IN ('master', 'superadmin', 'admin')").all() as { username: string; role: string; permissions?: string | null }[]
+  const users = db.prepare("SELECT username, email, role, permissions FROM users WHERE active = 1 AND role IN ('master', 'superadmin', 'admin')").all() as { username: string; email?: string | null; role: string; permissions?: string | null }[]
 
   for (const u of users) {
-    if (!u.username || !u.username.includes('@')) continue
+    const userEmail = (u.email && u.email.trim().includes('@')) ? u.email.trim() : (u.username.includes('@') ? u.username.trim() : null)
+    if (!userEmail) continue
 
     if (u.role === 'master' || u.role === 'superadmin') {
-      recipients.add(u.username)
+      recipients.add(userEmail)
     } else if (u.role === 'admin' && u.permissions) {
       try {
         const perms = JSON.parse(u.permissions)
@@ -50,7 +51,7 @@ export function getAdminNotificationEmails(lob: string, capability: string): str
         }
 
         if (hasLob && hasCapability) {
-          recipients.add(u.username)
+          recipients.add(userEmail)
         }
       } catch {
         // Fallback
