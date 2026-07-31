@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
-import { sendCoachingWebhookNotification } from '@/lib/webhook'
+import { sendCoachingWebhookNotification, sendCoachingStatusWebhookNotification } from '@/lib/webhook'
 
 // GET /api/coaching/requests
 export async function GET(req: NextRequest) {
@@ -160,6 +160,15 @@ export async function PATCH(req: NextRequest) {
       message: `Your Feedback Session request status has been updated to: ${status}.${coach_notes ? ' Notes: ' + coach_notes : ''}`,
       link: '/coaching'
     })
+
+    // Email specialist via Power Automate Webhook
+    sendCoachingStatusWebhookNotification({
+      agentName: request.agent_name,
+      coachName: session.user?.name || 'QA Coach',
+      sessionDate: new Date().toISOString().slice(0, 10),
+      status: status as any,
+      coachNotes: coach_notes || undefined,
+    }).catch((err) => console.error('[coaching] Failed to trigger status webhook for specialist:', err))
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

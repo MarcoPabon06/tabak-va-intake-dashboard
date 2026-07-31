@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendCoachingStatusWebhookNotification } from '@/lib/webhook'
 
 // GET /api/coaching?agent=Name
 export async function GET(req: NextRequest) {
@@ -99,9 +100,11 @@ export async function POST(req: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
+    const coachName = session.user?.name || 'QA Coach'
+
     const result = stmt.run(
       agent_name,
-      session.user?.name || 'QA Admin',
+      coachName,
       session_date,
       focusString,
       linked_evaluation_id || null,
@@ -133,9 +136,19 @@ export async function POST(req: NextRequest) {
     sendNotification({
       username: recipientUsername,
       title: '🎯 New Coaching Session Logged',
-      message: `A new coaching session has been logged by ${session.user?.name || 'Coach'} focusing on ${focusString}.${follow_up_date ? ' Follow-up: ' + follow_up_date : ''}`,
+      message: `A new coaching session has been logged by ${coachName} focusing on ${focusString}.${follow_up_date ? ' Follow-up: ' + follow_up_date : ''}`,
       link: '/coaching'
     })
+
+    // Email specialist via Power Automate Webhook
+    sendCoachingStatusWebhookNotification({
+      agentName: agent_name,
+      coachName,
+      sessionDate: session_date,
+      status: 'Scheduled',
+      focusAreas: focusString,
+      coachNotes: discussion_notes || undefined,
+    }).catch((err) => console.error('[coaching] Failed to trigger webhook for specialist:', err))
 
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {

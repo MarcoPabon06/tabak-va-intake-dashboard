@@ -1,7 +1,7 @@
 import getDb from './db'
 
 export interface WebhookPayload {
-  event_type: 'time_off_requested' | 'time_off_updated' | 'coaching_requested' | 'test'
+  event_type: 'time_off_requested' | 'time_off_updated' | 'coaching_requested' | 'coaching_updated' | 'test'
   title: string
   recipients: string
   agent_name: string
@@ -58,6 +58,28 @@ export function getAdminNotificationEmails(lob: string, capability: string): str
       }
     }
   }
+
+  return Array.from(recipients)
+}
+
+/**
+ * Resolves the work email of a specific agent/specialist (including superadmins as CC)
+ */
+export function getAgentEmail(agentName: string, capability: string = 'canApproveTimeOff'): string[] {
+  const recipients = new Set<string>()
+  const db = getDb()
+  
+  const user = db.prepare("SELECT email, username FROM users WHERE display_name = ? OR username = ? OR email = ?").get(agentName, agentName, agentName) as { email?: string; username: string } | undefined
+
+  if (user?.email && user.email.includes('@')) {
+    recipients.add(user.email.trim())
+  } else if (user?.username && user.username.includes('@')) {
+    recipients.add(user.username.trim())
+  }
+
+  // Include Super Admins / Managers as CC
+  const adminList = getAdminNotificationEmails('VA', capability)
+  adminList.forEach(e => recipients.add(e))
 
   return Array.from(recipients)
 }
@@ -185,7 +207,7 @@ function buildHtmlEmail(params: {
 }
 
 /**
- * Send Webhook for Time-Off Request Submission
+ * Send Webhook for Time-Off Request Submission (Specialist -> Admins)
  */
 export async function sendTimeOffWebhookNotification(params: {
   agentName: string
@@ -234,7 +256,7 @@ export async function sendTimeOffWebhookNotification(params: {
 }
 
 /**
- * Send Webhook for Time-Off Request Status Update
+ * Send Webhook for Time-Off Request Status Update (Manager -> Specialist)
  */
 export async function sendTimeOffStatusWebhookNotification(params: {
   agentName: string
@@ -247,26 +269,30 @@ export async function sendTimeOffStatusWebhookNotification(params: {
   const { agentName, startDate, endDate, status, reviewedBy, managerNotes } = params
   const baseUrl = getAppBaseUrl()
   const ctaUrl = `${baseUrl}/time-off`
-  const title = `🌴 Time-Off Request ${status}: ${agentName}`
-  const statusColor = status === 'Approved' ? '#10b981' : status === 'Rejected' ? '#ef4444' : '#64748b'
+  const isApproved = status === 'Approved'
+  const title = isApproved
+    ? `🌴 Time-Off Request Approved: ${agentName}`
+    : `🌴 Time-Off Request ${status}: ${agentName}`
+  const statusColor = isApproved ? '#10b981' : status === 'Rejected' ? '#ef4444' : '#64748b'
 
-  const recipientsList = getAdminNotificationEmails('VA', 'canViewTimeOff')
+  // Send to the specialist who requested time off (+ superadmins CC)
+  const recipientsList = getAgentEmail(agentName, 'canApproveTimeOff')
   const recipientsStr = recipientsList.join(', ')
 
   const htmlBody = buildHtmlEmail({
     accentColor: statusColor,
-    badgeText: `Time-Off Status Update`,
+    badgeText: `Time-Off Request ${status}`,
     title,
-    subtitle: `Status updated to ${status}`,
+    subtitle: isApproved ? `Your time-off request has been approved!` : `Your time-off request status was updated to ${status}`,
     agentName,
     fields: [
       { label: 'Specialist Representative', value: agentName, isBold: true },
-      { label: 'Requested Period', value: `${startDate} &nbsp;&rarr;&nbsp; ${endDate}` },
-      { label: 'New Status', value: status, isBold: true, color: statusColor },
-      { label: 'Reviewed By', value: reviewedBy || 'Manager' },
+      { label: 'Approved Period', value: `${startDate} &nbsp;&rarr;&nbsp; ${endDate}`, isBold: true, color: statusColor },
+      { label: 'Decision Status', value: status, isBold: true, color: statusColor },
+      { label: 'Reviewed By Manager', value: reviewedBy || 'Manager' },
       { label: 'Manager Notes', value: managerNotes || 'None' },
     ],
-    ctaLabel: '🌴 View Time-Off Calendar',
+    ctaLabel: '🌴 View My Time-Off Calendar',
     ctaUrl,
   })
 
@@ -278,13 +304,13 @@ export async function sendTimeOffStatusWebhookNotification(params: {
     lob: 'N/A',
     details: `Status: ${status}\nPeriod: ${startDate} to ${endDate}\nReviewed By: ${reviewedBy || 'Manager'}\nManager Notes: ${managerNotes || 'None'}`,
     link: ctaUrl,
-    cta_label: '🌴 View Time-Off Calendar',
+    cta_label: '🌴 View My Time-Off Calendar',
     html_body: htmlBody,
   })
 }
 
 /**
- * Send Webhook for Coaching Request Submission
+ * Send Webhook for Coaching Request Submission (Specialist -> QA/Admins)
  */
 export async function sendCoachingWebhookNotification(params: {
   agentName: string
@@ -324,6 +350,63 @@ export async function sendCoachingWebhookNotification(params: {
     details: `Specialist: ${agentName}\nPreferred Date: ${preferredDate || 'Flexible'}\nNotes: ${agentNotes}`,
     link: ctaUrl,
     cta_label: '🎯 Review & Schedule QA 1:1 Session',
+    html_body: htmlBody,
+  })
+}
+
+/**
+ * Send Webhook for Coaching Session Scheduled / Accepted / Completed (Coach -> Specialist)
+ */
+export async function sendCoachingStatusWebhookNotification(params: {
+  agentName: string
+  coachName: string
+  sessionDate: string
+  status: 'Scheduled' | 'Accepted' | 'Completed' | 'Declined'
+  focusAreas?: string
+  coachNotes?: string
+}) {
+  const { agentName, coachName, sessionDate, status, focusAreas, coachNotes } = params
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/coaching`
+  const isDeclined = status === 'Declined'
+  const title = isDeclined
+    ? `🎯 QA 1:1 Session Request Update: ${agentName}`
+    : `🎯 QA 1:1 Coaching Session ${status}: ${agentName}`
+  const statusColor = isDeclined ? '#ef4444' : '#7c3aed'
+
+  // Send to the specialist who requested/received coaching (+ QA coaches CC)
+  const recipientsList = getAgentEmail(agentName, 'canManageCoaching')
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor: statusColor,
+    badgeText: `QA 1:1 Coaching ${status}`,
+    title,
+    subtitle: isDeclined
+      ? `Your coaching session request has been updated to ${status}`
+      : `Your 1-on-1 coaching session with ${coachName} has been ${status.toLowerCase()}!`,
+    agentName,
+    fields: [
+      { label: 'Specialist Representative', value: agentName, isBold: true },
+      { label: 'QA Coach / Manager', value: coachName, isBold: true },
+      { label: 'Session Date', value: sessionDate, isBold: true, color: statusColor },
+      { label: 'Status', value: status, isBold: true, color: statusColor },
+      { label: 'Focus Areas', value: focusAreas || 'QA Performance & Coaching' },
+      { label: 'Coach Notes', value: coachNotes || 'None' },
+    ],
+    ctaLabel: '🎯 Open My Coaching Dashboard',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'coaching_updated',
+    title,
+    recipients: recipientsStr,
+    agent_name: agentName,
+    lob: 'VA Intake',
+    details: `Specialist: ${agentName}\nCoach: ${coachName}\nDate: ${sessionDate}\nStatus: ${status}\nNotes: ${coachNotes || 'N/A'}`,
+    link: ctaUrl,
+    cta_label: '🎯 Open My Coaching Dashboard',
     html_body: htmlBody,
   })
 }
