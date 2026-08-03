@@ -193,6 +193,23 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ success: true })
     }
 
+    if (action === 'remind') {
+      if (!isMaster) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(evaluation.agent_name) as { username: string } | undefined
+      const recipientUsername = user?.username || evaluation.agent_name.toLowerCase().replace(/\s+/g, '')
+
+      sendNotification({
+        username: recipientUsername,
+        title: 'QA Acknowledgement Reminder ⏰',
+        message: `Reminder: Please review and acknowledge your QA evaluation from ${evaluation.eval_date}.`,
+        link: '/qa'
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
     if (action === 'dispute') {
       if (!isMaster && !isOwner) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

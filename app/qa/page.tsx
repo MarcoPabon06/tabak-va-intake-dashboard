@@ -342,17 +342,59 @@ function EvaluationDetails({
         </div>
       )}
 
-      {/* Action Buttons (Available to Agents, Team Leads, Admins, and Super Admins) */}
-      <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        {(!ev.status || ev.status === 'Pending Acknowledgement') && (
-          <>
+      {/* Action Buttons for Specialist */}
+      {!isMaster && (
+        <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {(!ev.status || ev.status === 'Pending Acknowledgement') && (
+            <>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  await handleAcknowledge(ev.id)
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '6px 14px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Acknowledge Feedback
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
+                  setDisputeReasonText('')
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  padding: '5px 13px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Dispute Score
+              </button>
+            </>
+          )}
+
+          {!requestForEval && (
             <button
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation()
-                await handleAcknowledge(ev.id)
+                onRequestFeedback(ev.id)
               }}
               style={{
-                background: 'linear-gradient(135deg, #10b981, #059669)',
+                background: 'linear-gradient(135deg, #b82105, #4f46e5)',
                 color: '#fff',
                 border: 'none',
                 padding: '6px 14px',
@@ -362,54 +404,14 @@ function EvaluationDetails({
                 cursor: 'pointer',
               }}
             >
-              ✓ Acknowledge Feedback
+              🙋‍♂️ Request Feedback Session
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
-                setDisputeReasonText('')
-              }}
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: '#cbd5e1',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: '5px 13px',
-                borderRadius: 6,
-                fontSize: 11,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Dispute Score
-            </button>
-          </>
-        )}
-
-        {!requestForEval && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onRequestFeedback(ev.id)
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #b82105, #4f46e5)',
-              color: '#fff',
-              border: 'none',
-              padding: '6px 14px',
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            🙋‍♂️ Request Feedback Session
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Dispute text area */}
-      {disputingEvalId === ev.id && (
+      {!isMaster && disputingEvalId === ev.id && (
         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: 12, background: 'rgba(0,0,0,0.15)', borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
           <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 6 }}>Dispute Reason</label>
           <textarea
@@ -679,9 +681,10 @@ export default function QAPage() {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [expandedEval, setExpandedEval] = useState<number | null>(null)
 
-  const [activeTab, setActiveTab] = useState<'breakdown' | 'disputes'>('breakdown')
+  const [activeTab, setActiveTab] = useState<'breakdown' | 'pending-ack' | 'disputes'>('breakdown')
   const [disputingEvalId, setDisputingEvalId] = useState<number | null>(null)
   const [disputeReasonText, setDisputeReasonText] = useState('')
+  const [toastMessage, setToastMessage] = useState('')
 
   const [requests, setRequests] = useState<any[]>([])
   const [requestModalEvalId, setRequestModalEvalId] = useState<number | null>(null)
@@ -735,6 +738,22 @@ export default function QAPage() {
       if (res.ok) {
         fetchEvals()
         fetchRequests()
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleSendReminder = async (id: number) => {
+    try {
+      const res = await fetch('/api/qa', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remind', id }),
+      })
+      if (res.ok) {
+        setToastMessage('🔔 Reminder notification sent to specialist!')
+        setTimeout(() => setToastMessage(''), 4000)
       }
     } catch (err) {
       console.error(err)
@@ -840,6 +859,21 @@ export default function QAPage() {
           )}
         </div>
 
+        {toastMessage && (
+          <div style={{
+            background: 'rgba(16,185,129,0.15)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: 10,
+            padding: '12px 16px',
+            marginBottom: 20,
+            color: '#10b981',
+            fontSize: 14,
+            fontWeight: 600,
+          }}>
+            {toastMessage}
+          </div>
+        )}
+
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#64748b' }}>Loading evaluations...</div>
         ) : evals.length === 0 ? (
@@ -851,11 +885,12 @@ export default function QAPage() {
           /* ═══════ ADMIN VIEW ═══════ */
           <>
             {/* Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }}>
               {[
                 { label: 'Total Evaluations', value: evals.length, icon: '📝', color: '#b82105' },
                 { label: 'Team Avg Score', value: `${teamAvg}%`, icon: '📊', color: tierColor(getTier(teamAvg)) },
                 { label: 'Best Performer', value: bestPerformer?.name || '-', icon: '🏆', color: '#10b981', sub: bestPerformer ? `${bestPerformer.avg}%` : '' },
+                { label: 'Pending ACK', value: evals.filter((e) => !e.status || e.status === 'Pending Acknowledgement').length, icon: '⏳', color: evals.filter((e) => !e.status || e.status === 'Pending Acknowledgement').length > 0 ? '#f59e0b' : '#10b981' },
                 { label: 'Needs Coaching', value: needsCoaching.length, icon: '⚠️', color: needsCoaching.length > 0 ? '#ef4444' : '#10b981' },
               ].map((c) => (
                 <div key={c.label} className="glass-card fade-in" style={{ padding: '18px 20px' }}>
@@ -890,6 +925,22 @@ export default function QAPage() {
                 📊 Team Overview
               </button>
               <button
+                onClick={() => setActiveTab('pending-ack')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: activeTab === 'pending-ack' ? '#f59e0b' : '#64748b',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  borderBottom: activeTab === 'pending-ack' ? '2px solid #f59e0b' : 'none',
+                  transition: 'color 0.2s',
+                }}
+              >
+                ⏳ Pending Acknowledgements ({evals.filter((e) => !e.status || e.status === 'Pending Acknowledgement').length})
+              </button>
+              <button
                 onClick={() => setActiveTab('disputes')}
                 style={{
                   background: 'transparent',
@@ -907,7 +958,95 @@ export default function QAPage() {
               </button>
             </div>
 
-            {activeTab === 'disputes' ? (
+            {activeTab === 'pending-ack' ? (
+              <div className="glass-card fade-in" style={{ padding: '20px 24px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    ⏳ Pending QA Acknowledgements Report
+                  </h3>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Specialists with QA evaluations waiting for review and acknowledgement. Follow up to ensure timely ACK.
+                  </p>
+                </div>
+
+                {evals.filter((e) => !e.status || e.status === 'Pending Acknowledgement').length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 40, color: '#10b981', fontWeight: 600 }}>
+                    ✅ All QA evaluations have been acknowledged by specialists!
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                          {['Specialist Name', 'Division', 'Eval Date', 'Status & Age', 'Overall Score', 'Evaluator', 'Action'].map((h) => (
+                            <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {evals.filter((e) => !e.status || e.status === 'Pending Acknowledgement').map((ev) => {
+                          const daysPending = Math.floor((new Date().getTime() - new Date(ev.eval_date).getTime()) / (1000 * 3600 * 24))
+                          const isOverdue = daysPending >= 3
+                          return (
+                            <tr key={ev.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                              <td style={{ padding: '12px 14px', fontWeight: 700, fontSize: 13, color: '#fff' }}>
+                                {ev.agent_name}
+                              </td>
+                              <td style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>
+                                <span className="badge badge-secondary" style={{ fontSize: 10 }}>{(ev as any).lob || selectedLob}</span>
+                              </td>
+                              <td style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>
+                                {ev.eval_date}
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <span style={{
+                                  fontSize: 11, fontWeight: 700,
+                                  color: isOverdue ? '#ef4444' : '#f59e0b',
+                                  background: isOverdue ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                  padding: '3px 8px', borderRadius: 6,
+                                }}>
+                                  {daysPending <= 0 ? 'Today' : `${daysPending} day${daysPending !== 1 ? 's' : ''} pending`} {isOverdue ? '⚠️ Overdue' : ''}
+                                </span>
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: tierColor(ev.tier) }}>
+                                  {ev.overall_score}% ({ev.tier})
+                                </span>
+                              </td>
+                              <td style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>
+                                {ev.evaluator_name || 'QA Admin'}
+                              </td>
+                              <td style={{ padding: '12px 14px' }}>
+                                <button
+                                  onClick={async () => {
+                                    await handleSendReminder(ev.id)
+                                  }}
+                                  style={{
+                                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                                    color: '#fff',
+                                    border: 'none',
+                                    padding: '6px 14px',
+                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                  }}
+                                >
+                                  🔔 Send Reminder
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : activeTab === 'disputes' ? (
               <div className="glass-card fade-in" style={{ padding: '20px 24px' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 16 }}>
                   Active Disputes Under Review
