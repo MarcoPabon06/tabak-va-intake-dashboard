@@ -48,7 +48,7 @@ function emptyEntry(agent: string, lob: string): AgentEntry {
 }
 
 export default function EntryPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const today = format(new Date(), 'yyyy-MM-dd')
   const [date, setDate] = useState(today)
@@ -61,12 +61,29 @@ export default function EntryPage() {
   const [viewLob, setViewLob] = useState<string>('All')
   const [reloadCounter, setReloadCounter] = useState(0)
 
+  const userRole = (session?.user as any)?.role || 'regular'
+  const userPerms = (session?.user as any)?.permissions
+  const isManager = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canManageDailyEntry))
+
+  // Auth guard: redirect non-authorized regular users
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login')
+    } else if (status === 'authenticated' && userRole === 'regular' && !userPerms?.canManageDailyEntry) {
+      router.replace('/dashboard')
+    }
+  }, [status, userRole, userPerms, router])
+
   useEffect(() => {
     if (session?.user) {
-      const u = session.user as any
-      setViewLob(u.lob || 'VA')
+      if (isManager) {
+        setViewLob('All')
+      } else {
+        const u = session.user as any
+        setViewLob(u.lob || 'VA')
+      }
     }
-  }, [session])
+  }, [session, isManager])
 
   // Fetch active regular agents on mount — these are the agents shown in the form
   useEffect(() => {

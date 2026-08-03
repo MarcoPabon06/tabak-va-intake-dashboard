@@ -19,13 +19,21 @@ export async function GET(req: NextRequest) {
     agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
   }
 
-  // Fail-safe filtering for allowed agents (must exist as active regular user in users table)
-  const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string }[]
+  // Fail-safe filtering for active agents (must exist as active user in users table)
+  const users = db.prepare("SELECT display_name, lob FROM users WHERE role IN ('regular', 'admin') AND active = 1").all() as { display_name: string; lob?: string }[]
   const allowedAgents = users.map(u => u.display_name).filter(Boolean)
-  const filteredAgents = agents.filter((a: any) => {
-    const normalized = a.name.trim().replace(/\s+/g, '').toLowerCase()
-    return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
-  })
+  const filteredAgents = agents
+    .filter((a: any) => {
+      const normalized = a.name.trim().replace(/\s+/g, '').toLowerCase()
+      return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
+    })
+    .map((a: any) => {
+      const match = users.find(u => u.display_name && u.display_name.trim().replace(/\s+/g, '').toLowerCase() === a.name.trim().replace(/\s+/g, '').toLowerCase())
+      return {
+        ...a,
+        lob: match?.lob || a.lob || 'VA',
+      }
+    })
 
   return NextResponse.json(filteredAgents)
 }

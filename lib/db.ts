@@ -456,7 +456,7 @@ export function parseUserPermissions(role: string, permissionsJson?: string | nu
     try {
       const parsed = JSON.parse(permissionsJson)
       return {
-        allowedLobs: Array.isArray(parsed.allowedLobs) && parsed.allowedLobs.length > 0 ? parsed.allowedLobs : ['VA'],
+        allowedLobs: Array.isArray(parsed.allowedLobs) && parsed.allowedLobs.length > 0 ? parsed.allowedLobs : ['VA', 'SSD'],
         canManageDailyEntry: Boolean(parsed.canManageDailyEntry),
         canCopyEOD: Boolean(parsed.canCopyEOD),
         canViewQA: Boolean(parsed.canViewQA),
@@ -472,7 +472,7 @@ export function parseUserPermissions(role: string, permissionsJson?: string | nu
     }
   }
   return {
-    allowedLobs: ['VA'],
+    allowedLobs: ['VA', 'SSD'],
     canManageDailyEntry: true,
     canCopyEOD: true,
     canViewQA: true,

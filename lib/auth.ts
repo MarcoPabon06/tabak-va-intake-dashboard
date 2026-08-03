@@ -47,6 +47,18 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.lob = (user as any).lob || 'VA'
         token.permissions = (user as any).permissions
+      } else if (token.id) {
+        try {
+          const db = getDb()
+          const dbUser = db.prepare('SELECT role, lob, permissions FROM users WHERE id = ? AND active = 1').get(token.id) as any
+          if (dbUser) {
+            token.role = dbUser.role
+            token.lob = dbUser.lob || 'VA'
+            token.permissions = parseUserPermissions(dbUser.role, dbUser.permissions)
+          }
+        } catch {
+          // Keep existing token if db check fails
+        }
       }
       return token
     },
