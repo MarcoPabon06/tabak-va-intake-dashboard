@@ -125,7 +125,9 @@ export default function CoachingPage() {
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
 
-  const isMaster = (session?.user as any)?.role === 'master'
+  const userRole = (session?.user as any)?.role || 'regular'
+  const userPerms = (session?.user as any)?.permissions
+  const isMaster = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canManageCoaching))
   const userName = session?.user?.name || ''
 
   const fetchSessions = () => {

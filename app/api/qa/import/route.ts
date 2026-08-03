@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
@@ -35,13 +35,15 @@ function matchAgentName(excelName: string, dbUsers: string[]): string {
   return excelName
 }
 
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || (session.user as any)?.role !== 'master') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const role = (session?.user as any)?.role
+  const perms = (session?.user as any)?.permissions
+  if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canPerformQA)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
+  try {
     const formData = await req.formData()
     const file = formData.get('file') as File
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })

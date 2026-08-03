@@ -174,7 +174,9 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Evaluation not found' }, { status: 404 })
     }
 
-    const isMaster = (session.user as any)?.role === 'master'
+    const userRole = (session.user as any)?.role
+    const userPerms = (session.user as any)?.permissions
+    const isMaster = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && (userPerms?.canPerformQA || userPerms?.canViewQA))
     const isOwner = evaluation.agent_name === session.user?.name
 
     if (action === 'acknowledge') {

@@ -68,16 +68,19 @@ export default function EntryPage() {
     }
   }, [session])
 
-  // Fetch active regular users on mount — these are the agents shown in the form
+  // Fetch active regular agents on mount — these are the agents shown in the form
   useEffect(() => {
     async function fetchAgents() {
       setLoadingAgents(true)
       try {
-        const res = await fetch('/api/users')
-        const users: any[] = await res.json()
-        // Only show active Regular users in the daily entry form
-        const activeAgents = users.filter((u) => u.role === 'regular' && u.active === 1)
-        activeAgents.sort((a, b) => (a.display_name || a.username).localeCompare(b.display_name || b.username))
+        const res = await fetch('/api/agents')
+        const agents: any[] = await res.json()
+        const activeAgents = (Array.isArray(agents) ? agents : []).map((a) => ({
+          username: a.name,
+          display_name: a.name,
+          lob: a.lob || 'VA',
+        }))
+        activeAgents.sort((a, b) => a.display_name.localeCompare(b.display_name))
         setActiveAgentsList(activeAgents)
         if (activeAgents.length === 0) {
           setLoadingAgents(false)

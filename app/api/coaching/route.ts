@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
     const agent = searchParams.get('agent')
 
     const db = getDb()
-    const isMaster = (session.user as any)?.role === 'master'
+    const userRole = (session.user as any)?.role || 'regular'
+    const userPerms = (session.user as any)?.permissions
+    const isMaster = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canManageCoaching || userPerms?.canViewQA || userPerms?.canPerformQA))
     const userName = session.user?.name || ''
 
     let query = `
@@ -60,7 +62,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || (session.user as any)?.role !== 'master') {
+    const role = (session?.user as any)?.role
+    const perms = (session?.user as any)?.permissions
+    if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canManageCoaching)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 

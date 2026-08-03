@@ -47,10 +47,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(rows)
 }
 
-// POST /api/performance  — daily entry (master only)
+// POST /api/performance  — daily entry
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || (session.user as any)?.role !== 'master') {
+  const role = (session?.user as any)?.role
+  const perms = (session?.user as any)?.permissions
+  if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canManageDailyEntry)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

@@ -31,8 +31,12 @@ export default function TimeOffPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const userRole = (session?.user as any)?.role || 'regular'
+  const userPerms = (session?.user as any)?.permissions
   const userLob = (session?.user as any)?.lob || 'VA'
   const username = session?.user?.name || ''
+
+  const isManager = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canViewTimeOff || userPerms?.canApproveTimeOff))
+  const canApprove = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canApproveTimeOff))
 
   // Common State
   const [activeTab, setActiveTab] = useState<'calendar' | 'pending' | 'history' | 'request'>('request')
@@ -67,14 +71,14 @@ export default function TimeOffPage() {
 
   // Sync state on load
   useEffect(() => {
-    if (session?.user && userRole === 'master') {
+    if (session?.user && isManager) {
       setSelectedLobFilter('All')
       setActiveTab('calendar')
     } else if (session?.user) {
       setSelectedLobFilter(userLob as any)
       setActiveTab('request')
     }
-  }, [session, userRole, userLob])
+  }, [session, isManager, userLob])
 
   // Fetch requests and coverage metadata for calendar
   useEffect(() => {
@@ -433,7 +437,7 @@ export default function TimeOffPage() {
                 Time Off & Coverage Planner
               </h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                {userRole === 'master' 
+                {isManager 
                   ? 'Approve leaves, manage requests, and track daily team coverage ratios.' 
                   : `Request time off, manage your leaves, and check team coverage (${userLob} Intake Division).`}
               </p>
@@ -657,7 +661,7 @@ export default function TimeOffPage() {
                   </div>
 
                   {/* LOB Filters */}
-                  {userRole === 'master' ? (
+                  {isManager ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>Coverage LOB:</span>
                       <select
@@ -739,7 +743,7 @@ export default function TimeOffPage() {
                     </div>
 
                     {/* Pending requests inline approval (Manager only) */}
-                    {userRole === 'master' && pendingList.length > 0 && (
+                    {canApprove && pendingList.length > 0 && (
                       <div style={{ marginBottom: 20 }}>
                         <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: '#fbbf24', letterSpacing: '0.05em', marginBottom: 10 }}>
                           ⏳ Pending Decisions ({pendingList.length})
@@ -892,7 +896,7 @@ export default function TimeOffPage() {
           )}
 
           {/* Manager View Layout */}
-          {userRole === 'master' && (
+          {isManager && (
             <div>
               {/* Tab Selector */}
               <div className="glass-card" style={{ padding: '8px 12px', display: 'flex', gap: 8, marginBottom: 20, width: 'fit-content' }}>

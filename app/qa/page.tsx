@@ -692,8 +692,9 @@ export default function QAPage() {
   const [selectedLob, setSelectedLob] = useState<string>('')
 
   const userRole = (session?.user as any)?.role || 'regular'
+  const userPerms = (session?.user as any)?.permissions
   const userName = session?.user?.name || ''
-  const isMaster = userRole === 'master'
+  const isMaster = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canViewQA || userPerms?.canPerformQA))
 
   useEffect(() => {
     if (session?.user) {
