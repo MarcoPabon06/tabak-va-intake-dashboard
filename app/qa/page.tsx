@@ -342,59 +342,17 @@ function EvaluationDetails({
         </div>
       )}
 
-      {/* Action Buttons for Regular Agent */}
-      {!isMaster && (
-        <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          {(!ev.status || ev.status === 'Pending Acknowledgement') && (
-            <>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  await handleAcknowledge(ev.id)
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Acknowledge Feedback
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
-                  setDisputeReasonText('')
-                }}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: '#cbd5e1',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  padding: '5px 13px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Dispute Score
-              </button>
-            </>
-          )}
-
-          {!requestForEval && (
+      {/* Action Buttons (Available to Agents, Team Leads, Admins, and Super Admins) */}
+      <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {(!ev.status || ev.status === 'Pending Acknowledgement') && (
+          <>
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation()
-                onRequestFeedback(ev.id)
+                await handleAcknowledge(ev.id)
               }}
               style={{
-                background: 'linear-gradient(135deg, #b82105, #4f46e5)',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
                 color: '#fff',
                 border: 'none',
                 padding: '6px 14px',
@@ -404,14 +362,54 @@ function EvaluationDetails({
                 cursor: 'pointer',
               }}
             >
-              🙋‍♂️ Request Feedback Session
+              ✓ Acknowledge Feedback
             </button>
-          )}
-        </div>
-      )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setDisputingEvalId(disputingEvalId === ev.id ? null : ev.id)
+                setDisputeReasonText('')
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                color: '#cbd5e1',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: '5px 13px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Dispute Score
+            </button>
+          </>
+        )}
+
+        {!requestForEval && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRequestFeedback(ev.id)
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #b82105, #4f46e5)',
+              color: '#fff',
+              border: 'none',
+              padding: '6px 14px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            🙋‍♂️ Request Feedback Session
+          </button>
+        )}
+      </div>
 
       {/* Dispute text area */}
-      {!isMaster && disputingEvalId === ev.id && (
+      {disputingEvalId === ev.id && (
         <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: 12, background: 'rgba(0,0,0,0.15)', borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
           <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 6 }}>Dispute Reason</label>
           <textarea
