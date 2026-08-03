@@ -31,21 +31,35 @@ export async function GET(req: NextRequest) {
     `
     const params: any[] = []
 
+    const allowedLobs: string[] = userRole === 'admin'
+      ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : ['VA', 'SSD'])
+      : ['VA', 'SSD', 'APPS']
+
     if (!isMaster) {
       // Regular user can only view their own coaching sessions
       query += ' AND c.agent_name = ?'
       params.push(userName)
-    } else if (agent) {
-      // Admin can filter by agent
-      query += ' AND c.agent_name = ?'
-      params.push(agent)
+    } else {
+      if (userRole === 'admin' && !allowedLobs.includes('All')) {
+        const placeholders = allowedLobs.map(() => '?').join(',')
+        query += ` AND a.lob IN (${placeholders})`
+        params.push(...allowedLobs)
+      }
+      if (agent) {
+        // Admin can filter by agent
+        query += ' AND c.agent_name = ?'
+        params.push(agent)
+      }
     }
 
     query += ' ORDER BY c.session_date DESC'
     const rows = db.prepare(query).all(...params)
 
     // Fail-safe filtering for allowed agents (must exist as regular user in users table)
-    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
+    let users = db.prepare("SELECT display_name, lob FROM users WHERE role IN ('regular', 'admin')").all() as { display_name: string; lob?: string }[]
+    if (userRole === 'admin' && !allowedLobs.includes('All')) {
+      users = users.filter(u => allowedLobs.includes(u.lob || 'VA'))
+    }
     const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const filteredRows = rows.filter((r: any) => {
       const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()

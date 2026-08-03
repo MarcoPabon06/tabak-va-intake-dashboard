@@ -410,3 +410,96 @@ export async function sendCoachingStatusWebhookNotification(params: {
     html_body: htmlBody,
   })
 }
+
+/**
+ * Send Webhook for New QA Evaluation Uploaded (QA Admin -> Specialist)
+ */
+export async function sendQAUploadWebhookNotification(params: {
+  agentName: string
+  evalDate: string
+  overallScore: number
+  tier: string
+  evaluatorName?: string
+}) {
+  const { agentName, evalDate, overallScore, tier, evaluatorName } = params
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/qa`
+  const title = `📋 New QA Evaluation Uploaded: ${agentName}`
+
+  const recipientsList = getAgentEmail(agentName, 'canViewQA')
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor: '#b82105',
+    badgeText: `QA Call Evaluation`,
+    title,
+    subtitle: `Your QA performance score for ${evalDate} is ready for review and acknowledgement.`,
+    agentName,
+    fields: [
+      { label: 'Specialist Representative', value: agentName, isBold: true },
+      { label: 'Evaluation Date', value: evalDate, isBold: true },
+      { label: 'Overall QA Score', value: `${overallScore}% (${tier})`, isBold: true, color: '#b82105' },
+      { label: 'Evaluated By', value: evaluatorName || 'QA Team' },
+    ],
+    ctaLabel: '📋 Review & Acknowledge QA Evaluation',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'coaching_updated',
+    title,
+    recipients: recipientsStr,
+    agent_name: agentName,
+    lob: 'Intake Division',
+    details: `Specialist: ${agentName}\nDate: ${evalDate}\nScore: ${overallScore}% (${tier})\nEvaluator: ${evaluatorName || 'QA Team'}`,
+    link: ctaUrl,
+    cta_label: '📋 Review & Acknowledge QA Evaluation',
+    html_body: htmlBody,
+  })
+}
+
+/**
+ * Send Webhook for QA Acknowledgement Reminder (Manager -> Specialist)
+ */
+export async function sendQAReminderWebhookNotification(params: {
+  agentName: string
+  evalDate: string
+  overallScore?: number
+  evaluatorName?: string
+}) {
+  const { agentName, evalDate, overallScore, evaluatorName } = params
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/qa`
+  const title = `⏰ QA Acknowledgement Reminder: ${agentName}`
+
+  const recipientsList = getAgentEmail(agentName, 'canViewQA')
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor: '#f59e0b',
+    badgeText: `QA Acknowledgement Reminder`,
+    title,
+    subtitle: `Friendly reminder to review and acknowledge your QA evaluation from ${evalDate}.`,
+    agentName,
+    fields: [
+      { label: 'Specialist Representative', value: agentName, isBold: true },
+      { label: 'Evaluation Date', value: evalDate, isBold: true },
+      { label: 'Overall QA Score', value: overallScore !== undefined ? `${overallScore}%` : 'Recorded', isBold: true, color: '#f59e0b' },
+      { label: 'Action Required', value: 'Please log in to review feedback and submit your ACK.', isBold: true, color: '#b45309' },
+    ],
+    ctaLabel: '⏰ Review & Acknowledge QA Evaluation',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'coaching_updated',
+    title,
+    recipients: recipientsStr,
+    agent_name: agentName,
+    lob: 'Intake Division',
+    details: `Specialist: ${agentName}\nDate: ${evalDate}\nAction: Pending ACK Reminder`,
+    link: ctaUrl,
+    cta_label: '⏰ Review & Acknowledge QA Evaluation',
+    html_body: htmlBody,
+  })
+}

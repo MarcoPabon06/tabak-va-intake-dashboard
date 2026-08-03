@@ -457,13 +457,13 @@ export function parseUserPermissions(role: string, permissionsJson?: string | nu
       const parsed = JSON.parse(permissionsJson)
       return {
         allowedLobs: Array.isArray(parsed.allowedLobs) && parsed.allowedLobs.length > 0 ? parsed.allowedLobs : ['VA', 'SSD'],
-        canManageDailyEntry: Boolean(parsed.canManageDailyEntry),
-        canCopyEOD: Boolean(parsed.canCopyEOD),
-        canViewQA: Boolean(parsed.canViewQA),
-        canPerformQA: Boolean(parsed.canPerformQA),
-        canManageCoaching: Boolean(parsed.canManageCoaching),
-        canViewTimeOff: Boolean(parsed.canViewTimeOff),
-        canApproveTimeOff: Boolean(parsed.canApproveTimeOff),
+        canManageDailyEntry: parsed.canManageDailyEntry !== undefined ? Boolean(parsed.canManageDailyEntry) : true,
+        canCopyEOD: parsed.canCopyEOD !== undefined ? Boolean(parsed.canCopyEOD) : true,
+        canViewQA: parsed.canViewQA !== undefined ? Boolean(parsed.canViewQA) : true,
+        canPerformQA: parsed.canPerformQA !== undefined ? Boolean(parsed.canPerformQA) : true,
+        canManageCoaching: parsed.canManageCoaching !== undefined ? Boolean(parsed.canManageCoaching) : true,
+        canViewTimeOff: parsed.canViewTimeOff !== undefined ? Boolean(parsed.canViewTimeOff) : true,
+        canApproveTimeOff: parsed.canApproveTimeOff !== undefined ? Boolean(parsed.canApproveTimeOff) : true,
         canManageUsers: Boolean(parsed.canManageUsers),
         canChangeSettings: Boolean(parsed.canChangeSettings),
       }

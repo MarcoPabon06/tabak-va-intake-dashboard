@@ -72,13 +72,18 @@ export default function TimeOffPage() {
   // Sync state on load
   useEffect(() => {
     if (session?.user && isManager) {
-      setSelectedLobFilter('All')
+      if (userRole === 'admin') {
+        const allowed = Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [userLob]
+        setSelectedLobFilter(allowed.includes('All') || allowed.length > 1 ? 'All' : (allowed[0] as any))
+      } else {
+        setSelectedLobFilter('All')
+      }
       setActiveTab('calendar')
     } else if (session?.user) {
       setSelectedLobFilter(userLob as any)
       setActiveTab('request')
     }
-  }, [session, isManager, userLob])
+  }, [session, isManager, userRole, userPerms, userLob])
 
   // Fetch requests and coverage metadata for calendar
   useEffect(() => {
@@ -670,9 +675,19 @@ export default function TimeOffPage() {
                         value={selectedLobFilter}
                         onChange={(e) => setSelectedLobFilter(e.target.value as any)}
                       >
-                        <option value="All" style={{ background: '#0a1628' }}>All Teams</option>
-                        <option value="VA" style={{ background: '#0a1628' }}>VA Specialists</option>
-                        <option value="SSD" style={{ background: '#0a1628' }}>SSD Specialists</option>
+                        {(() => {
+                          const allowed = userRole === 'admin'
+                            ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [userLob])
+                            : ['VA', 'SSD', 'APPS']
+                          const showAll = isManager && (allowed.includes('All') || allowed.length > 1)
+                          return (
+                            <>
+                              {showAll && <option value="All" style={{ background: '#0a1628' }}>All Teams</option>}
+                              {(allowed.includes('VA') || allowed.includes('All') || userRole === 'master' || userRole === 'superadmin') && <option value="VA" style={{ background: '#0a1628' }}>VA Specialists</option>}
+                              {(allowed.includes('SSD') || allowed.includes('All') || userRole === 'master' || userRole === 'superadmin') && <option value="SSD" style={{ background: '#0a1628' }}>SSD Specialists</option>}
+                            </>
+                          )
+                        })()}
                       </select>
                     </div>
                   ) : (

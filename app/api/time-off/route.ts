@@ -31,9 +31,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(rows)
   }
 
-  // Master users can see all requests and filter them
+  // Master & Admin users can see requests based on permissions
   let query = 'SELECT * FROM time_off_requests WHERE 1=1'
   const params: any[] = []
+
+  if (userRole === 'admin') {
+    const userPerms = (session.user as any)?.permissions
+    const userLob = (session.user as any)?.lob || 'VA'
+    const allowedLobs: string[] = Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [userLob]
+    if (!allowedLobs.includes('All')) {
+      const placeholders = allowedLobs.map(() => '?').join(',')
+      query += ` AND lob IN (${placeholders})`
+      params.push(...allowedLobs)
+    }
+  }
 
   if (lob && lob !== 'All') {
     query += ' AND lob = ?'

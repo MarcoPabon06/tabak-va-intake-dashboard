@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendQAUploadWebhookNotification, sendQAReminderWebhookNotification } from '@/lib/webhook'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -30,10 +31,20 @@ export async function GET(req: Request) {
     `
     const params: any[] = [from, to]
 
+    const userPerms = (session.user as any)?.permissions
+    const allowedLobs: string[] = userRole === 'admin'
+      ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : ['VA', 'SSD'])
+      : ['VA', 'SSD', 'APPS']
+
     if (userRole === 'regular') {
       query += ' AND q.agent_name = ?'
       params.push(userName)
     } else {
+      if (userRole === 'admin' && !allowedLobs.includes('All')) {
+        const placeholders = allowedLobs.map(() => '?').join(',')
+        query += ` AND a.lob IN (${placeholders})`
+        params.push(...allowedLobs)
+      }
       if (agent) {
         query += ' AND q.agent_name = ?'
         params.push(agent)
@@ -47,8 +58,11 @@ export async function GET(req: Request) {
     query += ' ORDER BY q.eval_date DESC'
     const rows = db.prepare(query).all(...params)
 
-    // Fail-safe filtering for allowed agents (must exist as regular user in users table)
-    const users = db.prepare("SELECT display_name FROM users WHERE role = 'regular'").all() as { display_name: string }[]
+    // Fail-safe filtering for allowed agents (must exist as regular/admin user in users table)
+    let users = db.prepare("SELECT display_name, lob FROM users WHERE role IN ('regular', 'admin')").all() as { display_name: string; lob?: string }[]
+    if (userRole === 'admin' && !allowedLobs.includes('All')) {
+      users = users.filter(u => allowedLobs.includes(u.lob || 'VA'))
+    }
     const allowedAgents = users.map(u => u.display_name).filter(Boolean)
     const filteredRows = rows.filter((r: any) => {
       const normalized = r.agent_name.trim().replace(/\s+/g, '').toLowerCase()
@@ -147,6 +161,15 @@ export async function POST(req: Request) {
       link: '/qa'
     })
 
+    // Send M365 Email Webhook Notification to Specialist
+    sendQAUploadWebhookNotification({
+      agentName: body.agent_name,
+      evalDate: body.eval_date,
+      overallScore: overall,
+      tier,
+      evaluatorName: body.evaluator_name || 'QA Admin',
+    }).catch(err => console.error('[webhook] Error sending QA upload email:', err))
+
     return NextResponse.json({ success: true, id: result.lastInsertRowid })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -206,6 +229,14 @@ export async function PATCH(req: Request) {
         message: `Reminder: Please review and acknowledge your QA evaluation from ${evaluation.eval_date}.`,
         link: '/qa'
       })
+
+      // Send M365 Email Webhook Notification to Specialist
+      sendQAReminderWebhookNotification({
+        agentName: evaluation.agent_name,
+        evalDate: evaluation.eval_date,
+        overallScore: evaluation.overall_score,
+        evaluatorName: evaluation.evaluator_name,
+      }).catch(err => console.error('[webhook] Error sending QA reminder email:', err))
 
       return NextResponse.json({ success: true })
     }

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { sendNotification } from '@/lib/notifications'
+import { sendQAUploadWebhookNotification } from '@/lib/webhook'
 
 function getTier(score: number): string {
   if (score >= 90) return 'Top Performer'
@@ -364,6 +365,15 @@ export async function POST(req: NextRequest) {
         message: `Your evaluation for Call ID ${callId || 'None'} on ${evalDate} has been uploaded with a score of ${overallScore}%.`,
         link: '/qa'
       })
+
+      // Send M365 Email Webhook Notification to Specialist
+      sendQAUploadWebhookNotification({
+        agentName,
+        evalDate,
+        overallScore,
+        tier,
+        evaluatorName: 'QA Import',
+      }).catch(err => console.error('[webhook] Error sending imported QA email:', err))
 
       importedCount++
       details.push({

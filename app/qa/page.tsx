@@ -700,9 +700,14 @@ export default function QAPage() {
   useEffect(() => {
     if (session?.user) {
       const u = session.user as any
-      setSelectedLob(u.lob || 'VA')
+      if (userRole === 'admin') {
+        const allowed = Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [u.lob || 'VA']
+        setSelectedLob(allowed.includes('All') ? 'VA' : allowed[0])
+      } else {
+        setSelectedLob(u.lob || 'VA')
+      }
     }
-  }, [session])
+  }, [session, userRole, userPerms])
 
   const fetchRequests = () => {
     fetch('/api/coaching/requests')
@@ -852,8 +857,17 @@ export default function QAPage() {
                   fontWeight: 600
                 }}
               >
-                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Team</option>
-                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Team</option>
+                {(() => {
+                  const allowed = userRole === 'admin'
+                    ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : ['VA', 'SSD'])
+                    : ['VA', 'SSD', 'APPS']
+                  return (
+                    <>
+                      {(allowed.includes('VA') || allowed.includes('All') || userRole === 'master' || userRole === 'superadmin') && <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Team</option>}
+                      {(allowed.includes('SSD') || allowed.includes('All') || userRole === 'master' || userRole === 'superadmin') && <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Team</option>}
+                    </>
+                  )
+                })()}
               </select>
             </div>
           )}

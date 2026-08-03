@@ -26,13 +26,20 @@ export async function GET(req: NextRequest) {
 
     const db = getDb()
 
+    const userRole = (session.user as any)?.role || 'regular'
+    const userPerms = (session.user as any)?.permissions
+    const userLob = (session.user as any)?.lob || 'VA'
+    const allowedLobs: string[] = userRole === 'admin'
+      ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [userLob])
+      : ['VA', 'SSD', 'APPS']
+
     // Query 1: Fetch active regular users (specialists)
-    const activeSpecialists = db
+    let activeSpecialists = db
       .prepare("SELECT username, display_name, lob FROM users WHERE role = 'regular' AND active = 1")
-      .all()
+      .all() as { username: string; display_name: string; lob: string }[]
 
     // Query 2: Fetch approved and pending requests that overlap this month
-    const overlappingRequests = db
+    let overlappingRequests = db
       .prepare(`
         SELECT id, username, agent_name, lob, start_date, end_date, reason, status, manager_notes
         FROM time_off_requests
@@ -41,7 +48,12 @@ export async function GET(req: NextRequest) {
           AND end_date >= ?
         ORDER BY start_date ASC
       `)
-      .all(endDate, startDate)
+      .all(endDate, startDate) as any[]
+
+    if (userRole === 'admin' && !allowedLobs.includes('All')) {
+      activeSpecialists = activeSpecialists.filter(s => allowedLobs.includes(s.lob || 'VA'))
+      overlappingRequests = overlappingRequests.filter(r => allowedLobs.includes(r.lob || 'VA'))
+    }
 
     return NextResponse.json({
       month: monthParam,

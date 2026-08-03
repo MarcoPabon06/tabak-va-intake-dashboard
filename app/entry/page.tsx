@@ -76,14 +76,17 @@ export default function EntryPage() {
 
   useEffect(() => {
     if (session?.user) {
-      if (isManager) {
+      if (userRole === 'master' || userRole === 'superadmin') {
         setViewLob('All')
+      } else if (userRole === 'admin') {
+        const allowed = Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [(session.user as any).lob || 'VA']
+        setViewLob(allowed.includes('All') || allowed.length > 1 ? 'All' : allowed[0])
       } else {
         const u = session.user as any
         setViewLob(u.lob || 'VA')
       }
     }
-  }, [session, isManager])
+  }, [session, userRole, userPerms])
 
   // Fetch active regular agents on mount — these are the agents shown in the form
   useEffect(() => {
@@ -296,9 +299,20 @@ export default function EntryPage() {
                 value={viewLob}
                 onChange={(e) => setViewLob(e.target.value)}
               >
-                <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All Specialists</option>
-                <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Specialists</option>
-                <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Specialists</option>
+                {(() => {
+                  const isSuper = userRole === 'master' || userRole === 'superadmin'
+                  const allowed = userRole === 'admin'
+                    ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : ['VA', 'SSD'])
+                    : ['VA', 'SSD', 'APPS']
+                  const showAll = isManager && (allowed.includes('All') || allowed.length > 1)
+                  return (
+                    <>
+                      {showAll && <option value="All" style={{ background: '#1e1b4b', color: '#fff' }}>All Specialists</option>}
+                      {(allowed.includes('VA') || allowed.includes('All') || isSuper) && <option value="VA" style={{ background: '#1e1b4b', color: '#fff' }}>VA Specialists</option>}
+                      {(allowed.includes('SSD') || allowed.includes('All') || isSuper) && <option value="SSD" style={{ background: '#1e1b4b', color: '#fff' }}>SSD Specialists</option>}
+                    </>
+                  )
+                })()}
               </select>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
