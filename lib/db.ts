@@ -387,6 +387,10 @@ function initSchema(db: Database.Database) {
   try {
     db.prepare("UPDATE apps_team_entries SET rep_name = 'Estefani Cubides', rep_username = 'ecubides' WHERE LOWER(rep_name) LIKE '%estefani%'").run()
     db.prepare("UPDATE apps_team_entries SET rep_name = 'Samantha Benavides', rep_username = 'sbenavides' WHERE LOWER(rep_name) LIKE '%samantha%'").run()
+    
+    // Set Samantha Benavides and Estefani Cubides LOB to APPS in users and agents tables
+    db.prepare("UPDATE users SET lob = 'APPS' WHERE LOWER(display_name) LIKE '%samantha%' OR LOWER(display_name) LIKE '%estefani%' OR LOWER(username) LIKE '%samantha%' OR LOWER(username) LIKE '%estefani%' OR LOWER(username) LIKE '%sbenavides%' OR LOWER(username) LIKE '%ecubides%'").run()
+    db.prepare("UPDATE agents SET lob = 'APPS' WHERE LOWER(name) LIKE '%samantha%' OR LOWER(name) LIKE '%estefani%'").run()
   } catch {}
 
   // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
