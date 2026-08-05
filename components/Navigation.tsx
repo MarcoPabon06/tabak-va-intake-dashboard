@@ -43,13 +43,29 @@ export default function Navigation() {
   // Permission evaluation helper
   function canAccessLink(link: typeof navLinks[0]): boolean {
     if (isSuper) return true
+    const userLob = user?.lob || 'VA'
+    const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
+
+    if (link.href === '/apps-team') {
+      if (role === 'regular') return userLob === 'APPS'
+      if (isAdmin) {
+        return (
+          userLob === 'SSD' ||
+          userLob === 'APPS' ||
+          allowedLobs.includes('SSD') ||
+          allowedLobs.includes('APPS') ||
+          allowedLobs.includes('All')
+        )
+      }
+      return false
+    }
+
     if (role === 'regular') {
-      if (['/dashboard', '/apps-team', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      if (['/dashboard', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
       return false
     }
     if (isAdmin) {
       if (link.href === '/dashboard' || link.href === '/guide') return true
-      if (link.href === '/apps-team') return perms?.allowedLobs?.includes('APPS') ?? true
       if (link.href === '/entry') return perms?.canManageDailyEntry ?? true
       if (link.href === '/qa-entry') return perms?.canPerformQA ?? true
       if (link.href === '/qa') return perms?.canViewQA ?? true

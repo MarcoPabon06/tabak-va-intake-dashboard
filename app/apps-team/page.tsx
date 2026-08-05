@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { useSession } from 'next-auth/react'
 import { format } from 'date-fns'
@@ -37,15 +38,29 @@ const REASON_OPTIONS = [
 ]
 
 export default function AppsTeamPage() {
-  const { data: session } = useSession()
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const userRole = (session?.user as any)?.role || 'regular'
   const isSuper = userRole === 'master' || userRole === 'superadmin'
   const isAdmin = userRole === 'admin'
   const perms = (session?.user as any)?.permissions
-  const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
 
   const userLob = (session?.user as any)?.lob || 'VA'
   const userName = session?.user?.name || ''
+  const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
+
+  const isAuthorized = isSuper ||
+    (userRole === 'regular' && userLob === 'APPS') ||
+    (isAdmin && (userLob === 'SSD' || userLob === 'APPS' || allowedLobs.includes('SSD') || allowedLobs.includes('APPS') || allowedLobs.includes('All')))
+
+  const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
+
+  // Redirect unauthorized users to /dashboard
+  useEffect(() => {
+    if (status === 'authenticated' && !isAuthorized) {
+      router.replace('/dashboard')
+    }
+  }, [status, isAuthorized, router])
 
   // Data & Filter State
   const [entries, setEntries] = useState<AppEntry[]>([])

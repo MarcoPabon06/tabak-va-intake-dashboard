@@ -57,10 +57,15 @@ function standardizeReason(rawReason: any): { category: string; other: string } 
   return { category: 'Other', other: r }
 }
 
+import { isAuthorizedForAppsTeam } from '../route'
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!isAuthorizedForAppsTeam(session)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {

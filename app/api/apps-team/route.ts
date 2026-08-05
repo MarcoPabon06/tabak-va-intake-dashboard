@@ -21,11 +21,35 @@ export function normalizeRepInfo(rawName: string): { rep_name: string; rep_usern
   return { rep_name: titleCased, rep_username: username }
 }
 
+export function isAuthorizedForAppsTeam(session: any): boolean {
+  if (!session?.user) return false
+  const userRole = (session.user as any)?.role || 'regular'
+  const userLob = (session.user as any)?.lob || 'VA'
+  const perms = (session.user as any)?.permissions
+
+  if (userRole === 'master' || userRole === 'superadmin') return true
+  if (userRole === 'regular') return userLob === 'APPS'
+  if (userRole === 'admin') {
+    const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
+    return (
+      userLob === 'SSD' ||
+      userLob === 'APPS' ||
+      allowedLobs.includes('SSD') ||
+      allowedLobs.includes('APPS') ||
+      allowedLobs.includes('All')
+    )
+  }
+  return false
+}
+
 // GET /api/apps-team — Fetch entries & summary analytics
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!isAuthorizedForAppsTeam(session)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { searchParams } = new URL(req.url)
@@ -129,6 +153,9 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!isAuthorizedForAppsTeam(session)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const body = await req.json()
@@ -185,6 +212,9 @@ export async function PUT(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!isAuthorizedForAppsTeam(session)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   try {
     const body = await req.json()
@@ -237,6 +267,9 @@ export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!isAuthorizedForAppsTeam(session)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { searchParams } = new URL(req.url)
