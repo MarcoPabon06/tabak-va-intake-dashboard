@@ -42,7 +42,7 @@ function initSchema(db: Database.Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
+      role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'qa', 'regular')),
       display_name TEXT,
       email TEXT,
       active INTEGER DEFAULT 1,
@@ -341,14 +341,14 @@ function initSchema(db: Database.Database) {
     }
 
     const userTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get() as { sql: string } | undefined
-    if (userTableInfo && userTableInfo.sql && (!userTableInfo.sql.includes('permissions') || !userTableInfo.sql.includes('admin'))) {
+    if (userTableInfo && userTableInfo.sql && (!userTableInfo.sql.includes('permissions') || !userTableInfo.sql.includes('admin') || !userTableInfo.sql.includes("'qa'"))) {
       db.pragma('foreign_keys = OFF')
       db.exec(`
         CREATE TABLE users_tmp (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           username TEXT UNIQUE NOT NULL,
           password_hash TEXT NOT NULL,
-          role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'regular')),
+          role TEXT NOT NULL CHECK(role IN ('master', 'superadmin', 'admin', 'qa', 'regular')),
           display_name TEXT,
           email TEXT,
           active INTEGER DEFAULT 1,
@@ -362,7 +362,7 @@ function initSchema(db: Database.Database) {
         ALTER TABLE users_tmp RENAME TO users;
       `)
       db.pragma('foreign_keys = ON')
-      console.log('[db] Migrated users table to include permissions column & superadmin/admin role CHECK constraints')
+      console.log('[db] Migrated users table to include permissions column & superadmin/admin/qa role CHECK constraints')
     }
   } catch (e: any) {
     console.error('Failed to migrate users schema:', e.message)
@@ -391,6 +391,9 @@ function initSchema(db: Database.Database) {
     // Set Samantha Benavides and Estefani Cubides LOB to APPS in users and agents tables
     db.prepare("UPDATE users SET lob = 'APPS' WHERE LOWER(display_name) LIKE '%samantha%' OR LOWER(display_name) LIKE '%estefani%' OR LOWER(username) LIKE '%samantha%' OR LOWER(username) LIKE '%estefani%' OR LOWER(username) LIKE '%sbenavides%' OR LOWER(username) LIKE '%ecubides%'").run()
     db.prepare("UPDATE agents SET lob = 'APPS' WHERE LOWER(name) LIKE '%samantha%' OR LOWER(name) LIKE '%estefani%'").run()
+
+    // Update Brayan role to Quality Analyst ('qa')
+    db.prepare("UPDATE users SET role = 'qa' WHERE LOWER(display_name) LIKE '%brayan%' OR LOWER(username) LIKE '%brayan%'").run()
   } catch {}
 
   // Clean up any QA evaluations, coaching sessions, PIP plans, and agents not in the registered regular user list
@@ -436,6 +439,19 @@ export const DEFAULT_MASTER_PERMISSIONS: UserPermissions = {
   canChangeSettings: true,
 }
 
+export const DEFAULT_QA_PERMISSIONS: UserPermissions = {
+  allowedLobs: ['VA', 'SSD', 'APPS'],
+  canManageDailyEntry: false,
+  canCopyEOD: true,
+  canViewQA: true,
+  canPerformQA: true,
+  canManageCoaching: true,
+  canViewTimeOff: true,
+  canApproveTimeOff: false,
+  canManageUsers: false,
+  canChangeSettings: false,
+}
+
 export const DEFAULT_REGULAR_PERMISSIONS: UserPermissions = {
   allowedLobs: ['VA', 'SSD', 'APPS'],
   canManageDailyEntry: false,
@@ -452,6 +468,9 @@ export const DEFAULT_REGULAR_PERMISSIONS: UserPermissions = {
 export function parseUserPermissions(role: string, permissionsJson?: string | null): UserPermissions {
   if (role === 'master' || role === 'superadmin') {
     return DEFAULT_MASTER_PERMISSIONS
+  }
+  if (role === 'qa') {
+    return DEFAULT_QA_PERMISSIONS
   }
   if (role === 'regular') {
     return DEFAULT_REGULAR_PERMISSIONS

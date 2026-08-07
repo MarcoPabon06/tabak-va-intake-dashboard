@@ -199,8 +199,86 @@ export async function PATCH(req: Request) {
 
     const userRole = (session.user as any)?.role
     const userPerms = (session.user as any)?.permissions
-    const isMaster = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && (userPerms?.canPerformQA || userPerms?.canViewQA))
+    const isMaster = userRole === 'master' || userRole === 'superadmin' || userRole === 'qa' || (userRole === 'admin' && (userPerms?.canPerformQA || userPerms?.canViewQA))
     const isOwner = evaluation.agent_name === session.user?.name
+
+    if (action === 'edit') {
+      if (!isMaster) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const {
+        call_id,
+        evaluator_name,
+        eval_date,
+        score_introduction,
+        score_pk_policies,
+        score_eligibility,
+        score_deadline,
+        score_documentation,
+        score_objection,
+        zt_attorney_escalation,
+        zt_legal_misrepresentation,
+        zt_undocumented,
+        feedback,
+      } = body
+
+      const hasZT = Boolean(zt_attorney_escalation || zt_legal_misrepresentation || zt_undocumented)
+      const rawSum = (Number(score_introduction) || 0) +
+        (Number(score_pk_policies) || 0) +
+        (Number(score_eligibility) || 0) +
+        (Number(score_deadline) || 0) +
+        (Number(score_documentation) || 0) +
+        (Number(score_objection) || 0)
+
+      const overall = hasZT ? 0 : Math.min(100, Math.max(0, Math.round(rawSum * 10) / 10))
+
+      let tier = 'Developing Performer'
+      if (hasZT || overall < 60) tier = 'Immediate Coaching Required'
+      else if (overall >= 90) tier = 'Top Performer'
+      else if (overall >= 81) tier = 'Strong Performer'
+      else if (overall >= 70) tier = 'Developing Performer'
+      else if (overall >= 60) tier = 'Performance Risk'
+
+      db.prepare(`
+        UPDATE qa_evaluations
+        SET call_id = ?,
+            evaluator_name = ?,
+            eval_date = ?,
+            overall_score = ?,
+            score_introduction = ?,
+            score_pk_policies = ?,
+            score_eligibility = ?,
+            score_deadline = ?,
+            score_documentation = ?,
+            score_objection = ?,
+            zt_attorney_escalation = ?,
+            zt_legal_misrepresentation = ?,
+            zt_undocumented = ?,
+            feedback = ?,
+            tier = ?
+        WHERE id = ?
+      `).run(
+        call_id !== undefined ? String(call_id).trim() : evaluation.call_id,
+        evaluator_name !== undefined ? String(evaluator_name).trim() : evaluation.evaluator_name,
+        eval_date || evaluation.eval_date,
+        overall,
+        Number(score_introduction) || 0,
+        Number(score_pk_policies) || 0,
+        Number(score_eligibility) || 0,
+        Number(score_deadline) || 0,
+        Number(score_documentation) || 0,
+        Number(score_objection) || 0,
+        zt_attorney_escalation ? 1 : 0,
+        zt_legal_misrepresentation ? 1 : 0,
+        zt_undocumented ? 1 : 0,
+        feedback !== undefined ? feedback : evaluation.feedback,
+        tier,
+        id
+      )
+
+      return NextResponse.json({ success: true, overall_score: overall, tier })
+    }
 
     if (action === 'acknowledge') {
       if (!isMaster && !isOwner) {

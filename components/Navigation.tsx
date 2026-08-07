@@ -60,6 +60,12 @@ export default function Navigation() {
       return false
     }
 
+    if (role === 'qa') {
+      if (['/dashboard', '/qa-entry', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      if (link.href === '/apps-team') return userLob === 'APPS' || allowedLobs.includes('APPS') || allowedLobs.includes('All')
+      return false
+    }
+
     if (role === 'regular') {
       if (['/dashboard', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
       return false

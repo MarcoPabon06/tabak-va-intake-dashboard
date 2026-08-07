@@ -249,6 +249,7 @@ function EvaluationDetails({
   handleDispute,
   requests,
   onRequestFeedback,
+  onEditEval,
 }: {
   ev: Evaluation
   isMaster: boolean
@@ -260,6 +261,7 @@ function EvaluationDetails({
   handleDispute: (id: number) => Promise<void>
   requests: any[]
   onRequestFeedback: (evalId: number) => void
+  onEditEval?: (ev: Evaluation) => void
 }) {
   const requestForEval = requests.find((r) => r.linked_evaluation_id === ev.id)
 
@@ -297,16 +299,39 @@ function EvaluationDetails({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#64748b' }}>Acknowledgement Status:</span>
-          <span style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: statusColor(ev.status),
-            background: `${statusColor(ev.status)}20`,
-            padding: '2px 8px',
-            borderRadius: 4,
-          }}>
-            {ev.status || 'Pending Acknowledgement'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: statusColor(ev.status),
+              background: `${statusColor(ev.status)}20`,
+              padding: '2px 8px',
+              borderRadius: 4,
+            }}>
+              {ev.status || 'Pending Acknowledgement'}
+            </span>
+
+            {isMaster && onEditEval && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEditEval(ev)
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: '#cbd5e1',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                ✏️ Edit Evaluation
+              </button>
+            )}
+          </div>
         </div>
 
         {requestForEval && (
@@ -674,6 +699,168 @@ function RequestFeedbackModal({
   )
 }
 
+interface EditEvaluationModalProps {
+  evaluation: Evaluation
+  onClose: () => void
+  onSaved: () => void
+}
+
+function EditEvaluationModal({ evaluation, onClose, onSaved }: EditEvaluationModalProps) {
+  const [callId, setCallId] = useState(evaluation.call_id || '')
+  const [evaluatorName, setEvaluatorName] = useState(evaluation.evaluator_name || '')
+  const [evalDate, setEvalDate] = useState(evaluation.eval_date || '')
+  const [feedback, setFeedback] = useState(evaluation.feedback || '')
+  const [scores, setScores] = useState({
+    score_introduction: evaluation.score_introduction || 0,
+    score_pk_policies: evaluation.score_pk_policies || 0,
+    score_eligibility: evaluation.score_eligibility || 0,
+    score_deadline: evaluation.score_deadline || 0,
+    score_documentation: evaluation.score_documentation || 0,
+    score_objection: evaluation.score_objection || 0,
+  })
+  const [zt, setZt] = useState({
+    zt_attorney_escalation: Boolean(evaluation.zt_attorney_escalation),
+    zt_legal_misrepresentation: Boolean(evaluation.zt_legal_misrepresentation),
+    zt_undocumented: Boolean(evaluation.zt_undocumented),
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const hasZT = zt.zt_attorney_escalation || zt.zt_legal_misrepresentation || zt.zt_undocumented
+  const rawSum = scores.score_introduction + scores.score_pk_policies + scores.score_eligibility + scores.score_deadline + scores.score_documentation + scores.score_objection
+  const calculatedOverall = hasZT ? 0 : Math.min(100, Math.max(0, Math.round(rawSum * 10) / 10))
+  const calculatedTier = getTier(calculatedOverall)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/qa', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'edit',
+          id: evaluation.id,
+          call_id: callId,
+          evaluator_name: evaluatorName,
+          eval_date: evalDate,
+          feedback,
+          ...scores,
+          ...zt,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update evaluation.')
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="glass-card fade-in" style={{ maxWidth: 650, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 28, border: '1px solid rgba(255,255,255,0.15)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 14 }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#fff' }}>✏️ Edit QA Evaluation #{evaluation.id}</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>Agent: <strong>{evaluation.agent_name}</strong></p>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 20, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16 }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Call ID / Ref *</label>
+              <input type="text" required className="input-field" value={callId} onChange={e => setCallId(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Evaluator Name *</label>
+              <input type="text" required className="input-field" value={evaluatorName} onChange={e => setEvaluatorName(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Evaluation Date *</label>
+              <input type="date" required className="input-field" value={evalDate} onChange={e => setEvalDate(e.target.value)} />
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 14, borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)' }}>
+            <h4 style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-color)', marginBottom: 12 }}>📊 Category Scores</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {CATEGORIES.map(cat => (
+                <div key={cat.key}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12 }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{cat.label}</span>
+                    <strong style={{ color: cat.color }}>{(scores as any)[cat.key]} / {cat.max}</strong>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    max={cat.max}
+                    step="0.5"
+                    className="input-field"
+                    value={(scores as any)[cat.key]}
+                    onChange={e => setScores({ ...scores, [cat.key]: Math.min(cat.max, Math.max(0, Number(e.target.value) || 0)) })}
+                    style={{ padding: '6px 10px', fontSize: 12 }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(239, 68, 68, 0.08)', padding: 14, borderRadius: 10, border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+            <h4 style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#ef4444', marginBottom: 10 }}>⚠️ Zero Tolerance Infractions</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#fca5a5', cursor: 'pointer' }}>
+                <input type="checkbox" checked={zt.zt_attorney_escalation} onChange={e => setZt({ ...zt, zt_attorney_escalation: e.target.checked })} />
+                <span>Escalation to Attorney required</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#fca5a5', cursor: 'pointer' }}>
+                <input type="checkbox" checked={zt.zt_legal_misrepresentation} onChange={e => setZt({ ...zt, zt_legal_misrepresentation: e.target.checked })} />
+                <span>Legal Misrepresentation on Call</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#fca5a5', cursor: 'pointer' }}>
+                <input type="checkbox" checked={zt.zt_undocumented} onChange={e => setZt({ ...zt, zt_undocumented: e.target.checked })} />
+                <span>Undocumented Call in CRM</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Evaluator Notes & Feedback</label>
+            <textarea rows={3} className="input-field" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Detailed feedback..." style={{ width: '100%', resize: 'vertical' }} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '12px 16px', borderRadius: 8 }}>
+            <div>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Calculated Overall Score: </span>
+              <strong style={{ fontSize: 16, color: tierColor(calculatedTier) }}>{calculatedOverall}%</strong>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 20, color: tierColor(calculatedTier) }}>
+              {calculatedTier}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Saving...' : '💾 Save Changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function QAPage() {
   const { data: session, status } = useSession()
   const [evals, setEvals] = useState<Evaluation[]>([])
@@ -688,6 +875,7 @@ export default function QAPage() {
 
   const [requests, setRequests] = useState<any[]>([])
   const [requestModalEvalId, setRequestModalEvalId] = useState<number | null>(null)
+  const [editingEval, setEditingEval] = useState<Evaluation | null>(null)
   const [submittingRequest, setSubmittingRequest] = useState(false)
   const [requestError, setRequestError] = useState('')
   const [selectedLob, setSelectedLob] = useState<string>('')
@@ -1216,6 +1404,7 @@ export default function QAPage() {
                                           handleDispute={handleDispute}
                                           requests={requests}
                                           onRequestFeedback={setRequestModalEvalId}
+                                          onEditEval={setEditingEval}
                                         />
                                       )}
                                     </div>
@@ -1340,6 +1529,7 @@ export default function QAPage() {
                         handleDispute={handleDispute}
                         requests={requests}
                         onRequestFeedback={setRequestModalEvalId}
+                        onEditEval={setEditingEval}
                       />
                     )}
                   </div>
@@ -1381,6 +1571,18 @@ export default function QAPage() {
             } finally {
               setSubmittingRequest(false)
             }
+          }}
+        />
+      )}
+
+      {editingEval !== null && (
+        <EditEvaluationModal
+          evaluation={editingEval}
+          onClose={() => setEditingEval(null)}
+          onSaved={() => {
+            fetchEvals()
+            setToastMessage('QA Evaluation updated successfully! 💾')
+            setTimeout(() => setToastMessage(''), 4000)
           }}
         />
       )}

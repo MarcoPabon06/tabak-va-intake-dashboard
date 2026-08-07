@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (!username || !password || !role) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
-  if (!['master', 'superadmin', 'admin', 'regular'].includes(role)) {
+  if (!['master', 'superadmin', 'admin', 'qa', 'regular'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
   }
 

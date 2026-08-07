@@ -28,6 +28,19 @@ interface User {
   created_at: string
 }
 
+const DEFAULT_QA_PERMISSIONS: UserPermissions = {
+  allowedLobs: ['VA', 'SSD', 'APPS'],
+  canManageDailyEntry: false,
+  canCopyEOD: true,
+  canViewQA: true,
+  canPerformQA: true,
+  canManageCoaching: true,
+  canViewTimeOff: true,
+  canApproveTimeOff: false,
+  canManageUsers: false,
+  canChangeSettings: false,
+}
+
 const DEFAULT_ADMIN_PERMISSIONS: UserPermissions = {
   allowedLobs: ['VA', 'SSD'],
   canManageDailyEntry: true,
@@ -92,6 +105,9 @@ export default function UsersPage() {
         canManageUsers: true,
         canChangeSettings: true,
       }
+    }
+    if (role === 'qa') {
+      return DEFAULT_QA_PERMISSIONS
     }
     if (permStr) {
       try {
@@ -286,6 +302,7 @@ export default function UsersPage() {
                   <label className="field-label">Role</label>
                   <select id="new-role" className="input-field" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>
                     <option value="regular">Regular Specialist (View only)</option>
+                    <option value="qa">Quality Analyst (QA Evaluations & Coaching)</option>
                     <option value="admin">Admin / Team Lead (Custom Permissions)</option>
                     <option value="superadmin">Super Admin (Full Unrestricted Access)</option>
                   </select>
@@ -544,6 +561,7 @@ export default function UsersPage() {
                             }}
                           >
                             <option value="regular" style={{ background: '#1e1b4b', color: '#fff' }}>Regular Specialist</option>
+                            <option value="qa" style={{ background: '#1e1b4b', color: '#fff' }}>Quality Analyst (QA)</option>
                             <option value="admin" style={{ background: '#1e1b4b', color: '#fff' }}>Admin / Team Lead</option>
                             <option value="superadmin" style={{ background: '#1e1b4b', color: '#fff' }}>Super Admin</option>
                           </select>
