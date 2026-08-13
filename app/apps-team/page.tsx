@@ -82,9 +82,10 @@ export default function AppsTeamPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'reasons' | 'history'>('pending')
+  const [activeTab, setActiveTab] = useState<'pending' | 'converted' | 'reasons' | 'history'>('pending')
   const [searchQuery, setSearchQuery] = useState('')
   const [repFilter, setRepFilter] = useState('All')
+  const [statusFilter, setStatusFilter] = useState<'All' | 'YES' | 'NO'>('All')
 
   // Date Range Filtering State
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
@@ -117,6 +118,7 @@ export default function AppsTeamPage() {
     try {
       const queryParams = new URLSearchParams()
       if (repFilter !== 'All') queryParams.append('rep', repFilter)
+      if (statusFilter !== 'All') queryParams.append('converted', statusFilter)
       if (searchQuery) queryParams.append('search', searchQuery)
       if (from) queryParams.append('from', from)
       if (to) queryParams.append('to', to)
@@ -131,7 +133,7 @@ export default function AppsTeamPage() {
     } finally {
       setLoading(false)
     }
-  }, [repFilter, searchQuery, from, to])
+  }, [repFilter, statusFilter, searchQuery, from, to])
 
   useEffect(() => {
     fetchData()
@@ -501,16 +503,27 @@ export default function AppsTeamPage() {
 
           {/* Tab & Filter Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-            <div className="glass-card" style={{ padding: '6px 10px', display: 'flex', gap: 6, width: 'fit-content' }}>
+            <div className="glass-card" style={{ padding: '6px 10px', display: 'flex', gap: 6, width: 'fit-content', flexWrap: 'wrap' }}>
               <button
                 className={`btn-secondary ${activeTab === 'pending' ? 'btn-primary' : ''}`}
                 style={{ 
                   background: activeTab === 'pending' ? 'var(--accent-primary)' : 'transparent',
                   border: 'none', padding: '8px 16px', fontSize: 13, fontWeight: 600
                 }}
-                onClick={() => setActiveTab('pending')}
+                onClick={() => { setActiveTab('pending'); setStatusFilter('NO') }}
               >
                 ⏳ Pending Reminder Queue ({summary.pending})
+              </button>
+              <button
+                className={`btn-secondary ${activeTab === 'converted' ? 'btn-primary' : ''}`}
+                style={{ 
+                  background: activeTab === 'converted' ? '#10b981' : 'transparent',
+                  border: 'none', padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                  color: activeTab === 'converted' ? '#fff' : 'var(--text-secondary)'
+                }}
+                onClick={() => { setActiveTab('converted'); setStatusFilter('YES') }}
+              >
+                ✅ Converted Cases ({summary.converted})
               </button>
               <button
                 className={`btn-secondary ${activeTab === 'reasons' ? 'btn-primary' : ''}`}
@@ -518,7 +531,7 @@ export default function AppsTeamPage() {
                   background: activeTab === 'reasons' ? 'var(--accent-primary)' : 'transparent',
                   border: 'none', padding: '8px 16px', fontSize: 13, fontWeight: 600
                 }}
-                onClick={() => setActiveTab('reasons')}
+                onClick={() => { setActiveTab('reasons'); setStatusFilter('All') }}
               >
                 📊 Non-Conversion Analytics
               </button>
@@ -528,21 +541,33 @@ export default function AppsTeamPage() {
                   background: activeTab === 'history' ? 'var(--accent-primary)' : 'transparent',
                   border: 'none', padding: '8px 16px', fontSize: 13, fontWeight: 600
                 }}
-                onClick={() => setActiveTab('history')}
+                onClick={() => { setActiveTab('history'); setStatusFilter('All') }}
               >
                 📜 All Filings History ({summary.total})
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <input
                 type="text"
                 className="input-field"
                 placeholder="Search Lead ID, Name..."
-                style={{ width: 220, fontSize: 13, margin: 0 }}
+                style={{ width: 180, fontSize: 13, margin: 0 }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+
+              <select
+                className="input-field"
+                style={{ width: 160, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+              >
+                <option value="All" style={{ background: '#0a1628' }}>All Statuses</option>
+                <option value="YES" style={{ background: '#0a1628' }}>Converted Only (YES)</option>
+                <option value="NO" style={{ background: '#0a1628' }}>Pending Only (NO)</option>
+              </select>
+
               {!isRegularAppsRep && (
                 <select
                   className="input-field"
@@ -649,7 +674,87 @@ export default function AppsTeamPage() {
             </div>
           )}
 
-          {/* TAB 2: REASON ANALYTICS */}
+          {/* TAB 2: CONVERTED APPLICATIONS QUEUE */}
+          {activeTab === 'converted' && (
+            <div className="glass-card" style={{ padding: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#10b981' }}>
+                    ✅ Converted Applications ({entries.filter(e => e.converted === 'YES').length})
+                  </h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                    Applications successfully converted into retainers during the selected date filter.
+                  </p>
+                </div>
+              </div>
+
+              {loading ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading converted applications...</p>
+              ) : entries.filter(e => e.converted === 'YES').length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+                  <p style={{ fontSize: 14 }}>No converted applications recorded for the selected filter.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                  {entries.filter(e => e.converted === 'YES').map(entry => (
+                    <div 
+                      key={entry.id}
+                      style={{
+                        padding: 18,
+                        borderRadius: 12,
+                        background: 'rgba(16, 185, 129, 0.04)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 12
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginRight: 8 }}>
+                              {entry.client_name}
+                            </span>
+                            <span className="badge" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', fontSize: 11 }}>
+                              Lead ID: {entry.lead_id}
+                            </span>
+                          </div>
+                          <span className="badge badge-success" style={{ fontSize: 11 }}>
+                            YES (Converted)
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                          Filed: <strong>{entry.date_completed}</strong> &nbsp;|&nbsp; Rep: <strong>{entry.rep_name}</strong>
+                        </div>
+
+                        {entry.converted_at && (
+                          <div style={{ padding: '8px 12px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, border: '1px solid rgba(16,185,129,0.2)', fontSize: 12, color: '#10b981' }}>
+                            <strong>⏱️ Converted Date / Time: </strong>
+                            <span>{entry.converted_at}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+                        <button
+                          className="btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => setEditingEntry(entry)}
+                        >
+                          ✏️ Edit Lead
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: REASON ANALYTICS */}
           {activeTab === 'reasons' && (
             <div className="glass-card" style={{ padding: 24 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>
