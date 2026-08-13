@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Navigation from '@/components/Navigation'
 import { useSession } from 'next-auth/react'
-import { format } from 'date-fns'
+import { format, startOfMonth, subDays } from 'date-fns'
 import { generateEODReportHtml } from '@/lib/eodReport'
 
 interface AppEntry {
@@ -17,6 +17,7 @@ interface AppEntry {
   other_reason?: string
   rep_username: string
   rep_name: string
+  converted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -26,6 +27,8 @@ interface SummaryData {
   converted: number
   pending: number
   conversion_rate: number
+  bonus_rate?: number
+  estimated_bonus?: number
   reasons_breakdown: Record<string, number>
 }
 
@@ -35,6 +38,12 @@ const REASON_OPTIONS = [
   'Yellow Screen (CC with SSA scheduled)',
   'Rejected (While on Application)',
   'Other'
+]
+
+const DATE_PRESETS = [
+  { label: 'This month', getValue: () => ({ from: format(startOfMonth(new Date()), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
+  { label: 'Last 30 days', getValue: () => ({ from: format(subDays(new Date(), 30), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
+  { label: 'All time', getValue: () => ({ from: '', to: '' }) },
 ]
 
 export default function AppsTeamPage() {
@@ -48,9 +57,10 @@ export default function AppsTeamPage() {
   const userLob = (session?.user as any)?.lob || 'VA'
   const userName = session?.user?.name || ''
   const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
+  const isRegularAppsRep = userRole === 'regular' && userLob === 'APPS'
 
   const isAuthorized = isSuper ||
-    (userRole === 'regular' && userLob === 'APPS') ||
+    isRegularAppsRep ||
     (isAdmin && (userLob === 'SSD' || userLob === 'APPS' || allowedLobs.includes('SSD') || allowedLobs.includes('APPS') || allowedLobs.includes('All')))
 
   const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
@@ -65,7 +75,7 @@ export default function AppsTeamPage() {
   // Data & Filter State
   const [entries, setEntries] = useState<AppEntry[]>([])
   const [summary, setSummary] = useState<SummaryData>({
-    total: 0, converted: 0, pending: 0, conversion_rate: 0,
+    total: 0, converted: 0, pending: 0, conversion_rate: 0, bonus_rate: 25.00, estimated_bonus: 0,
     reasons_breakdown: { 'Need Reps': 0, 'Need Wet 827': 0, 'Yellow Screen (CC with SSA scheduled)': 0, 'Rejected (While on Application)': 0, 'Other': 0 }
   })
   const [loading, setLoading] = useState(true)
@@ -75,6 +85,11 @@ export default function AppsTeamPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'reasons' | 'history'>('pending')
   const [searchQuery, setSearchQuery] = useState('')
   const [repFilter, setRepFilter] = useState('All')
+
+  // Date Range Filtering State
+  const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
+  const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [activePreset, setActivePreset] = useState('This month')
 
   // Log Modal State
   const [showLogModal, setShowLogModal] = useState(false)
@@ -103,6 +118,8 @@ export default function AppsTeamPage() {
       const queryParams = new URLSearchParams()
       if (repFilter !== 'All') queryParams.append('rep', repFilter)
       if (searchQuery) queryParams.append('search', searchQuery)
+      if (from) queryParams.append('from', from)
+      if (to) queryParams.append('to', to)
 
       const res = await fetch(`/api/apps-team?${queryParams.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch Apps Team entries.')
@@ -114,7 +131,7 @@ export default function AppsTeamPage() {
     } finally {
       setLoading(false)
     }
-  }, [repFilter, searchQuery])
+  }, [repFilter, searchQuery, from, to])
 
   useEffect(() => {
     fetchData()
@@ -345,16 +362,110 @@ export default function AppsTeamPage() {
             </div>
           )}
 
+          {/* Date Range Filter Bar */}
+          <div className="glass-card" style={{ padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>📅 Date Filter:</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {DATE_PRESETS.map(p => (
+                  <button
+                    key={p.label}
+                    onClick={() => {
+                      setActivePreset(p.label)
+                      const { from: f, to: t } = p.getValue()
+                      setFrom(f)
+                      setTo(t)
+                    }}
+                    className={`btn-secondary ${activePreset === p.label ? 'btn-primary' : ''}`}
+                    style={{
+                      padding: '6px 14px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: activePreset === p.label ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+                      borderColor: activePreset === p.label ? 'var(--accent-primary)' : 'rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 10 }}>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ width: 140, padding: '5px 10px', fontSize: 12, margin: 0 }}
+                  value={from}
+                  onChange={(e) => { setFrom(e.target.value); setActivePreset('Custom') }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>to</span>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ width: 140, padding: '5px 10px', fontSize: 12, margin: 0 }}
+                  value={to}
+                  onChange={(e) => { setTo(e.target.value); setActivePreset('Custom') }}
+                />
+              </div>
+            </div>
+
+            {isRegularAppsRep && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', padding: '6px 14px', borderRadius: 20, color: '#10b981', fontSize: 12, fontWeight: 700 }}>
+                👤 Personal Applications Workspace ({userName})
+              </div>
+            )}
+          </div>
+
+          {/* Motivational Estimated Bonus Card */}
+          <div 
+            className="glass-card" 
+            style={{ 
+              padding: '20px 24px', 
+              marginBottom: 24, 
+              background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(14,165,233,0.06))', 
+              border: '1px solid rgba(16,185,129,0.3)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 16
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 20 }}>💵</span>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: 0 }}>
+                  Estimated Period Bonus Earnings ({activePreset === 'All time' ? 'All Time' : 'Selected Period'})
+                </h3>
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '2px 0 6px' }}>
+                Based on <strong>{summary.converted} converted applications</strong> recorded within the selected date filter at <strong>${summary.bonus_rate || 25.00}/converted case</strong>.
+              </p>
+              <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', padding: '6px 12px', borderRadius: 6, border: '1px solid rgba(245,158,11,0.25)', display: 'inline-block' }}>
+                ⚠️ <strong>Preliminary Figure:</strong> This estimated bonus figure is calculated based on recorded conversions for the selected date range and is a preliminary figure subject to final verification and approval by management.
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+                Estimated Bonus
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+                ${(summary.estimated_bonus || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+
           {/* KPI Stat Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
             <div className="glass-card" style={{ padding: 20 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Total Apps Completed
+                Apps Completed (Period)
               </div>
               <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', margin: '6px 0 2px' }}>
                 {summary.total}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>All logged applications</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Filed applications in period</div>
             </div>
 
             <div className="glass-card" style={{ padding: 20, borderLeft: '4px solid #10b981' }}>
@@ -364,7 +475,7 @@ export default function AppsTeamPage() {
               <div style={{ fontSize: 26, fontWeight: 800, color: '#10b981', margin: '6px 0 2px' }}>
                 {summary.converted}
               </div>
-              <div style={{ fontSize: 12, color: '#10b981', fontWeight: 600 }}>Successfully converted</div>
+              <div style={{ fontSize: 12, color: '#10b981', fontWeight: 600 }}>Converted in period</div>
             </div>
 
             <div className="glass-card" style={{ padding: 20, borderLeft: '4px solid #f59e0b' }}>
@@ -384,7 +495,7 @@ export default function AppsTeamPage() {
               <div style={{ fontSize: 26, fontWeight: 800, color: '#b82105', margin: '6px 0 2px' }}>
                 {summary.conversion_rate}%
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Overall conversion ratio</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Period conversion ratio</div>
             </div>
           </div>
 
@@ -432,17 +543,19 @@ export default function AppsTeamPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <select
-                className="input-field"
-                style={{ width: 180, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
-                value={repFilter}
-                onChange={(e) => setRepFilter(e.target.value)}
-              >
-                <option value="All" style={{ background: '#0a1628' }}>All Representatives</option>
-                {availableReps.map(r => (
-                  <option key={r} value={r} style={{ background: '#0a1628' }}>{r}</option>
-                ))}
-              </select>
+              {!isRegularAppsRep && (
+                <select
+                  className="input-field"
+                  style={{ width: 180, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                  value={repFilter}
+                  onChange={(e) => setRepFilter(e.target.value)}
+                >
+                  <option value="All" style={{ background: '#0a1628' }}>All Representatives</option>
+                  {availableReps.map(r => (
+                    <option key={r} value={r} style={{ background: '#0a1628' }}>{r}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -581,6 +694,7 @@ export default function AppsTeamPage() {
                         <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Rep</th>
                         <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Date Completed</th>
                         <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Converted</th>
+                        <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Converted Date / Time</th>
                         <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Non-Conversion Reason</th>
                         <th style={{ padding: 12, fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>Action</th>
                       </tr>
@@ -597,6 +711,13 @@ export default function AppsTeamPage() {
                               <span className="badge badge-success">YES</span>
                             ) : (
                               <span className="badge badge-accent">NO</span>
+                            )}
+                          </td>
+                          <td style={{ padding: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+                            {entry.converted === 'YES' && entry.converted_at ? (
+                              <span style={{ color: '#10b981', fontWeight: 600 }}>{entry.converted_at}</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
                             )}
                           </td>
                           <td style={{ padding: 12, fontSize: 13, color: 'var(--text-secondary)' }}>

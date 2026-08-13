@@ -216,6 +216,7 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_apps_lead ON apps_team_entries(lead_id);
     CREATE INDEX IF NOT EXISTS idx_apps_date ON apps_team_entries(date_completed);
     CREATE INDEX IF NOT EXISTS idx_apps_converted ON apps_team_entries(converted);
+    CREATE INDEX IF NOT EXISTS idx_apps_converted_at ON apps_team_entries(converted_at);
     CREATE INDEX IF NOT EXISTS idx_apps_rep ON apps_team_entries(rep_username);
   `)
 
@@ -382,6 +383,7 @@ function initSchema(db: Database.Database) {
   defaults.run('goal_apps_filed_apps', '30')
   defaults.run('goal_conversion_rate_apps', '75')
   defaults.run('goal_converted_cases_apps', '20')
+  defaults.run('apps_bonus_rate_per_converted', '25.00')
 
   // Standardize case-sensitivity on rep names in apps_team_entries
   try {

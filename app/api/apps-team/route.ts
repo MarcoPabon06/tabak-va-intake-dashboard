@@ -106,11 +106,27 @@ export async function GET(req: NextRequest) {
   try {
     const entries = db.prepare(query).all(...params)
 
-    // Compute Summary Stats
+    // Fetch bonus rate per converted application from settings
+    const bonusSetting = db.prepare("SELECT value FROM settings WHERE key = 'apps_bonus_rate_per_converted'").get() as { value: string } | undefined
+    const bonusRate = bonusSetting ? (parseFloat(bonusSetting.value) || 25.00) : 25.00
+
+    // Compute Summary Stats for the requested date range
     const total = entries.length
-    const convertedCount = entries.filter((e: any) => e.converted === 'YES').length
+
+    // Count conversions for period: match converted_at date if present, otherwise date_completed
+    const convertedEntries = entries.filter((e: any) => {
+      if (e.converted !== 'YES') return false
+      if (!from && !to) return true
+      const convDate = (e.converted_at ? e.converted_at.slice(0, 10) : e.date_completed)
+      if (from && convDate < from) return false
+      if (to && convDate > to) return false
+      return true
+    })
+
+    const convertedCount = convertedEntries.length
     const pendingCount = entries.filter((e: any) => e.converted === 'NO').length
     const conversionRate = total > 0 ? Math.round((convertedCount / total) * 1000) / 10 : 0
+    const estimatedBonus = Math.round(convertedCount * bonusRate * 100) / 100
 
     // Non-conversion reasons breakdown
     const reasonsBreakdown: Record<string, number> = {
@@ -139,6 +155,8 @@ export async function GET(req: NextRequest) {
         converted: convertedCount,
         pending: pendingCount,
         conversion_rate: conversionRate,
+        bonus_rate: bonusRate,
+        estimated_bonus: estimatedBonus,
         reasons_breakdown: reasonsBreakdown,
       }
     })

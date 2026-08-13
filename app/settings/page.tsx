@@ -101,6 +101,15 @@ const APPS_GOAL_FIELDS: GoalConfig[] = [
     min: 1,
     max: 200,
   },
+  {
+    key: 'apps_bonus_rate_per_converted',
+    label: 'Bonus Rate per Converted App ($)',
+    icon: '💵',
+    unit: '$',
+    description: 'Estimated bonus dollar amount awarded per converted application',
+    min: 0,
+    max: 500,
+  },
 ]
 
 export default function SettingsPage() {
