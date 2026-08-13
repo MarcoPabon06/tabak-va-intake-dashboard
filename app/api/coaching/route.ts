@@ -174,6 +174,95 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PUT /api/coaching — Update existing coaching session or mark follow-up completed
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    const role = (session?.user as any)?.role
+    const perms = (session?.user as any)?.permissions
+    const isAuthorized = session && (role === 'master' || role === 'superadmin' || role === 'qa' || (role === 'admin' && Boolean(perms?.canManageCoaching)))
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const {
+      id,
+      session_date,
+      focus_areas,
+      linked_evaluation_id,
+      discussion_notes,
+      commitments_agent,
+      commitments_coach,
+      follow_up_date,
+      follow_up_status,
+      follow_up_notes,
+      follow_up_completed_at,
+    } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing session ID' }, { status: 400 })
+    }
+
+    const db = getDb()
+    const existing = db.prepare('SELECT * FROM coaching_sessions WHERE id = ?').get(id) as any
+    if (!existing) {
+      return NextResponse.json({ error: 'Coaching session not found' }, { status: 404 })
+    }
+
+    const focusString = Array.isArray(focus_areas) ? focus_areas.join(', ') : (focus_areas || existing.focus_areas)
+    const editorName = session.user?.name || 'QA Coach'
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+    db.prepare(`
+      UPDATE coaching_sessions
+      SET session_date = ?,
+          focus_areas = ?,
+          linked_evaluation_id = ?,
+          discussion_notes = ?,
+          commitments_agent = ?,
+          commitments_coach = ?,
+          follow_up_date = ?,
+          follow_up_status = ?,
+          follow_up_notes = ?,
+          follow_up_completed_at = ?,
+          updated_at = ?,
+          last_edited_by = ?
+      WHERE id = ?
+    `).run(
+      session_date || existing.session_date,
+      focusString,
+      linked_evaluation_id !== undefined ? (linked_evaluation_id || null) : existing.linked_evaluation_id,
+      discussion_notes !== undefined ? (discussion_notes || null) : existing.discussion_notes,
+      commitments_agent !== undefined ? (commitments_agent || null) : existing.commitments_agent,
+      commitments_coach !== undefined ? (commitments_coach || null) : existing.commitments_coach,
+      follow_up_date !== undefined ? (follow_up_date || null) : existing.follow_up_date,
+      follow_up_status || existing.follow_up_status || 'Pending',
+      follow_up_notes !== undefined ? (follow_up_notes || null) : existing.follow_up_notes,
+      follow_up_completed_at !== undefined ? (follow_up_completed_at || null) : existing.follow_up_completed_at,
+      nowStr,
+      editorName,
+      id
+    )
+
+    // Notify agent if follow-up date or notes changed
+    const user = db.prepare('SELECT username FROM users WHERE display_name = ?').get(existing.agent_name) as { username: string } | undefined
+    if (user?.username) {
+      sendNotification({
+        username: user.username,
+        title: '✏️ Coaching Log Updated',
+        message: `Your coaching session log from ${session_date || existing.session_date} was updated by ${editorName}.${follow_up_status === 'Completed' ? ' Follow-up marked completed!' : ''}`,
+        link: '/coaching'
+      })
+    }
+
+    return NextResponse.json({ success: true, id })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
 // DELETE /api/coaching?id=123
 export async function DELETE(req: NextRequest) {
   try {

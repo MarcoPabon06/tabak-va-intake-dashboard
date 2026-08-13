@@ -15,6 +15,11 @@ interface CoachingSession {
   commitments_agent: string | null
   commitments_coach: string | null
   follow_up_date: string | null
+  follow_up_status?: 'Pending' | 'Completed' | 'Rescheduled' | null
+  follow_up_notes?: string | null
+  follow_up_completed_at?: string | null
+  updated_at?: string | null
+  last_edited_by?: string | null
   created_at: string
   linked_eval_date?: string | null
   linked_eval_score?: number | null
@@ -90,6 +95,10 @@ export default function CoachingPage() {
   const [declineRequestId, setDeclineRequestId] = useState<number | null>(null)
   const [declineNotes, setDeclineNotes] = useState('')
   const [submittingDecline, setSubmittingDecline] = useState(false)
+
+  // ── Edit & Follow-up Modal State ──
+  const [editingSession, setEditingSession] = useState<CoachingSession | null>(null)
+  const [completingFollowUpSession, setCompletingFollowUpSession] = useState<CoachingSession | null>(null)
 
   // ── Toggle Forms ──
   const [showForm, setShowForm] = useState(false)
@@ -442,8 +451,20 @@ export default function CoachingPage() {
   })
 
   // Date differences for alert badge
-  const getFollowUpStatusBadge = (dateStr: string | null) => {
+  const getFollowUpStatusBadge = (sessionItem: CoachingSession) => {
+    const { follow_up_date: dateStr, follow_up_status: status, follow_up_completed_at: completedAt } = sessionItem
+    if (!dateStr && !completedAt) return null
+
+    if (status === 'Completed') {
+      return (
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.15)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(16,185,129,0.3)' }}>
+          ✅ Follow-up Completed {completedAt ? `(${completedAt.slice(0, 10)})` : ''}
+        </span>
+      )
+    }
+
     if (!dateStr) return null
+
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const targetDate = new Date(dateStr + 'T00:00:00')
@@ -452,20 +473,20 @@ export default function CoachingPage() {
 
     if (diffDays > 0) {
       return (
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', background: 'rgba(16,185,129,0.12)', padding: '2px 8px', borderRadius: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#3b82f6', background: 'rgba(59,130,246,0.12)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(59,130,246,0.25)' }}>
           🗓️ Follow-up in {diffDays} day{diffDays !== 1 ? 's' : ''} ({dateStr})
         </span>
       )
     } else if (diffDays === 0) {
       return (
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', padding: '2px 8px', borderRadius: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245,158,11,0.3)' }}>
           ⚠️ Follow-up is TODAY! ({dateStr})
         </span>
       )
     } else {
       const absDays = Math.abs(diffDays)
       return (
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '2px 8px', borderRadius: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(239,68,68,0.3)' }}>
           🚨 Overdue by {absDays} day{absDays !== 1 ? 's' : ''} ({dateStr})
         </span>
       )
@@ -889,7 +910,7 @@ export default function CoachingPage() {
                           <span style={{ fontSize: 12, color: '#94a3b8' }}>Coach: {session.coach_name}</span>
                           <span style={{ fontSize: 11, color: '#64748b' }}>·</span>
                           <span style={{ fontSize: 11, color: '#64748b' }}>Date: {session.session_date}</span>
-                          {getFollowUpStatusBadge(session.follow_up_date)}
+                          {getFollowUpStatusBadge(session)}
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -913,6 +934,13 @@ export default function CoachingPage() {
                           <div style={{ marginBottom: 14 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Discussion Summary</div>
                             <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{session.discussion_notes}</div>
+                          </div>
+                        )}
+
+                        {session.follow_up_notes && (
+                          <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 8 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', marginBottom: 4 }}>📌 Follow-up Outcome Notes</div>
+                            <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{session.follow_up_notes}</div>
                           </div>
                         )}
 
@@ -949,6 +977,31 @@ export default function CoachingPage() {
                             )}
                           </div>
                         </div>
+
+                        {/* Card Action Buttons */}
+                        {isMaster && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: 14, paddingTop: 10 }}>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>
+                              {session.last_edited_by && `Last edited by ${session.last_edited_by} (${session.updated_at?.slice(0, 10)})`}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {session.follow_up_date && session.follow_up_status !== 'Completed' && (
+                                <button
+                                  onClick={() => setCompletingFollowUpSession(session)}
+                                  style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                  ✅ Complete Follow-up
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setEditingSession(session)}
+                                style={{ background: 'rgba(255,255,255,0.06)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                ✏️ Edit Session
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1025,7 +1078,7 @@ export default function CoachingPage() {
                             <span style={{ fontSize: 11, color: '#64748b' }}>{s.follow_up_date}</span>
                           </div>
                           <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 6 }}>Coach: {s.coach_name}</div>
-                          {getFollowUpStatusBadge(s.follow_up_date)}
+                          {getFollowUpStatusBadge(s)}
                         </div>
                       ))}
                     {sessions.filter((s) => s.follow_up_date).length === 0 && (
@@ -1667,6 +1720,359 @@ export default function CoachingPage() {
           </div>
         </div>
       )}
+
+      {editingSession && (
+        <EditCoachingModal
+          sessionItem={editingSession}
+          evals={evals}
+          onClose={() => setEditingSession(null)}
+          onSaved={() => fetchSessions()}
+        />
+      )}
+
+      {completingFollowUpSession && (
+        <CompleteFollowUpModal
+          sessionItem={completingFollowUpSession}
+          onClose={() => setCompletingFollowUpSession(null)}
+          onSaved={() => fetchSessions()}
+        />
+      )}
+    </div>
+  )
+}
+
+function EditCoachingModal({
+  sessionItem,
+  evals,
+  onClose,
+  onSaved,
+}: {
+  sessionItem: CoachingSession
+  evals: EvaluationOption[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [sessionDate, setSessionDate] = useState(sessionItem.session_date)
+  const [selectedFocus, setSelectedFocus] = useState<string[]>(
+    sessionItem.focus_areas ? sessionItem.focus_areas.split(',').map((s) => s.trim()) : []
+  )
+  const [linkedEvalId, setLinkedEvalId] = useState<string>(
+    sessionItem.linked_evaluation_id ? String(sessionItem.linked_evaluation_id) : ''
+  )
+  const [discussionNotes, setDiscussionNotes] = useState(sessionItem.discussion_notes || '')
+  const [commitmentsAgent, setCommitmentsAgent] = useState(sessionItem.commitments_agent || '')
+  const [commitmentsCoach, setCommitmentsCoach] = useState(sessionItem.commitments_coach || '')
+  const [followUpDate, setFollowUpDate] = useState(sessionItem.follow_up_date || '')
+  const [followUpStatus, setFollowUpStatus] = useState<string>(sessionItem.follow_up_status || 'Pending')
+  const [followUpNotes, setFollowUpNotes] = useState(sessionItem.follow_up_notes || '')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const toggleFocus = (area: string) => {
+    if (selectedFocus.includes(area)) {
+      setSelectedFocus(selectedFocus.filter((a) => a !== area))
+    } else {
+      setSelectedFocus([...selectedFocus, area])
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/coaching', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sessionItem.id,
+          session_date: sessionDate,
+          focus_areas: selectedFocus,
+          linked_evaluation_id: linkedEvalId ? Number(linkedEvalId) : null,
+          discussion_notes: discussionNotes,
+          commitments_agent: commitmentsAgent,
+          commitments_coach: commitmentsCoach,
+          follow_up_date: followUpDate || null,
+          follow_up_status: followUpStatus,
+          follow_up_notes: followUpNotes || null,
+          follow_up_completed_at: followUpStatus === 'Completed' ? (sessionItem.follow_up_completed_at || new Date().toISOString().slice(0, 10)) : null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update session')
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const agentEvals = evals.filter(
+    (ev) => ev.agent_name.trim().toLowerCase() === sessionItem.agent_name.trim().toLowerCase()
+  )
+
+  return (
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 20
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card fade-in"
+        style={{ maxWidth: 750, width: '100%', padding: 28, background: '#0a1628', border: '1px solid var(--border)', maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>✏️ Edit Coaching Log ({sessionItem.agent_name})</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0' }}>Update notes, follow-up status, and coaching commitments.</p>
+          </div>
+          <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#ef4444', fontSize: 13 }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Left Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Session Date *</label>
+              <input
+                type="date"
+                required
+                value={sessionDate}
+                onChange={(e) => setSessionDate(e.target.value)}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Linked QA Evaluation</label>
+              <select
+                value={linkedEvalId}
+                onChange={(e) => setLinkedEvalId(e.target.value)}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, background: '#0a1628', color: '#fff' }}
+              >
+                <option value="">-- No Linked QA Evaluation --</option>
+                {agentEvals.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.eval_date} — {ev.overall_score}% {ev.call_id ? `(Call: ${ev.call_id})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>Focus Areas *</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {FOCUS_AREA_OPTIONS.map((area) => {
+                  const active = selectedFocus.includes(area)
+                  return (
+                    <button
+                      type="button"
+                      key={area}
+                      onClick={() => toggleFocus(area)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 14, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        background: active ? 'rgba(167,139,250,0.25)' : 'rgba(255,255,255,0.05)',
+                        color: active ? '#a78bfa' : '#94a3b8',
+                        border: active ? '1px solid rgba(167,139,250,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      {active ? '✓ ' : '+ '}{area}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Follow-up Date</label>
+              <input
+                type="date"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Follow-up Status</label>
+              <select
+                value={followUpStatus}
+                onChange={(e) => setFollowUpStatus(e.target.value)}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, background: '#0a1628', color: '#fff' }}
+              >
+                <option value="Pending">⏳ Pending Follow-up</option>
+                <option value="Completed">✅ Follow-up Completed</option>
+                <option value="Rescheduled">🔄 Rescheduled</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Discussion Notes</label>
+              <textarea
+                value={discussionNotes}
+                onChange={(e) => setDiscussionNotes(e.target.value)}
+                rows={3}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Agent Commitments</label>
+              <textarea
+                value={commitmentsAgent}
+                onChange={(e) => setCommitmentsAgent(e.target.value)}
+                rows={3}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Coach Commitments</label>
+              <textarea
+                value={commitmentsCoach}
+                onChange={(e) => setCommitmentsCoach(e.target.value)}
+                rows={3}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Follow-up Outcome Notes</label>
+              <textarea
+                value={followUpNotes}
+                onChange={(e) => setFollowUpNotes(e.target.value)}
+                placeholder="Log outcome of follow-up meeting..."
+                rows={3}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? 'Saving...' : '💾 Save Changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function CompleteFollowUpModal({
+  sessionItem,
+  onClose,
+  onSaved,
+}: {
+  sessionItem: CoachingSession
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [notes, setNotes] = useState(sessionItem.follow_up_notes || '')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      const res = await fetch('/api/coaching', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sessionItem.id,
+          follow_up_status: 'Completed',
+          follow_up_notes: notes,
+          follow_up_completed_at: new Date().toISOString().slice(0, 10),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to complete follow-up')
+      onSaved()
+      onClose()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 20
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card fade-in"
+        style={{ maxWidth: 500, width: '100%', padding: 28, background: '#0a1628', border: '1px solid var(--border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#10b981' }}>✅ Complete Follow-up ({sessionItem.agent_name})</h3>
+          <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#ef4444', fontSize: 13 }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ fontSize: 13, color: '#cbd5e1' }}>
+            Scheduled Follow-up Date: <strong>{sessionItem.follow_up_date || 'N/A'}</strong>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+              Follow-up Outcome Notes / Feedback *
+            </label>
+            <textarea
+              required
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Record results of follow-up call review and commitment progress..."
+              rows={4}
+              className="input-field"
+              style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary" style={{ background: '#10b981' }} disabled={submitting}>{submitting ? 'Saving...' : '✅ Mark Completed'}</button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }

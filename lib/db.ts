@@ -234,6 +234,11 @@ function initSchema(db: Database.Database) {
     { table: 'qa_evaluations', column: 'disputed_at', definition: 'TEXT' },
     { table: 'qa_evaluations', column: 'resolution_notes', definition: 'TEXT' },
     { table: 'qa_evaluations', column: 'resolved_at', definition: 'TEXT' },
+    { table: 'coaching_sessions', column: 'follow_up_status', definition: "TEXT DEFAULT 'Pending'" },
+    { table: 'coaching_sessions', column: 'follow_up_notes', definition: 'TEXT' },
+    { table: 'coaching_sessions', column: 'follow_up_completed_at', definition: 'TEXT' },
+    { table: 'coaching_sessions', column: 'updated_at', definition: 'TEXT' },
+    { table: 'coaching_sessions', column: 'last_edited_by', definition: 'TEXT' },
   ]
 
   for (const alter of alterColumns) {
