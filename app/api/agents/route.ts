@@ -27,8 +27,8 @@ export async function GET(req: NextRequest) {
     agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
   }
 
-  // Fail-safe filtering for active agents (must exist as active user in users table)
-  let users = db.prepare("SELECT display_name, lob FROM users WHERE role IN ('regular', 'admin') AND active = 1").all() as { display_name: string; lob?: string }[]
+  // Fail-safe filtering for active agents (must exist as active regular specialist in users table)
+  let users = db.prepare("SELECT display_name, lob FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string; lob?: string }[]
   if (userRole === 'admin' && !allowedLobs.includes('All')) {
     users = users.filter(u => allowedLobs.includes(u.lob || 'VA'))
   }

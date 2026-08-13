@@ -19,25 +19,27 @@ export async function GET(req: NextRequest) {
   const userLob = (session.user as any)?.lob || 'VA'
 
   let query = `
-    SELECT dp.*, a.lob 
+    SELECT dp.*, u.lob 
     FROM daily_performance dp
-    INNER JOIN agents a ON dp.agent_name = a.name
+    INNER JOIN users u ON (LOWER(TRIM(dp.agent_name)) = LOWER(TRIM(u.display_name)) OR LOWER(TRIM(dp.agent_name)) = LOWER(TRIM(u.username)))
     WHERE dp.date >= ? AND dp.date <= ?
+      AND u.role = 'regular'
+      AND u.active = 1
   `
   const params: any[] = [from, to]
 
   if (agent) {
-    query += ` AND dp.agent_name = ?`
-    params.push(agent)
+    query += ` AND (dp.agent_name = ? OR u.display_name = ? OR u.username = ?)`
+    params.push(agent, agent, agent)
   }
 
   // Enforce LOB filter: regular users are locked to their own LOB.
   // Master admins can request a specific LOB or get all if they request 'All' or no lob parameter.
   if (userRole === 'regular') {
-    query += ` AND a.lob = ?`
+    query += ` AND u.lob = ?`
     params.push(userLob)
   } else if (lob && lob !== 'All') {
-    query += ` AND a.lob = ?`
+    query += ` AND u.lob = ?`
     params.push(lob)
   }
 
@@ -52,7 +54,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const role = (session?.user as any)?.role
   const perms = (session?.user as any)?.permissions
-  if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canManageDailyEntry)) {
+  const isAllowed = role === 'master' || role === 'superadmin' || (role === 'admin' && (perms?.canManageDailyEntry ?? true))
+  if (!session || !isAllowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

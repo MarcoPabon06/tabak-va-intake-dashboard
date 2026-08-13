@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const role = (session?.user as any)?.role
   const perms = (session?.user as any)?.permissions
-  if (!session || (role !== 'master' && role !== 'superadmin' && !perms?.canManageDailyEntry)) {
+  const isAllowed = role === 'master' || role === 'superadmin' || (role === 'admin' && (perms?.canManageDailyEntry ?? true))
+  if (!session || !isAllowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -216,8 +217,9 @@ export async function POST(req: NextRequest) {
       const agentName = String(row[iAgent]).trim()
       const signed = iSigned !== -1 ? Number(row[iSigned]) || 0 : 0
 
-      // Ensure agent exists and is active in agents table with correct LOB matching the sheet
-      const agentLob = isSSDSheet ? 'SSD' : 'VA'
+      // Ensure agent exists and is active in agents table with correct LOB matching the user's account
+      const userMatch = db.prepare("SELECT role, lob FROM users WHERE LOWER(TRIM(display_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(username)) = LOWER(TRIM(?))").get(agentName, agentName) as { role?: string; lob?: string } | undefined
+      const agentLob = userMatch?.lob || (isSSDSheet ? 'SSD' : 'VA')
       const actResult = db.prepare('UPDATE agents SET active = 1, lob = ? WHERE name = ?').run(agentLob, agentName)
       if (actResult.changes === 0) {
         db.prepare('INSERT INTO agents (name, active, lob) VALUES (?, 1, ?)').run(agentName, agentLob)

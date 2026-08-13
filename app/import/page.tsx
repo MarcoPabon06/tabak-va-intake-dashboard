@@ -1,13 +1,35 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
 
 export default function ImportPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const userRole = (session?.user as any)?.role || 'regular'
+  const userPerms = (session?.user as any)?.permissions
+
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ imported?: number; skipped?: number; error?: string } | null>(null)
   const [dragging, setDragging] = useState(false)
+
+  // Auth guard: redirect non-authorized users
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login')
+    } else if (status === 'authenticated') {
+      if (userRole === 'regular' && !userPerms?.canManageDailyEntry) {
+        router.replace('/dashboard')
+      } else if (userRole === 'admin' && userPerms?.canManageDailyEntry === false) {
+        router.replace('/dashboard')
+      } else if (userRole === 'qa') {
+        router.replace('/dashboard')
+      }
+    }
+  }, [status, userRole, userPerms, router])
 
   async function handleUpload() {
     if (!file) return

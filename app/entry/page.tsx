@@ -63,14 +63,20 @@ export default function EntryPage() {
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userPerms = (session?.user as any)?.permissions
-  const isManager = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && Boolean(userPerms?.canManageDailyEntry))
+  const isManager = userRole === 'master' || userRole === 'superadmin' || (userRole === 'admin' && (userPerms?.canManageDailyEntry ?? true))
 
-  // Auth guard: redirect non-authorized regular users
+  // Auth guard: redirect non-authorized users
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.replace('/login')
-    } else if (status === 'authenticated' && userRole === 'regular' && !userPerms?.canManageDailyEntry) {
-      router.replace('/dashboard')
+    } else if (status === 'authenticated') {
+      if (userRole === 'regular' && !userPerms?.canManageDailyEntry) {
+        router.replace('/dashboard')
+      } else if (userRole === 'admin' && userPerms?.canManageDailyEntry === false) {
+        router.replace('/dashboard')
+      } else if (userRole === 'qa') {
+        router.replace('/dashboard')
+      }
     }
   }, [status, userRole, userPerms, router])
 
