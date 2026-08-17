@@ -512,7 +512,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12, marginBottom: 32 }}>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -532,6 +532,9 @@ export default function SettingsPage() {
                   {saving ? 'Saving…' : 'Save Target Settings & Webhook Config'}
                 </button>
               </div>
+
+              {/* Security Suite & Upload Audit Trail */}
+              <SecurityAuditTrailCard />
             </>
           )}
         </div>
@@ -561,3 +564,130 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+function SecurityAuditTrailCard() {
+  const [logs, setLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/audit-logs?limit=25')
+      .then((res) => (res.ok ? res.json() : { logs: [] }))
+      .then((data) => setLogs(data.logs || []))
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function formatBytes(bytes: number) {
+    if (!bytes) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  }
+
+  function getStatusBadge(status: string) {
+    if (status === 'SUCCESS') {
+      return <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}>✅ SUCCESS</span>
+    }
+    return <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>❌ REJECTED</span>
+  }
+
+  function formatUploadType(type: string) {
+    switch (type) {
+      case 'call_report': return '📞 CRM Call Report'
+      case 'eod_report': return '📊 EOD Report'
+      case 'va_leads': return '📑 VA Leads'
+      case 'apps_team': return '📲 Apps Team'
+      case 'qa_scores': return '📋 QA Scores'
+      default: return type
+    }
+  }
+
+  return (
+    <div className="glass-card" style={{ padding: '24px', borderColor: 'rgba(59,130,246,0.3)', marginTop: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 8 }}>
+            🛡️ File Upload Security Suite & Audit Trail
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+            Zero-persistence in-memory processing, binary magic byte authentication, formula injection neutralization, and immutable upload history.
+          </p>
+        </div>
+      </div>
+
+      {/* Security Status Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Magic Byte Verification</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Binary header check (PK\x03\x04)</div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Formula Injection Shield</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Neutralizes =, +, -, @, | triggers</div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Zero Disk Persistence</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Parsed in RAM; no files saved</div>
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Phone & PII Auto-Mask</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Redacts phone numbers in notes</div>
+        </div>
+      </div>
+
+      {/* Audit Log Table */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16 }}>
+        <h4 style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', marginBottom: 12 }}>
+          Recent File Upload Events
+        </h4>
+
+        {loading ? (
+          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 20 }}>
+            ⏳ Loading upload audit trail...
+          </div>
+        ) : logs.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 20 }}>
+            No upload audit events recorded yet.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, textAlign: 'left' }}>
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <th style={{ padding: '8px 10px' }}>Timestamp</th>
+                  <th style={{ padding: '8px 10px' }}>User</th>
+                  <th style={{ padding: '8px 10px' }}>Type</th>
+                  <th style={{ padding: '8px 10px' }}>File Name</th>
+                  <th style={{ padding: '8px 10px' }}>Size</th>
+                  <th style={{ padding: '8px 10px' }}>Rows</th>
+                  <th style={{ padding: '8px 10px' }}>SHA-256 Hash</th>
+                  <th style={{ padding: '8px 10px', textAlign: 'right' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{log.created_at}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 600, color: '#fff' }}>{log.user_name || log.username}</td>
+                    <td style={{ padding: '8px 10px', color: '#cbd5e1' }}>{formatUploadType(log.upload_type)}</td>
+                    <td style={{ padding: '8px 10px', color: '#60a5fa', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.filename}>
+                      {log.filename}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{formatBytes(log.file_size_bytes)}</td>
+                    <td style={{ padding: '8px 10px', color: '#fff', fontWeight: 700 }}>{log.rows_processed}</td>
+                    <td style={{ padding: '8px 10px', fontFamily: 'monospace', color: '#64748b', fontSize: 10 }} title={log.file_hash_sha256}>
+                      {log.file_hash_sha256 ? `${log.file_hash_sha256.slice(0, 10)}...` : '—'}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>{getStatusBadge(log.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+

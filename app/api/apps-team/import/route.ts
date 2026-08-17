@@ -58,6 +58,7 @@ function standardizeReason(rawReason: any): { category: string; other: string } 
 }
 
 import { isAuthorizedForAppsTeam } from '../route'
+import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -77,6 +78,27 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
+
+    // Security: File Size & Magic Byte Verification
+    const validation = validateFileUpload(buffer, file.name, {
+      maxSizeBytes: 15 * 1024 * 1024,
+      allowedTypes: ['xlsx', 'xls'],
+    })
+
+    if (!validation.isValid) {
+      recordUploadAudit({
+        username: (session.user as any)?.email || session.user?.name || 'unknown',
+        userName: session.user?.name || undefined,
+        uploadType: 'apps_team',
+        filename: file.name,
+        buffer,
+        rowsProcessed: 0,
+        status: 'REJECTED',
+        details: validation.error,
+      })
+      return NextResponse.json({ error: validation.error }, { status: 400 })
+    }
+
     const workbook = xlsx.read(buffer, { type: 'buffer' })
     const sheetName = workbook.Sheets['Matrix'] ? 'Matrix' : workbook.SheetNames[0]
     const sheet = workbook.Sheets[sheetName]
@@ -114,9 +136,9 @@ export async function POST(req: NextRequest) {
         const leadIdRaw = r['Lead ID']
         if (!leadIdRaw) continue
 
-        const leadId = String(leadIdRaw).trim()
-        const clientName = String(r["Lead's Name"] || 'Unknown Client').trim()
-        const rawRepName = String(r['Apps Representative'] || 'Apps Rep').trim()
+        const leadId = sanitizeCellText(String(leadIdRaw))
+        const clientName = sanitizeCellText(String(r["Lead's Name"] || 'Unknown Client'))
+        const rawRepName = sanitizeCellText(String(r['Apps Representative'] || 'Apps Rep'))
         const { rep_name: repName, rep_username: repUsername } = normalizeRepInfo(rawRepName)
         const dateCompleted = parseExcelDate(r['Date'])
         
@@ -135,13 +157,25 @@ export async function POST(req: NextRequest) {
           dateCompleted,
           converted,
           converted === 'NO' ? category : null,
-          converted === 'NO' ? other : null,
+          converted === 'NO' ? (other ? sanitizeCellText(other) : null) : null,
           repUsername,
           repName
         )
         totalProcessed++
       }
     })()
+
+    // Security: Record Upload Audit Log
+    recordUploadAudit({
+      username: (session.user as any)?.email || session.user?.name || 'unknown',
+      userName: session.user?.name || undefined,
+      uploadType: 'apps_team',
+      filename: file.name,
+      buffer,
+      rowsProcessed: totalProcessed,
+      status: 'SUCCESS',
+      details: `Processed ${totalProcessed} application entries (${convertedCount} Converted, ${pendingCount} Pending).`,
+    })
 
     return NextResponse.json({
       success: true,

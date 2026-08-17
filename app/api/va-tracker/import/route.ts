@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedForVaTracker, VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '../route'
+import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
 
 function parseDateString(str: string): string {
   str = str.trim()
@@ -80,6 +81,27 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  // Security: File Size & Magic Byte Verification
+  const validation = validateFileUpload(buffer, file.name, {
+    maxSizeBytes: 15 * 1024 * 1024,
+    allowedTypes: ['xlsx', 'xls'],
+  })
+
+  if (!validation.isValid) {
+    recordUploadAudit({
+      username: (session.user as any)?.email || session.user?.name || 'unknown',
+      userName: session.user?.name || undefined,
+      uploadType: 'va_leads',
+      filename: file.name,
+      buffer,
+      rowsProcessed: 0,
+      status: 'REJECTED',
+      details: validation.error,
+    })
+    return NextResponse.json({ error: validation.error }, { status: 400 })
+  }
+
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
 
   const sheetName = workbook.SheetNames[0]
@@ -163,7 +185,7 @@ export async function POST(req: NextRequest) {
     for (const row of dataRows) {
       if (!row || !Array.isArray(row) || row.length === 0) continue
 
-      const veteranName = row[iVeteran] ? String(row[iVeteran]).trim() : ''
+      let veteranName = row[iVeteran] ? String(row[iVeteran]).trim() : ''
       if (!veteranName) {
         skipped++
         continue
@@ -192,8 +214,11 @@ export async function POST(req: NextRequest) {
       const rawReason = row[iReason] ? String(row[iReason]).trim() : ''
       const outcomeReason = rawReason ? normalizeOutcomeReason(rawReason) : null
 
-      const otherNotes = row[iOtherNotes] ? String(row[iOtherNotes]).trim() : null
+      let otherNotes = row[iOtherNotes] ? String(row[iOtherNotes]).trim() : null
       const signedAt = status === 'Signed E-Sign' ? `${dateStr} 12:00:00` : null
+
+      otherNotes = otherNotes ? maskSensitivePII(otherNotes) : null
+      veteranName = sanitizeCellText(veteranName)
 
       // Check if duplicate exists with same lead_id or veteran_name + date + rep
       let existing: any
@@ -236,6 +261,18 @@ export async function POST(req: NextRequest) {
   })
 
   importAll()
+
+  // Security: Record Upload Audit Log
+  recordUploadAudit({
+    username: (session.user as any)?.email || session.user?.name || 'unknown',
+    userName: session.user?.name || undefined,
+    uploadType: 'va_leads',
+    filename: file.name,
+    buffer,
+    rowsProcessed: imported,
+    status: 'SUCCESS',
+    details: `Imported ${imported} VA lead records from spreadsheet (skipped ${skipped} rows).`,
+  })
 
   return NextResponse.json({ success: true, imported, skipped })
 }

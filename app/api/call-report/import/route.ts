@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
 
 function parseDateString(str: string): string {
   str = str.trim()
@@ -83,6 +84,27 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  // Security: File Size & Magic Byte Verification
+  const validation = validateFileUpload(buffer, file.name, {
+    maxSizeBytes: 15 * 1024 * 1024,
+    allowedTypes: ['xlsx', 'xls'],
+  })
+
+  if (!validation.isValid) {
+    recordUploadAudit({
+      username: (session.user as any)?.email || session.user?.name || 'unknown',
+      userName: session.user?.name || undefined,
+      uploadType: 'call_report',
+      filename: file.name,
+      buffer,
+      rowsProcessed: 0,
+      status: 'REJECTED',
+      details: validation.error,
+    })
+    return NextResponse.json({ error: validation.error }, { status: 400 })
+  }
+
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
 
   // Find target sheet (Call Report or first sheet)
@@ -266,6 +288,18 @@ export async function POST(req: NextRequest) {
   })
 
   updateDb()
+
+  // Security: Record Upload Audit Log
+  recordUploadAudit({
+    username: (session.user as any)?.email || session.user?.name || 'unknown',
+    userName: session.user?.name || undefined,
+    uploadType: 'call_report',
+    filename: file.name,
+    buffer,
+    rowsProcessed: totalProcessedRows,
+    status: 'SUCCESS',
+    details: `Processed ${totalProcessedRows} calls across ${summaryResults.length} specialist records.`,
+  })
 
   return NextResponse.json({
     success: true,

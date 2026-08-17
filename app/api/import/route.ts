@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
 
 function parseDateString(str: string): string {
   str = str.trim()
@@ -58,6 +59,27 @@ export async function POST(req: NextRequest) {
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
+
+  // Security: File Size & Magic Byte Verification
+  const validation = validateFileUpload(buffer, file.name, {
+    maxSizeBytes: 15 * 1024 * 1024,
+    allowedTypes: ['xlsx', 'xls'],
+  })
+
+  if (!validation.isValid) {
+    recordUploadAudit({
+      username: (session.user as any)?.email || session.user?.name || 'unknown',
+      userName: session.user?.name || undefined,
+      uploadType: 'eod_report',
+      filename: file.name,
+      buffer,
+      rowsProcessed: 0,
+      status: 'REJECTED',
+      details: validation.error,
+    })
+    return NextResponse.json({ error: validation.error }, { status: 400 })
+  }
+
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true })
 
   // Identify the target sheet name
@@ -273,6 +295,18 @@ export async function POST(req: NextRequest) {
   })
 
   importAll()
+
+  // Security: Record Upload Audit Log
+  recordUploadAudit({
+    username: (session.user as any)?.email || session.user?.name || 'unknown',
+    userName: session.user?.name || undefined,
+    uploadType: 'eod_report',
+    filename: file.name,
+    buffer,
+    rowsProcessed: imported,
+    status: 'SUCCESS',
+    details: `Imported ${imported} records from ${sheetName} sheet (skipped ${skipped} rows).`,
+  })
 
   return NextResponse.json({ success: true, imported, skipped })
 }

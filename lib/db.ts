@@ -238,6 +238,25 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_va_leads_rep ON va_lead_records(rep_username);
     CREATE INDEX IF NOT EXISTS idx_va_leads_status ON va_lead_records(status);
     CREATE INDEX IF NOT EXISTS idx_va_leads_lead_id ON va_lead_records(lead_id);
+
+    CREATE TABLE IF NOT EXISTS upload_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT NOT NULL,
+      user_name TEXT,
+      upload_type TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      file_size_bytes INTEGER NOT NULL,
+      file_hash_sha256 TEXT NOT NULL,
+      rows_processed INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'SUCCESS',
+      details TEXT,
+      ip_address TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_upload_audit_user ON upload_audit_logs(username);
+    CREATE INDEX IF NOT EXISTS idx_upload_audit_type ON upload_audit_logs(upload_type);
+    CREATE INDEX IF NOT EXISTS idx_upload_audit_date ON upload_audit_logs(created_at);
   `)
 
   // Run self-healing schema migrations for new columns

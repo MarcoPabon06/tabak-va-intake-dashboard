@@ -5,6 +5,7 @@ import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { sendNotification } from '@/lib/notifications'
 import { sendQAUploadWebhookNotification } from '@/lib/webhook'
+import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
 
 function getTier(score: number): string {
   if (score >= 90) return 'Top Performer'
@@ -50,6 +51,27 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
 
     const buffer = Buffer.from(await file.arrayBuffer())
+
+    // Security: File Size & Magic Byte Verification
+    const validation = validateFileUpload(buffer, file.name, {
+      maxSizeBytes: 15 * 1024 * 1024,
+      allowedTypes: ['xlsx', 'xls'],
+    })
+
+    if (!validation.isValid) {
+      recordUploadAudit({
+        username: (session.user as any)?.email || session.user?.name || 'unknown',
+        userName: session.user?.name || undefined,
+        uploadType: 'qa_scores',
+        filename: file.name,
+        buffer,
+        rowsProcessed: 0,
+        status: 'REJECTED',
+        details: validation.error,
+      })
+      return NextResponse.json({ error: validation.error }, { status: 400 })
+    }
+
     const wb = XLSX.read(buffer, { type: 'buffer' })
 
     const db = getDb()
@@ -382,6 +404,18 @@ export async function POST(req: NextRequest) {
         tier
       })
     }
+
+    // Security: Record Upload Audit Log
+    recordUploadAudit({
+      username: (session.user as any)?.email || session.user?.name || 'unknown',
+      userName: session.user?.name || undefined,
+      uploadType: 'qa_scores',
+      filename: file.name,
+      buffer,
+      rowsProcessed: importedCount,
+      status: 'SUCCESS',
+      details: `Imported ${importedCount} QA evaluations.`,
+    })
 
     return NextResponse.json({
       success: true,
