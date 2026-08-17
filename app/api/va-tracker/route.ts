@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
+import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
 
 // Valid statuses & outcome reasons
 export const VA_STATUS_OPTIONS = [
@@ -181,191 +182,214 @@ export async function GET(req: NextRequest) {
 
 // POST /api/va-tracker — Log a new lead record
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (!isAuthorizedForVaTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isAuthorizedForVaTracker(session)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-  const body = await req.json()
-  const {
-    veteran_name,
-    lead_id,
-    date,
-    status,
-    outcome_reason,
-    other_reason_notes,
-    rep_name: customRepName,
-  } = body
+    const body = await req.json()
+    const {
+      veteran_name,
+      lead_id,
+      date,
+      status,
+      outcome_reason,
+      other_reason_notes,
+      rep_name: customRepName,
+    } = body
 
-  if (!veteran_name || !veteran_name.trim()) {
-    return NextResponse.json({ error: "Veteran's Name is required" }, { status: 400 })
-  }
-  if (!date) {
-    return NextResponse.json({ error: 'Date is required' }, { status: 400 })
-  }
-  if (!status || !VA_STATUS_OPTIONS.includes(status)) {
-    return NextResponse.json({ error: 'Valid status is required' }, { status: 400 })
-  }
+    if (!veteran_name || !veteran_name.trim()) {
+      return NextResponse.json({ error: "Veteran's Name is required" }, { status: 400 })
+    }
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 })
+    }
+    if (!status || !VA_STATUS_OPTIONS.includes(status)) {
+      return NextResponse.json({ error: 'Valid status is required' }, { status: 400 })
+    }
 
-  const userRole = (session.user as any)?.role || 'regular'
-  const sessionDisplayName = session.user?.name || 'VA Specialist'
-  const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || 'va_user'
+    const userRole = (session.user as any)?.role || 'regular'
+    const sessionDisplayName = session.user?.name || 'VA Specialist'
+    const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || 'va_user'
 
-  const repName = (userRole === 'master' || userRole === 'superadmin' || userRole === 'admin') && customRepName
-    ? customRepName.trim()
-    : sessionDisplayName
+    const repName = (userRole === 'master' || userRole === 'superadmin' || userRole === 'admin') && customRepName
+      ? customRepName.trim()
+      : sessionDisplayName
 
-  const repUsername = (userRole === 'master' || userRole === 'superadmin' || userRole === 'admin') && customRepName
-    ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '')
-    : sessionUsername
+    const repUsername = (userRole === 'master' || userRole === 'superadmin' || userRole === 'admin') && customRepName
+      ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '')
+      : sessionUsername
 
-  const signedAt = status === 'Signed E-Sign' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+    const signedAt = status === 'Signed E-Sign' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
 
-  const db = getDb()
-  const insert = db.prepare(`
-    INSERT INTO va_lead_records (
-      rep_name, rep_username, veteran_name, lead_id, date, status, outcome_reason, other_reason_notes, signed_at, last_edited_by
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    const sanitizedVeteranName = sanitizeCellText(veteran_name.trim())
+    const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
+    const sanitizedNotes = other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null
+
+    const db = getDb()
+    const insert = db.prepare(`
+      INSERT INTO va_lead_records (
+        rep_name, rep_username, veteran_name, lead_id, date, status, outcome_reason, other_reason_notes, signed_at, last_edited_by
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `)
+
+    const result = insert.run(
+      repName,
+      repUsername,
+      sanitizedVeteranName,
+      sanitizedLeadId,
+      date,
+      status,
+      outcome_reason || null,
+      sanitizedNotes,
+      signedAt,
+      sessionDisplayName
     )
-  `)
 
-  const result = insert.run(
-    repName,
-    repUsername,
-    veteran_name.trim(),
-    lead_id ? lead_id.trim() : null,
-    date,
-    status,
-    outcome_reason || null,
-    other_reason_notes ? other_reason_notes.trim() : null,
-    signedAt,
-    sessionDisplayName
-  )
-
-  return NextResponse.json({ success: true, id: result.lastInsertRowid })
+    return NextResponse.json({ success: true, id: result.lastInsertRowid })
+  } catch (err: any) {
+    console.error('[va-tracker POST error]:', err)
+    return NextResponse.json({ error: err.message || 'Failed to save lead record' }, { status: 500 })
+  }
 }
 
 // PUT /api/va-tracker — Update existing lead record (e.g. mark Signed, edit outcome reason)
 export async function PUT(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isAuthorizedForVaTracker(session)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const {
+      id,
+      veteran_name,
+      lead_id,
+      date,
+      status,
+      outcome_reason,
+      other_reason_notes,
+      rep_name: customRepName,
+    } = body
+
+    if (!id) {
+      return NextResponse.json({ error: 'Record ID is required' }, { status: 400 })
+    }
+
+    const db = getDb()
+    const existing = db.prepare(`SELECT * FROM va_lead_records WHERE id = ?`).get(id) as any
+    if (!existing) {
+      return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+    }
+
+    const userRole = (session.user as any)?.role || 'regular'
+    const userLob = (session.user as any)?.lob || 'VA'
+    const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || ''
+    const sessionDisplayName = session.user?.name || ''
+
+    // Specialist can only edit their own records; Managers can edit any
+    if (userRole === 'regular' && userLob === 'VA' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
+      return NextResponse.json({ error: 'Forbidden: You can only edit your own lead records' }, { status: 403 })
+    }
+
+    const newStatus = status || existing.status
+    let signedAt = existing.signed_at
+    if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
+      signedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    } else if (newStatus !== 'Signed E-Sign' && existing.status === 'Signed E-Sign') {
+      signedAt = null
+    }
+
+    const repName = customRepName ? customRepName.trim() : existing.rep_name
+    const repUsername = customRepName ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '') : existing.rep_username
+
+    const sanitizedVeteranName = veteran_name ? sanitizeCellText(veteran_name.trim()) : existing.veteran_name
+    const sanitizedLeadId = lead_id !== undefined ? (lead_id ? sanitizeCellText(lead_id.trim()) : null) : existing.lead_id
+    const sanitizedNotes = other_reason_notes !== undefined ? (other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null) : existing.other_reason_notes
+
+    const update = db.prepare(`
+      UPDATE va_lead_records SET
+        rep_name = ?,
+        rep_username = ?,
+        veteran_name = ?,
+        lead_id = ?,
+        date = ?,
+        status = ?,
+        outcome_reason = ?,
+        other_reason_notes = ?,
+        signed_at = ?,
+        updated_at = (datetime('now')),
+        last_edited_by = ?
+      WHERE id = ?
+    `)
+
+    update.run(
+      repName,
+      repUsername,
+      sanitizedVeteranName,
+      sanitizedLeadId,
+      date || existing.date,
+      newStatus,
+      outcome_reason !== undefined ? (outcome_reason || null) : existing.outcome_reason,
+      sanitizedNotes,
+      signedAt,
+      sessionDisplayName,
+      id
+    )
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    console.error('[va-tracker PUT error]:', err)
+    return NextResponse.json({ error: err.message || 'Failed to update lead record' }, { status: 500 })
   }
-  if (!isAuthorizedForVaTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
-  const body = await req.json()
-  const {
-    id,
-    veteran_name,
-    lead_id,
-    date,
-    status,
-    outcome_reason,
-    other_reason_notes,
-    rep_name: customRepName,
-  } = body
-
-  if (!id) {
-    return NextResponse.json({ error: 'Record ID is required' }, { status: 400 })
-  }
-
-  const db = getDb()
-  const existing = db.prepare(`SELECT * FROM va_lead_records WHERE id = ?`).get(id) as any
-  if (!existing) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 })
-  }
-
-  const userRole = (session.user as any)?.role || 'regular'
-  const userLob = (session.user as any)?.lob || 'VA'
-  const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || ''
-  const sessionDisplayName = session.user?.name || ''
-
-  // Specialist can only edit their own records; Managers can edit any
-  if (userRole === 'regular' && userLob === 'VA' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
-    return NextResponse.json({ error: 'Forbidden: You can only edit your own lead records' }, { status: 403 })
-  }
-
-  const newStatus = status || existing.status
-  let signedAt = existing.signed_at
-  if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
-    signedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  } else if (newStatus !== 'Signed E-Sign' && existing.status === 'Signed E-Sign') {
-    signedAt = null
-  }
-
-  const repName = customRepName ? customRepName.trim() : existing.rep_name
-  const repUsername = customRepName ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '') : existing.rep_username
-
-  const update = db.prepare(`
-    UPDATE va_lead_records SET
-      rep_name = ?,
-      rep_username = ?,
-      veteran_name = ?,
-      lead_id = ?,
-      date = ?,
-      status = ?,
-      outcome_reason = ?,
-      other_reason_notes = ?,
-      signed_at = ?,
-      updated_at = (datetime('now')),
-      last_edited_by = ?
-    WHERE id = ?
-  `)
-
-  update.run(
-    repName,
-    repUsername,
-    veteran_name ? veteran_name.trim() : existing.veteran_name,
-    lead_id !== undefined ? (lead_id ? lead_id.trim() : null) : existing.lead_id,
-    date || existing.date,
-    newStatus,
-    outcome_reason !== undefined ? outcome_reason : existing.outcome_reason,
-    other_reason_notes !== undefined ? (other_reason_notes ? other_reason_notes.trim() : null) : existing.other_reason_notes,
-    signedAt,
-    sessionDisplayName,
-    id
-  )
-
-  return NextResponse.json({ success: true, id, status: newStatus, signed_at: signedAt })
 }
 
 // DELETE /api/va-tracker?id=X — Delete lead record
 export async function DELETE(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (!isAuthorizedForVaTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!isAuthorizedForVaTracker(session)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-  const { searchParams } = new URL(req.url)
-  const id = searchParams.get('id')
-  if (!id) {
-    return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
+    }
+
+    const db = getDb()
+    const existing = db.prepare(`SELECT * FROM va_lead_records WHERE id = ?`).get(id) as any
+    if (!existing) {
+      return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+    }
+
+    const userRole = (session.user as any)?.role || 'regular'
+    const userLob = (session.user as any)?.lob || 'VA'
+    const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || ''
+    const sessionDisplayName = session.user?.name || ''
+
+    if (userRole === 'regular' && userLob === 'VA' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
+      return NextResponse.json({ error: 'Forbidden: You can only delete your own lead records' }, { status: 403 })
+    }
+
+    db.prepare(`DELETE FROM va_lead_records WHERE id = ?`).run(id)
+    return NextResponse.json({ success: true, deletedId: id })
+  } catch (err: any) {
+    console.error('[va-tracker DELETE error]:', err)
+    return NextResponse.json({ error: err.message || 'Failed to delete lead record' }, { status: 500 })
   }
-
-  const db = getDb()
-  const existing = db.prepare(`SELECT * FROM va_lead_records WHERE id = ?`).get(id) as any
-  if (!existing) {
-    return NextResponse.json({ error: 'Record not found' }, { status: 404 })
-  }
-
-  const userRole = (session.user as any)?.role || 'regular'
-  const userLob = (session.user as any)?.lob || 'VA'
-  const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || ''
-  const sessionDisplayName = session.user?.name || ''
-
-  if (userRole === 'regular' && userLob === 'VA' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
-    return NextResponse.json({ error: 'Forbidden: You can only delete your own lead records' }, { status: 403 })
-  }
-
-  db.prepare(`DELETE FROM va_lead_records WHERE id = ?`).run(id)
-  return NextResponse.json({ success: true, deletedId: id })
 }

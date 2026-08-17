@@ -60,6 +60,27 @@ const PRESETS = [
   { label: 'All time', getValue: () => ({ from: '2024-01-01', to: '2099-12-31' }) },
 ]
 
+/**
+ * Safe JSON fetch utility to gracefully handle non-JSON / 429 rate limit responses.
+ */
+async function safeFetchJson(url: string, options?: RequestInit) {
+  const res = await fetch(url, options)
+  const text = await res.text()
+  let data: any = {}
+  try {
+    data = JSON.parse(text)
+  } catch {
+    if (res.status === 429 || text.toLowerCase().includes('rate limit')) {
+      throw new Error('Server rate limit reached. Please wait a moment and try again.')
+    }
+    throw new Error(text || `Server error (${res.status})`)
+  }
+  if (!res.ok) {
+    throw new Error(data?.error || `Request failed (${res.status})`)
+  }
+  return data
+}
+
 export default function VaTrackerPage() {
   const { data: session } = useSession()
   const [entries, setEntries] = useState<VaLeadRecord[]>([])
@@ -86,6 +107,7 @@ export default function VaTrackerPage() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [reasonFilter, setReasonFilter] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [viewTab, setViewTab] = useState<'all' | 'pending' | 'signed' | 'refused'>('all')
 
   // Modals
@@ -98,6 +120,14 @@ export default function VaTrackerPage() {
   const userLob = (session?.user as any)?.lob || 'VA'
   const isMaster = userRole === 'master' || userRole === 'superadmin' || userRole === 'admin'
 
+  // Debounce search query to prevent high-frequency API flooding
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [searchQuery])
+
   const fetchTrackerData = useCallback(async () => {
     setLoading(true)
     try {
@@ -107,33 +137,30 @@ export default function VaTrackerPage() {
       if (selectedRep && selectedRep !== 'All') params.set('rep', selectedRep)
       if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter)
       if (reasonFilter && reasonFilter !== 'All') params.set('reason', reasonFilter)
-      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+      if (debouncedSearch) params.set('search', debouncedSearch)
 
-      const res = await fetch(`/api/va-tracker?${params.toString()}`)
-      const json = await res.json()
+      const json = await safeFetchJson(`/api/va-tracker?${params.toString()}`)
 
-      if (res.ok) {
-        setEntries(json.entries || [])
-        setSummary(json.summary || {
-          total_leads: 0,
-          sent_esigns: 0,
-          follow_ups: 0,
-          pending_signatures: 0,
-          signed_esigns: 0,
-          crh_count: 0,
-          rejected_count: 0,
-          conversion_rate: 0,
-          reasons_breakdown: {},
-        })
-        setRepsList(json.reps_list || [])
-        setIsPersonalView(Boolean(json.is_personal_view))
-      }
-    } catch {
-      // ignore
+      setEntries(json.entries || [])
+      setSummary(json.summary || {
+        total_leads: 0,
+        sent_esigns: 0,
+        follow_ups: 0,
+        pending_signatures: 0,
+        signed_esigns: 0,
+        crh_count: 0,
+        rejected_count: 0,
+        conversion_rate: 0,
+        reasons_breakdown: {},
+      })
+      setRepsList(json.reps_list || [])
+      setIsPersonalView(Boolean(json.is_personal_view))
+    } catch (err: any) {
+      console.error('Failed to fetch VA tracker data:', err.message)
     } finally {
       setLoading(false)
     }
-  }, [from, to, selectedRep, statusFilter, reasonFilter, searchQuery])
+  }, [from, to, selectedRep, statusFilter, reasonFilter, debouncedSearch])
 
   useEffect(() => {
     fetchTrackerData()
@@ -147,7 +174,7 @@ export default function VaTrackerPage() {
   // Quick 1-click Mark Signed
   async function handleMarkSigned(record: VaLeadRecord) {
     try {
-      const res = await fetch('/api/va-tracker', {
+      await safeFetchJson('/api/va-tracker', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -155,12 +182,10 @@ export default function VaTrackerPage() {
           status: 'Signed E-Sign',
         }),
       })
-      if (res.ok) {
-        showBannerMessage(`✅ Successfully converted "${record.veteran_name}" to Signed E-Sign!`)
-        fetchTrackerData()
-      }
-    } catch {
-      // ignore
+      showBannerMessage(`✅ Successfully converted "${record.veteran_name}" to Signed E-Sign!`)
+      fetchTrackerData()
+    } catch (err: any) {
+      alert(`Error updating lead: ${err.message}`)
     }
   }
 
@@ -168,13 +193,11 @@ export default function VaTrackerPage() {
   async function handleDeleteRecord(id: number, name: string) {
     if (!confirm(`Are you sure you want to delete lead record for "${name}"?`)) return
     try {
-      const res = await fetch(`/api/va-tracker?id=${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        showBannerMessage(`🗑️ Record for "${name}" deleted.`)
-        fetchTrackerData()
-      }
-    } catch {
-      // ignore
+      await safeFetchJson(`/api/va-tracker?id=${id}`, { method: 'DELETE' })
+      showBannerMessage(`🗑️ Record for "${name}" deleted.`)
+      fetchTrackerData()
+    } catch (err: any) {
+      alert(`Error deleting record: ${err.message}`)
     }
   }
 
@@ -736,7 +759,7 @@ function LogLeadModal({
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch('/api/va-tracker', {
+      await safeFetchJson('/api/va-tracker', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -749,8 +772,6 @@ function LogLeadModal({
           rep_name: isMaster && repName ? repName : undefined,
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to save lead record')
       onSaved()
     } catch (err: any) {
       setError(err.message)
@@ -808,7 +829,7 @@ function LogLeadModal({
             <input
               type="text"
               required
-              placeholder="e.g. John Doe"
+              placeholder="e.g. Byron Clayton"
               value={veteranName}
               onChange={(e) => setVeteranName(e.target.value)}
               className="input-field"
@@ -821,7 +842,7 @@ function LogLeadModal({
               <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Lead ID</label>
               <input
                 type="text"
-                placeholder="e.g. 104829"
+                placeholder="e.g. 812933"
                 value={leadId}
                 onChange={(e) => setLeadId(e.target.value)}
                 className="input-field"
@@ -875,7 +896,7 @@ function LogLeadModal({
             <textarea
               value={otherReasonNotes}
               onChange={(e) => setOtherReasonNotes(e.target.value)}
-              placeholder="Free-hand notes, veteran follow-up details..."
+              placeholder="e.g. 100% RATED, veteran follow-up details..."
               rows={3}
               className="input-field"
               style={{ margin: 0, fontSize: 13, resize: 'vertical' }}
@@ -925,7 +946,7 @@ function EditLeadModal({
     setSubmitting(true)
     setError('')
     try {
-      const res = await fetch('/api/va-tracker', {
+      await safeFetchJson('/api/va-tracker', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -939,8 +960,6 @@ function EditLeadModal({
           rep_name: isMaster && repName ? repName : undefined,
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to update lead record')
       onSaved()
     } catch (err: any) {
       setError(err.message)
@@ -1097,9 +1116,7 @@ function ImportExcelModal({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const res = await fetch('/api/va-tracker/import', { method: 'POST', body: formData })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to import spreadsheet')
+      const json = await safeFetchJson('/api/va-tracker/import', { method: 'POST', body: formData })
       onImported(json.imported || 0)
     } catch (err: any) {
       setError(err.message)
