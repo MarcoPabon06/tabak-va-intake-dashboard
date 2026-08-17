@@ -245,14 +245,8 @@ export default function EntryPage() {
       ] as const
     }
     return [
-      { key: 'capd', label: 'CAPD', hint: 'Calls made' },
-      { key: 'inbound_calls', label: 'Inbound', hint: 'Inbound calls' },
-      { key: 'case_rejected', label: 'Rejected', hint: 'Cases rejected' },
-      { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
-      { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
-      { key: 'unsigned_retainers', label: 'Unsigned', hint: 'Unsigned retainers' },
-      { key: 'ura', label: 'URA', hint: 'Unnecessary Req. Assistance' },
-      { key: 'reprocess', label: 'Reprocess', hint: 'Times reprocessed' },
+      { key: 'capd', label: 'CAPD (Calls Made)', hint: 'Total calls made' },
+      { key: 'inbound_calls', label: 'Inbound Calls', hint: 'Inbound calls answered' },
     ] as const
   }
 
@@ -431,13 +425,14 @@ export default function EntryPage() {
                             </div>
                           )
                         ) : (
-                          total > 0 && (
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                              Signed: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.signed_retainers}</span>
-                              {' / '}Total: <span style={{ fontWeight: 600 }}>{total}</span>
-                              {' · '}Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{rate}</span>
-                            </div>
-                          )
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                              📑 VA Tracker Live
+                            </span>
+                            <span>
+                              Signed: <strong style={{ color: '#10b981' }}>{entry.signed_retainers || 0}</strong> · Unsigned: <strong style={{ color: '#f59e0b' }}>{entry.unsigned_retainers || 0}</strong> · CRH: <strong style={{ color: '#c084fc' }}>{entry.crh || 0}</strong>
+                            </span>
+                          </div>
                         )}
                       </div>
 
