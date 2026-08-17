@@ -60,6 +60,8 @@ export default function EntryPage() {
   const [error, setError] = useState('')
   const [viewLob, setViewLob] = useState<string>('All')
   const [reloadCounter, setReloadCounter] = useState(0)
+  const [showQuickCallModal, setShowQuickCallModal] = useState(false)
+  const [quickCallSuccessMsg, setQuickCallSuccessMsg] = useState('')
 
   const userRole = (session?.user as any)?.role || 'regular'
   const userPerms = (session?.user as any)?.permissions
@@ -322,11 +324,24 @@ export default function EntryPage() {
               </select>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', fontSize: 13, fontWeight: 700, padding: '6px 14px' }}
+                onClick={() => setShowQuickCallModal(true)}
+              >
+                ⚡ Quick Import Call Report
+              </button>
               <button id="btn-reset" type="button" className="btn-secondary" onClick={resetForm}>Reset</button>
             </div>
           </div>
 
-          {/* Success/Error */}
+          {/* Success/Error / Quick Call Toast */}
+          {quickCallSuccessMsg && (
+            <div style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid #3b82f6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#60a5fa', fontSize: 14, fontWeight: 700 }}>
+              {quickCallSuccessMsg}
+            </div>
+          )}
           {success && (
             <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#10b981', fontSize: 14, fontWeight: 600 }}>
               ✅ Data saved successfully for {date}!
@@ -468,7 +483,103 @@ export default function EntryPage() {
           )}
         </div>
       </main>
+
+      {/* Quick Call Import Modal */}
+      {showQuickCallModal && (
+        <QuickCallImportModal
+          onClose={() => setShowQuickCallModal(false)}
+          onSuccess={(dateImported, count) => {
+            setShowQuickCallModal(false)
+            if (dateImported) setDate(dateImported)
+            setQuickCallSuccessMsg(`⚡ Successfully processed ${count} calls! Form updated for ${dateImported || date}.`)
+            setReloadCounter(prev => prev + 1)
+            setTimeout(() => setQuickCallSuccessMsg(''), 5000)
+          }}
+        />
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
+
+function QuickCallImportModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (date: string, count: number) => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleUpload = async () => {
+    if (!file) return
+    setLoading(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/call-report/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to process call report')
+      
+      const firstDate = json.agent_summaries?.[0]?.date || ''
+      onSuccess(firstDate, json.total_calls_processed || 0)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 20
+      }}
+      onClick={onClose}
+    >
+      <div
+        className="glass-card fade-in"
+        style={{ maxWidth: 500, width: '100%', padding: 28, background: '#0a1628', border: '1px solid var(--border)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#60a5fa' }}>⚡ Quick Import CRM Call Report</h3>
+          <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
+        </div>
+
+        {error && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, color: '#ef4444', fontSize: 13 }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <p style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.5, marginBottom: 16 }}>
+          Upload raw <span style={{ color: '#60a5fa', fontWeight: 700 }}>CallReport.xlsx</span> downloaded from the CRM. 
+          The system will automatically correct rep names (e.g. <em>"Daniel Castill"</em> ➔ <strong>Daniel Castillo</strong>), 
+          sum <strong>CAPD</strong> and <strong>Inbound</strong> call totals, and populate this form instantly.
+        </p>
+
+        <input
+          type="file"
+          accept=".xlsx, .xls"
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          style={{ marginBottom: 20, width: '100%', fontSize: 13, color: '#cbd5e1' }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary" onClick={handleUpload} disabled={!file || loading}>
+            {loading ? 'Processing...' : '⚡ Process & Populate'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
