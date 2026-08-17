@@ -159,8 +159,58 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Get distinct reps for dropdown filter
-  const repsList = db.prepare(`SELECT DISTINCT rep_name, rep_username FROM va_lead_records ORDER BY rep_name ASC`).all() as { rep_name: string; rep_username: string }[]
+  // Get all active VA Intake Reps from users, agents, and lead records
+  const vaUsers = db.prepare(`
+    SELECT username AS rep_username, display_name
+    FROM users 
+    WHERE (lob = 'VA' OR lob IS NULL) AND active = 1 AND role = 'regular'
+  `).all() as { rep_username: string; display_name: string | null }[]
+
+  const vaAgents = db.prepare(`
+    SELECT name 
+    FROM agents 
+    WHERE (lob = 'VA' OR lob IS NULL) AND (active = 1 OR active IS NULL)
+  `).all() as { name: string }[]
+
+  const historicalReps = db.prepare(`
+    SELECT DISTINCT rep_name, rep_username 
+    FROM va_lead_records 
+    WHERE rep_name IS NOT NULL AND rep_name != ''
+  `).all() as { rep_name: string; rep_username: string }[]
+
+  const repsMap = new Map<string, { rep_name: string; rep_username: string }>()
+
+  for (const u of vaUsers) {
+    const name = (u.display_name || u.rep_username || '').trim()
+    if (name) {
+      repsMap.set(name.toLowerCase(), {
+        rep_name: name,
+        rep_username: u.rep_username || name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      })
+    }
+  }
+
+  for (const a of vaAgents) {
+    const name = (a.name || '').trim()
+    if (name && !repsMap.has(name.toLowerCase())) {
+      repsMap.set(name.toLowerCase(), {
+        rep_name: name,
+        rep_username: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      })
+    }
+  }
+
+  for (const h of historicalReps) {
+    const name = (h.rep_name || '').trim()
+    if (name && !repsMap.has(name.toLowerCase())) {
+      repsMap.set(name.toLowerCase(), {
+        rep_name: name,
+        rep_username: h.rep_username || name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      })
+    }
+  }
+
+  const repsList = Array.from(repsMap.values()).sort((a, b) => a.rep_name.localeCompare(b.rep_name))
 
   return NextResponse.json({
     entries,
