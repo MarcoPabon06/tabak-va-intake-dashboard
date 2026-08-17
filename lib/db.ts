@@ -218,6 +218,26 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_apps_converted ON apps_team_entries(converted);
     CREATE INDEX IF NOT EXISTS idx_apps_converted_at ON apps_team_entries(converted_at);
     CREATE INDEX IF NOT EXISTS idx_apps_rep ON apps_team_entries(rep_username);
+
+    CREATE TABLE IF NOT EXISTS va_lead_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rep_name TEXT NOT NULL,
+      rep_username TEXT NOT NULL,
+      veteran_name TEXT NOT NULL,
+      lead_id TEXT,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('Sent E-Sign', 'Sign Follow Up', 'Signed E-Sign', 'Client Refused Help', 'Case Rejected')),
+      outcome_reason TEXT,
+      other_reason_notes TEXT,
+      signed_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      last_edited_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_va_leads_date ON va_lead_records(date);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_rep ON va_lead_records(rep_username);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_status ON va_lead_records(status);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_lead_id ON va_lead_records(lead_id);
   `)
 
   // Run self-healing schema migrations for new columns

@@ -17,6 +17,7 @@ export { AGENT_COLORS }
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { href: '/va-tracker', label: 'VA Tracker', icon: '📑' },
   { href: '/apps-team', label: 'Apps Team', icon: '📲' },
   { href: '/entry', label: 'Daily Entry', icon: '✏️', masterOnly: true },
   { href: '/qa-entry', label: 'QA Entry', icon: '📋', masterOnly: true },
@@ -46,6 +47,19 @@ export default function Navigation() {
     const userLob = user?.lob || 'VA'
     const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
 
+    if (link.href === '/va-tracker') {
+      if (role === 'regular') return userLob === 'VA'
+      if (isAdmin) {
+        return (
+          userLob === 'VA' ||
+          allowedLobs.includes('VA') ||
+          allowedLobs.includes('All')
+        )
+      }
+      if (role === 'qa') return true
+      return false
+    }
+
     if (link.href === '/apps-team') {
       if (role === 'regular') return userLob === 'APPS'
       if (isAdmin) {
@@ -61,7 +75,7 @@ export default function Navigation() {
     }
 
     if (role === 'qa') {
-      if (['/dashboard', '/qa-entry', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      if (['/dashboard', '/va-tracker', '/qa-entry', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
       if (link.href === '/apps-team') return userLob === 'APPS' || allowedLobs.includes('APPS') || allowedLobs.includes('All')
       return false
     }
