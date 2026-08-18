@@ -18,6 +18,7 @@ export { AGENT_COLORS }
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/va-tracker', label: 'VA Tracker', icon: '📑' },
+  { href: '/ssd-tracker', label: 'SSD Tracker', icon: '💼' },
   { href: '/apps-team', label: 'Apps Team', icon: '📲' },
   { href: '/entry', label: 'Daily Entry', icon: '✏️', masterOnly: true },
   { href: '/qa-entry', label: 'QA Entry', icon: '📋', masterOnly: true },
@@ -60,6 +61,19 @@ export default function Navigation() {
       return false
     }
 
+    if (link.href === '/ssd-tracker') {
+      if (role === 'regular') return userLob === 'SSD'
+      if (isAdmin) {
+        return (
+          userLob === 'SSD' ||
+          allowedLobs.includes('SSD') ||
+          allowedLobs.includes('All')
+        )
+      }
+      if (role === 'qa') return true
+      return false
+    }
+
     if (link.href === '/apps-team') {
       if (role === 'regular') return userLob === 'APPS'
       if (isAdmin) {
@@ -75,13 +89,15 @@ export default function Navigation() {
     }
 
     if (role === 'qa') {
-      if (['/dashboard', '/va-tracker', '/qa-entry', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      if (['/dashboard', '/va-tracker', '/ssd-tracker', '/qa-entry', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
       if (link.href === '/apps-team') return userLob === 'APPS' || allowedLobs.includes('APPS') || allowedLobs.includes('All')
       return false
     }
 
     if (role === 'regular') {
       if (['/dashboard', '/qa', '/coaching', '/time-off', '/guide'].includes(link.href)) return true
+      if (link.href === '/va-tracker') return userLob === 'VA'
+      if (link.href === '/ssd-tracker') return userLob === 'SSD'
       return false
     }
     if (isAdmin) {

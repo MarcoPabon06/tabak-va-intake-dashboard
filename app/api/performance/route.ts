@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
 
   const rows = db.prepare(query).all(...params) as any[]
 
-  // Dynamically enhance VA specialist performance with live va_lead_records
+  // Dynamically enhance VA and SSD specialist performance with live tracker records
   const enhancedRows = rows.map((row) => {
     if (row.lob === 'VA') {
       const leads = db.prepare(`
@@ -72,14 +72,43 @@ export async function GET(req: NextRequest) {
           signed_success_rate: total > 0 ? signed / total : 0,
         }
       }
+    } else if (row.lob === 'SSD') {
+      const leads = db.prepare(`
+        SELECT status, is_converted FROM ssd_lead_records 
+        WHERE date = ? AND (LOWER(rep_name) = LOWER(?) OR rep_username = ?)
+      `).all(row.date, row.agent_name, row.agent_name) as { status: string; is_converted: number }[]
+
+      if (leads.length > 0) {
+        const signed = leads.filter((l) => l.status === 'Signed E-Sign').length
+        const unsigned = leads.filter((l) => l.status === 'Sent E-Sign' || l.status === 'Paper Retainer Sent').length
+        const rfc = leads.filter((l) => l.status === 'Sent RFC').length
+        const crh = leads.filter((l) => l.status === 'Client Refused Help').length
+        const rejected = leads.filter((l) => l.status === 'Case Rejected').length
+        const converted = leads.filter((l) => l.is_converted === 1).length
+        const total = signed + unsigned
+        const maxConverted = Math.max(row.converted_cases || 0, converted)
+
+        return {
+          ...row,
+          signed_retainers: signed,
+          unsigned_retainers: unsigned,
+          rfc_sent: rfc,
+          crh: crh,
+          case_rejected: rejected,
+          converted_cases: maxConverted,
+          total_case_wanted: total,
+          signed_success_rate: signed > 0 ? maxConverted / signed : (total > 0 ? signed / total : 0),
+        }
+      }
     }
     return row
   })
 
-  // Check for any VA leads logged on dates without a daily_performance row yet
-  if ((!lob || lob === 'VA' || lob === 'All') && (userRole !== 'regular' || userLob === 'VA')) {
-    const existingKeys = new Set(enhancedRows.map((r) => `${r.date}___${r.agent_name.toLowerCase()}`))
+  // Check for any VA or SSD leads logged on dates without a daily_performance row yet
+  const existingKeys = new Set(enhancedRows.map((r) => `${r.date}___${r.agent_name.toLowerCase()}`))
 
+  // VA unmapped synthetic rows
+  if ((!lob || lob === 'VA' || lob === 'All') && (userRole !== 'regular' || userLob === 'VA')) {
     let leadsQuery = `
       SELECT vlr.date, vlr.rep_name as agent_name, vlr.status, u.lob
       FROM va_lead_records vlr
@@ -118,7 +147,7 @@ export async function GET(req: NextRequest) {
       const total = signed + unsigned
 
       enhancedRows.push({
-        id: `synth-${group.date}-${group.agent_name}`,
+        id: `synth-va-${group.date}-${group.agent_name}`,
         date: group.date,
         agent_name: group.agent_name,
         lob: 'VA',
@@ -132,6 +161,70 @@ export async function GET(req: NextRequest) {
         rfc_sent: 0,
         total_case_wanted: total,
         signed_success_rate: total > 0 ? signed / total : 0,
+        week_label: '',
+        present: 'SI',
+        ura: 0,
+        reprocess: 0,
+      })
+    }
+  }
+
+  // SSD unmapped synthetic rows
+  if ((!lob || lob === 'SSD' || lob === 'All') && (userRole !== 'regular' || userLob === 'SSD')) {
+    let ssdLeadsQuery = `
+      SELECT slr.date, slr.rep_name as agent_name, slr.status, slr.is_converted, u.lob
+      FROM ssd_lead_records slr
+      INNER JOIN users u ON (LOWER(TRIM(slr.rep_name)) = LOWER(TRIM(u.display_name)) OR LOWER(TRIM(slr.rep_username)) = LOWER(TRIM(u.username)))
+      WHERE slr.date >= ? AND slr.date <= ? AND u.role = 'regular' AND u.active = 1 AND u.lob = 'SSD'
+    `
+    const ssdLeadsParams: any[] = [from, to]
+    if (agent) {
+      ssdLeadsQuery += ` AND (slr.rep_name = ? OR slr.rep_username = ? OR u.display_name = ?)`
+      ssdLeadsParams.push(agent, agent, agent)
+    }
+
+    const unmappedSsdLeads = db.prepare(ssdLeadsQuery).all(...ssdLeadsParams) as any[]
+    const unmappedSsdGroups: Record<string, { date: string; agent_name: string; lob: string; items: { status: string; is_converted: number }[] }> = {}
+
+    for (const item of unmappedSsdLeads) {
+      const key = `${item.date}___${item.agent_name.toLowerCase()}`
+      if (!existingKeys.has(key)) {
+        if (!unmappedSsdGroups[key]) {
+          unmappedSsdGroups[key] = {
+            date: item.date,
+            agent_name: item.agent_name,
+            lob: 'SSD',
+            items: [],
+          }
+        }
+        unmappedSsdGroups[key].items.push({ status: item.status, is_converted: item.is_converted })
+      }
+    }
+
+    for (const group of Object.values(unmappedSsdGroups)) {
+      const signed = group.items.filter((it) => it.status === 'Signed E-Sign').length
+      const unsigned = group.items.filter((it) => it.status === 'Sent E-Sign' || it.status === 'Paper Retainer Sent').length
+      const rfc = group.items.filter((it) => it.status === 'Sent RFC').length
+      const crh = group.items.filter((it) => it.status === 'Client Refused Help').length
+      const rejected = group.items.filter((it) => it.status === 'Case Rejected').length
+      const converted = group.items.filter((it) => it.is_converted === 1).length
+      const total = signed + unsigned
+
+      enhancedRows.push({
+        id: `synth-ssd-${group.date}-${group.agent_name}`,
+        date: group.date,
+        agent_name: group.agent_name,
+        lob: 'SSD',
+        capd: 0,
+        inbound_calls: 0,
+        case_rejected: rejected,
+        crh: crh,
+        signed_retainers: signed,
+        unsigned_retainers: unsigned,
+        converted_cases: converted,
+        rfc_sent: rfc,
+        total_case_wanted: total,
+        signed_success_rate: signed > 0 ? converted / signed : 0,
         week_label: '',
         present: 'SI',
         ura: 0,
@@ -202,9 +295,33 @@ export async function POST(req: NextRequest) {
       let rate = 0
 
       if (isSSD) {
-        // SSD: Conversion rate = Converted to Case / Signed Retainers
-        total = row.signed_retainers || 0
-        rate = total > 0 ? (row.converted_cases || 0) / total : 0
+        // SSD: Sync live retainers & converted from ssd_lead_records if present, or preserve existing
+        const leads = db.prepare(`
+          SELECT status, is_converted FROM ssd_lead_records 
+          WHERE date = ? AND (LOWER(rep_name) = LOWER(?) OR rep_username = ?)
+        `).all(date, row.agent_name, row.agent_name) as { status: string; is_converted: number }[]
+
+        if (leads.length > 0) {
+          row.signed_retainers = leads.filter((l) => l.status === 'Signed E-Sign').length
+          row.unsigned_retainers = leads.filter((l) => l.status === 'Sent E-Sign' || l.status === 'Paper Retainer Sent').length
+          row.rfc_sent = leads.filter((l) => l.status === 'Sent RFC').length
+          row.crh = leads.filter((l) => l.status === 'Client Refused Help').length
+          row.case_rejected = leads.filter((l) => l.status === 'Case Rejected').length
+          const converted = leads.filter((l) => l.is_converted === 1).length
+          row.converted_cases = Math.max(row.converted_cases || 0, converted)
+        } else {
+          const existing = db.prepare('SELECT * FROM daily_performance WHERE date = ? AND agent_name = ?').get(date, row.agent_name) as any
+          if (existing) {
+            if (row.signed_retainers === undefined || row.signed_retainers === 0) row.signed_retainers = existing.signed_retainers
+            if (row.unsigned_retainers === undefined || row.unsigned_retainers === 0) row.unsigned_retainers = existing.unsigned_retainers
+            if (row.rfc_sent === undefined || row.rfc_sent === 0) row.rfc_sent = existing.rfc_sent
+            if (row.crh === undefined || row.crh === 0) row.crh = existing.crh
+            if (row.case_rejected === undefined || row.case_rejected === 0) row.case_rejected = existing.case_rejected
+            if (row.converted_cases === undefined || row.converted_cases === 0) row.converted_cases = existing.converted_cases
+          }
+        }
+        total = (row.signed_retainers || 0) + (row.unsigned_retainers || 0)
+        rate = (row.signed_retainers || 0) > 0 ? (row.converted_cases || 0) / row.signed_retainers : 0
       } else {
         // VA: Sync live retainers from va_lead_records if present, or preserve existing
         const leads = db.prepare(`

@@ -239,6 +239,38 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_va_leads_status ON va_lead_records(status);
     CREATE INDEX IF NOT EXISTS idx_va_leads_lead_id ON va_lead_records(lead_id);
 
+    CREATE TABLE IF NOT EXISTS ssd_lead_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rep_name TEXT NOT NULL,
+      rep_username TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      lead_id TEXT,
+      date TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN (
+        'Sent E-Sign',
+        'Paper Retainer Sent',
+        'Signed E-Sign',
+        'Client Refused Help',
+        'Case Rejected',
+        'Sent RFC',
+        'Appointment Rescheduled'
+      )),
+      claim_type TEXT,
+      outcome_reason TEXT,
+      other_reason_notes TEXT,
+      signed_at TEXT,
+      converted_at TEXT,
+      is_converted INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      last_edited_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_date ON ssd_lead_records(date);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_rep ON ssd_lead_records(rep_username);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_status ON ssd_lead_records(status);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_lead_id ON ssd_lead_records(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_claim_type ON ssd_lead_records(claim_type);
+
     CREATE TABLE IF NOT EXISTS upload_audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,

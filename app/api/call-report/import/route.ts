@@ -52,6 +52,33 @@ export function normalizeAgentName(raw: string, activeAgents: string[] = []): st
   if (clean.includes('omar') && clean.includes('soto')) {
     return 'Omar Soto'
   }
+  if (clean.includes('felipe') && (clean.includes('latriglia') || clean.includes('latri'))) {
+    return 'Felipe Latriglia'
+  }
+  if (clean.includes('ana') && clean.includes('salas')) {
+    return 'Ana Salas'
+  }
+  if (clean.includes('karen') && clean.includes('morales')) {
+    return 'Karen Morales'
+  }
+  if (clean.includes('luis') && clean.includes('cepeda')) {
+    return 'Luis Cepeda'
+  }
+  if (clean.includes('jair') && clean.includes('torres')) {
+    return 'Jair Torres'
+  }
+  if (clean.includes('laura') && clean.includes('romero')) {
+    return 'Laura Romero'
+  }
+  if (clean.includes('daniel') && clean.includes('ayala')) {
+    return 'Daniel Ayala'
+  }
+  if (clean.includes('kevin') && clean.includes('morantes')) {
+    return 'Kevin Morantes'
+  }
+  if (clean.includes('oscar') && clean.includes('botello')) {
+    return 'Oscar Botello'
+  }
 
   // Dynamic matching against active agents list
   for (const agent of activeAgents) {

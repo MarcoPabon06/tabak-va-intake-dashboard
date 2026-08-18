@@ -11,13 +11,7 @@ export default function ImportPage() {
   const userRole = (session?.user as any)?.role || 'regular'
   const userPerms = (session?.user as any)?.permissions
 
-  const [activeTab, setActiveTab] = useState<'call-report' | 'eod-report'>('call-report')
-
-  // EOD Report State
-  const [eodFile, setEodFile] = useState<File | null>(null)
-  const [eodLoading, setEodLoading] = useState(false)
-  const [eodResult, setEodResult] = useState<{ imported?: number; skipped?: number; error?: string } | null>(null)
-  const [eodDragging, setEodDragging] = useState(false)
+  const [activeTab, setActiveTab] = useState<'call-report' | 'converted-ssd' | 'ssd-leads' | 'va-leads' | 'eod-report'>('call-report')
 
   // CRM Call Report State
   const [callFile, setCallFile] = useState<File | null>(null)
@@ -28,6 +22,30 @@ export default function ImportPage() {
     error?: string
   } | null>(null)
   const [callDragging, setCallDragging] = useState(false)
+
+  // SSD Converted Cases State
+  const [convertedFile, setConvertedFile] = useState<File | null>(null)
+  const [convertedLoading, setConvertedLoading] = useState(false)
+  const [convertedResult, setConvertedResult] = useState<{ message?: string; error?: string } | null>(null)
+  const [convertedDragging, setConvertedDragging] = useState(false)
+
+  // SSD Leads State
+  const [ssdFile, setSsdFile] = useState<File | null>(null)
+  const [ssdLoading, setSsdLoading] = useState(false)
+  const [ssdResult, setSsdResult] = useState<{ message?: string; error?: string } | null>(null)
+  const [ssdDragging, setSsdDragging] = useState(false)
+
+  // VA Leads State
+  const [vaFile, setVaFile] = useState<File | null>(null)
+  const [vaLoading, setVaLoading] = useState(false)
+  const [vaResult, setVaResult] = useState<{ message?: string; error?: string } | null>(null)
+  const [vaDragging, setVaDragging] = useState(false)
+
+  // EOD Report State
+  const [eodFile, setEodFile] = useState<File | null>(null)
+  const [eodLoading, setEodLoading] = useState(false)
+  const [eodResult, setEodResult] = useState<{ imported?: number; skipped?: number; error?: string } | null>(null)
+  const [eodDragging, setEodDragging] = useState(false)
 
   // Auth guard: redirect non-authorized users
   useEffect(() => {
@@ -43,26 +61,6 @@ export default function ImportPage() {
       }
     }
   }, [status, userRole, userPerms, router])
-
-  // Upload EOD Report
-  async function handleEodUpload() {
-    if (!eodFile) return
-    setEodLoading(true)
-    setEodResult(null)
-
-    const formData = new FormData()
-    formData.append('file', eodFile)
-
-    try {
-      const res = await fetch('/api/import', { method: 'POST', body: formData })
-      const json = await res.json()
-      setEodResult(json)
-    } catch {
-      setEodResult({ error: 'Upload failed. Please try again.' })
-    } finally {
-      setEodLoading(false)
-    }
-  }
 
   // Upload CRM Call Report
   async function handleCallReportUpload() {
@@ -84,46 +82,171 @@ export default function ImportPage() {
     }
   }
 
+  // Upload SSD Converted Cases Report
+  async function handleConvertedUpload() {
+    if (!convertedFile) return
+    setConvertedLoading(true)
+    setConvertedResult(null)
+
+    const formData = new FormData()
+    formData.append('file', convertedFile)
+
+    try {
+      const res = await fetch('/api/ssd-tracker/import-converted', { method: 'POST', body: formData })
+      const json = await res.json()
+      setConvertedResult(json)
+    } catch {
+      setConvertedResult({ error: 'Converted cases upload failed. Please try again.' })
+    } finally {
+      setConvertedLoading(false)
+    }
+  }
+
+  // Upload SSD Leads Spreadsheet
+  async function handleSsdUpload() {
+    if (!ssdFile) return
+    setSsdLoading(true)
+    setSsdResult(null)
+
+    const formData = new FormData()
+    formData.append('file', ssdFile)
+
+    try {
+      const res = await fetch('/api/ssd-tracker/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      setSsdResult(json)
+    } catch {
+      setSsdResult({ error: 'SSD leads upload failed. Please try again.' })
+    } finally {
+      setSsdLoading(false)
+    }
+  }
+
+  // Upload VA Leads Spreadsheet
+  async function handleVaUpload() {
+    if (!vaFile) return
+    setVaLoading(true)
+    setVaResult(null)
+
+    const formData = new FormData()
+    formData.append('file', vaFile)
+
+    try {
+      const res = await fetch('/api/va-tracker/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      setVaResult(json)
+    } catch {
+      setVaResult({ error: 'VA leads upload failed. Please try again.' })
+    } finally {
+      setVaLoading(false)
+    }
+  }
+
+  // Upload EOD Report
+  async function handleEodUpload() {
+    if (!eodFile) return
+    setEodLoading(true)
+    setEodResult(null)
+
+    const formData = new FormData()
+    formData.append('file', eodFile)
+
+    try {
+      const res = await fetch('/api/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      setEodResult(json)
+    } catch {
+      setEodResult({ error: 'Upload failed. Please try again.' })
+    } finally {
+      setEodLoading(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navigation />
       <main style={{ marginLeft: 'var(--sidebar-width)', flex: 1, padding: '32px 28px' }}>
-        <div style={{ maxWidth: 760 }}>
+        <div style={{ maxWidth: 850 }}>
           {/* Header */}
           <div style={{ marginBottom: 24 }}>
             <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-              📥 Import Data from Excel
+              📥 Import Data Center
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
-              Import raw CRM Call Reports to automate CAPD & Inbound call totals, or upload full EOD performance spreadsheets.
+              Upload CRM Call Reports, Converted Cases reports, and Intake spreadsheets with automated PII masking and security scans.
             </p>
           </div>
 
           {/* Tab Switcher */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
             <button
               onClick={() => setActiveTab('call-report')}
               style={{
-                padding: '10px 18px',
+                padding: '9px 16px',
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: 'pointer',
-                background: activeTab === 'call-report' ? '#b82105' : 'rgba(255,255,255,0.05)',
+                background: activeTab === 'call-report' ? '#3b82f6' : 'rgba(255,255,255,0.05)',
                 color: activeTab === 'call-report' ? '#fff' : '#94a3b8',
-                border: activeTab === 'call-report' ? '1px solid #b82105' : '1px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
+                border: activeTab === 'call-report' ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
               }}
             >
-              <span>📞 CRM Call Report (Auto CAPD)</span>
+              📞 CRM Call Report (Auto CAPD)
+            </button>
+
+            <button
+              onClick={() => setActiveTab('converted-ssd')}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: activeTab === 'converted-ssd' ? '#10b981' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'converted-ssd' ? '#fff' : '#94a3b8',
+                border: activeTab === 'converted-ssd' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              🎉 Converted Cases (SSD Sync)
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ssd-leads')}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: activeTab === 'ssd-leads' ? '#8b5cf6' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'ssd-leads' ? '#fff' : '#94a3b8',
+                border: activeTab === 'ssd-leads' ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              💼 SSD Leads Spreadsheet
+            </button>
+
+            <button
+              onClick={() => setActiveTab('va-leads')}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: activeTab === 'va-leads' ? '#06b6d4' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'va-leads' ? '#fff' : '#94a3b8',
+                border: activeTab === 'va-leads' ? '1px solid #06b6d4' : '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              📑 VA Leads Spreadsheet
             </button>
 
             <button
               onClick={() => setActiveTab('eod-report')}
               style={{
-                padding: '10px 18px',
+                padding: '9px 16px',
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 700,
@@ -131,12 +254,9 @@ export default function ImportPage() {
                 background: activeTab === 'eod-report' ? '#b82105' : 'rgba(255,255,255,0.05)',
                 color: activeTab === 'eod-report' ? '#fff' : '#94a3b8',
                 border: activeTab === 'eod-report' ? '1px solid #b82105' : '1px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
               }}
             >
-              <span>📊 Full EOD Performance Report</span>
+              📊 Full EOD Performance
             </button>
           </div>
 
@@ -149,18 +269,17 @@ export default function ImportPage() {
                 </h3>
                 <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: 0, paddingLeft: 16 }}>
                   <li style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    <strong>Auto Name Correction</strong>: Misspelled CRM names (like <em>"Daniel Castill"</em>) are automatically mapped to <strong>Daniel Castillo</strong>.
+                    <strong>Auto Name Correction</strong>: Misspelled CRM names are mapped to standard VA and SSD specialists.
                   </li>
                   <li style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
                     <strong>Automated CAPD & Inbound Totals</strong>: Calculates total calls per rep as <strong>CAPD</strong> and inbound calls as <strong>Inbound</strong>.
                   </li>
                   <li style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    <strong>Safe Sync</strong>: Automatically updates or creates daily performance entries without overwriting existing retainer counts.
+                    <strong>Safe Sync</strong>: Automatically updates daily performance without overwriting live retainer counts.
                   </li>
                 </ul>
               </div>
 
-              {/* Call Report Drop Zone */}
               <div
                 onDragOver={(e) => { e.preventDefault(); setCallDragging(true) }}
                 onDragLeave={() => setCallDragging(false)}
@@ -185,11 +304,11 @@ export default function ImportPage() {
                 <input
                   id="call-file-input"
                   type="file"
-                  accept=".xlsx, .xls"
+                  accept=".xlsx"
                   style={{ display: 'none' }}
                   onChange={(e) => setCallFile(e.target.files?.[0] || null)}
                 />
-                <div style={{ fontSize: 36, marginBottom: 10 }}>{callFile ? '📞' : '📂'}</div>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{callFile ? '📞' : '📁'}</div>
                 {callFile ? (
                   <div>
                     <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>{callFile.name}</p>
@@ -198,9 +317,9 @@ export default function ImportPage() {
                 ) : (
                   <div>
                     <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>
-                      Drop your raw CRM <span style={{ color: '#60a5fa' }}>CallReport.xlsx</span> here, or browse
+                      Drop your CallReport.xlsx here, or browse
                     </p>
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supports .xlsx exported directly from CRM</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Automatically parses Agents, Call Direction, and timestamps</p>
                   </div>
                 )}
               </div>
@@ -209,50 +328,40 @@ export default function ImportPage() {
                 onClick={handleCallReportUpload}
                 disabled={!callFile || callLoading}
                 className="btn-primary"
-                style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, marginBottom: 20 }}
+                style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, marginBottom: 20, background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}
               >
-                {callLoading ? '⏳ Processing Call Report & Updating CAPD...' : '⚡ Process Call Report & Update Dashboard'}
+                {callLoading ? '⏳ Processing Call Report...' : 'Process CRM Call Report'}
               </button>
 
-              {/* Call Report Result Summary Table */}
               {callResult && (
-                <div className="glass-card fade-in" style={{ padding: '20px 24px', borderColor: callResult.error ? '#ef4444' : '#10b981' }}>
+                <div className="glass-card fade-in" style={{ padding: '18px 22px', borderColor: callResult.error ? '#ef4444' : '#10b981' }}>
                   {callResult.error ? (
                     <div style={{ color: '#ef4444', fontSize: 13 }}>❌ {callResult.error}</div>
                   ) : (
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                        <span style={{ fontSize: 20 }}>✅</span>
-                        <div>
-                          <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#10b981' }}>
-                            Successfully Processed {callResult.total_calls_processed} Calls!
-                          </h4>
-                          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                            CAPD and Inbound call volume has been automatically populated for the following specialists:
-                          </p>
-                        </div>
+                      <div style={{ fontWeight: 700, color: '#10b981', marginBottom: 6, fontSize: 14 }}>
+                        ⚡ Successfully Processed {callResult.total_calls_processed} Calls!
                       </div>
-
                       {callResult.agent_summaries && callResult.agent_summaries.length > 0 && (
-                        <div style={{ overflowX: 'auto', marginTop: 12 }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
+                        <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                             <thead>
-                              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)' }}>
-                                <th style={{ padding: '8px 12px' }}>Date</th>
-                                <th style={{ padding: '8px 12px' }}>Specialist</th>
-                                <th style={{ padding: '8px 12px' }}>Total Calls (CAPD)</th>
-                                <th style={{ padding: '8px 12px' }}>Inbound</th>
-                                <th style={{ padding: '8px 12px' }}>Outbound</th>
+                              <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Date</th>
+                                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Agent</th>
+                                <th style={{ textAlign: 'left', padding: '6px 10px' }}>CAPD</th>
+                                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Inbound</th>
+                                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Outbound</th>
                               </tr>
                             </thead>
                             <tbody>
                               {callResult.agent_summaries.map((s, idx) => (
                                 <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                  <td style={{ padding: '8px 12px', color: '#94a3b8' }}>{s.date}</td>
-                                  <td style={{ padding: '8px 12px', fontWeight: 700, color: '#fff' }}>{s.agent_name}</td>
-                                  <td style={{ padding: '8px 12px', fontWeight: 800, color: '#3b82f6' }}>{s.capd}</td>
-                                  <td style={{ padding: '8px 12px', color: '#10b981' }}>{s.inbound_calls}</td>
-                                  <td style={{ padding: '8px 12px', color: '#cbd5e1' }}>{s.outbound_calls}</td>
+                                  <td style={{ padding: '6px 10px', color: '#94a3b8' }}>{s.date}</td>
+                                  <td style={{ padding: '6px 10px', fontWeight: 700, color: '#fff' }}>{s.agent_name}</td>
+                                  <td style={{ padding: '6px 10px', fontWeight: 800, color: '#3b82f6' }}>{s.capd}</td>
+                                  <td style={{ padding: '6px 10px', color: '#10b981' }}>{s.inbound_calls}</td>
+                                  <td style={{ padding: '6px 10px', color: '#cbd5e1' }}>{s.outbound_calls}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -266,7 +375,249 @@ export default function ImportPage() {
             </div>
           )}
 
-          {/* TAB 2: FULL EOD REPORT */}
+          {/* TAB 2: CONVERTED CASES (SSD SYNC) */}
+          {activeTab === 'converted-ssd' && (
+            <div className="fade-in">
+              <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  🎉 Automated CRM Converted Cases Synchronization
+                </h3>
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: 0, paddingLeft: 16 }}>
+                  <li style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <strong>Smart Match & Promote</strong>: Matches <strong>LeadID</strong> in SSD Tracker and automatically updates pending retainers (Sent E-Sign / Paper Sent) to <strong>Signed E-Sign</strong>.
+                  </li>
+                  <li style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <strong>Real-Time Conversion Rates</strong>: Increments <strong>converted_cases</strong> for the assigned specialist on the conversion date so Dashboard conversion rates match perfectly.
+                  </li>
+                </ul>
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); setConvertedDragging(true) }}
+                onDragLeave={() => setConvertedDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setConvertedDragging(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) setConvertedFile(f)
+                }}
+                onClick={() => document.getElementById('converted-file-input')?.click()}
+                className="glass-card"
+                style={{
+                  padding: '36px 24px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  borderColor: convertedDragging ? '#10b981' : convertedFile ? 'rgba(16,185,129,0.5)' : 'var(--border)',
+                  background: convertedDragging ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)',
+                  transition: 'all 0.2s',
+                  marginBottom: 20,
+                }}
+              >
+                <input
+                  id="converted-file-input"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setConvertedFile(e.target.files?.[0] || null)}
+                />
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{convertedFile ? '🎉' : '📁'}</div>
+                {convertedFile ? (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>{convertedFile.name}</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(convertedFile.size / 1024).toFixed(1)} KB — Click or drop another to replace</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>
+                      Drop your Converted-Status_Report.xlsx here, or browse
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supports direct exports from CRM with LeadID, Idle Time, and Current Assignee</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleConvertedUpload}
+                disabled={!convertedFile || convertedLoading}
+                className="btn-primary"
+                style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, marginBottom: 20, background: '#10b981', borderColor: '#10b981' }}
+              >
+                {convertedLoading ? '⏳ Synchronizing Converted Cases...' : 'Synchronize Converted Cases'}
+              </button>
+
+              {convertedResult && (
+                <div className="glass-card fade-in" style={{ padding: '18px 22px', borderColor: convertedResult.error ? '#ef4444' : '#10b981' }}>
+                  {convertedResult.error ? (
+                    <div style={{ color: '#ef4444', fontSize: 13 }}>❌ {convertedResult.error}</div>
+                  ) : (
+                    <div style={{ fontWeight: 700, color: '#10b981', fontSize: 14 }}>
+                      {convertedResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: SSD LEADS SPREADSHEET */}
+          {activeTab === 'ssd-leads' && (
+            <div className="fade-in">
+              <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(139, 92, 246, 0.3)' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#c084fc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  💼 SSD Leads 8-Column Spreadsheet Import
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                  Imports Rep Name, Client Name, Lead ID, Date, Status, Claim Type (SSDI/SSI/DWB), Outcome Reasoning, and Notes.
+                </p>
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); setSsdDragging(true) }}
+                onDragLeave={() => setSsdDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setSsdDragging(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) setSsdFile(f)
+                }}
+                onClick={() => document.getElementById('ssd-file-input')?.click()}
+                className="glass-card"
+                style={{
+                  padding: '36px 24px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  borderColor: ssdDragging ? '#8b5cf6' : ssdFile ? 'rgba(16,185,129,0.5)' : 'var(--border)',
+                  background: ssdDragging ? 'rgba(139, 92, 246, 0.08)' : 'var(--bg-card)',
+                  transition: 'all 0.2s',
+                  marginBottom: 20,
+                }}
+              >
+                <input
+                  id="ssd-file-input"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setSsdFile(e.target.files?.[0] || null)}
+                />
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{ssdFile ? '💼' : '📁'}</div>
+                {ssdFile ? (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>{ssdFile.name}</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(ssdFile.size / 1024).toFixed(1)} KB — Click or drop another to replace</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>
+                      Drop your SSD Leads Spreadsheet here, or browse
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supports .xlsx and .xls formats</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleSsdUpload}
+                disabled={!ssdFile || ssdLoading}
+                className="btn-primary"
+                style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, marginBottom: 20, background: '#8b5cf6', borderColor: '#8b5cf6' }}
+              >
+                {ssdLoading ? '⏳ Importing SSD Leads...' : 'Import SSD Leads'}
+              </button>
+
+              {ssdResult && (
+                <div className="glass-card fade-in" style={{ padding: '18px 22px', borderColor: ssdResult.error ? '#ef4444' : '#10b981' }}>
+                  {ssdResult.error ? (
+                    <div style={{ color: '#ef4444', fontSize: 13 }}>❌ {ssdResult.error}</div>
+                  ) : (
+                    <div style={{ fontWeight: 700, color: '#10b981', fontSize: 14 }}>
+                      {ssdResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: VA LEADS SPREADSHEET */}
+          {activeTab === 'va-leads' && (
+            <div className="fade-in">
+              <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(6, 182, 212, 0.3)' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#22d3ee', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  📑 VA Leads Spreadsheet Import
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                  Imports Veteran Name, Lead ID, Date, Status, and Outcome Reasoning for VA Intake.
+                </p>
+              </div>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); setVaDragging(true) }}
+                onDragLeave={() => setVaDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setVaDragging(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) setVaFile(f)
+                }}
+                onClick={() => document.getElementById('va-file-input')?.click()}
+                className="glass-card"
+                style={{
+                  padding: '36px 24px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  borderColor: vaDragging ? '#06b6d4' : vaFile ? 'rgba(16,185,129,0.5)' : 'var(--border)',
+                  background: vaDragging ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-card)',
+                  transition: 'all 0.2s',
+                  marginBottom: 20,
+                }}
+              >
+                <input
+                  id="va-file-input"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  style={{ display: 'none' }}
+                  onChange={(e) => setVaFile(e.target.files?.[0] || null)}
+                />
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{vaFile ? '📑' : '📁'}</div>
+                {vaFile ? (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>{vaFile.name}</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(vaFile.size / 1024).toFixed(1)} KB — Click or drop another to replace</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4, fontSize: 14 }}>
+                      Drop your VA Leads Spreadsheet here, or browse
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Supports .xlsx and .xls formats</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleVaUpload}
+                disabled={!vaFile || vaLoading}
+                className="btn-primary"
+                style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 700, marginBottom: 20, background: '#06b6d4', borderColor: '#06b6d4' }}
+              >
+                {vaLoading ? '⏳ Importing VA Leads...' : 'Import VA Leads'}
+              </button>
+
+              {vaResult && (
+                <div className="glass-card fade-in" style={{ padding: '18px 22px', borderColor: vaResult.error ? '#ef4444' : '#10b981' }}>
+                  {vaResult.error ? (
+                    <div style={{ color: '#ef4444', fontSize: 13 }}>❌ {vaResult.error}</div>
+                  ) : (
+                    <div style={{ fontWeight: 700, color: '#10b981', fontSize: 14 }}>
+                      {vaResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: FULL EOD REPORT */}
           {activeTab === 'eod-report' && (
             <div className="fade-in">
               <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(184, 33, 5, 0.3)' }}>
@@ -280,7 +631,6 @@ export default function ImportPage() {
                 </ul>
               </div>
 
-              {/* EOD Drop zone */}
               <div
                 onDragOver={(e) => { e.preventDefault(); setEodDragging(true) }}
                 onDragLeave={() => setEodDragging(false)}

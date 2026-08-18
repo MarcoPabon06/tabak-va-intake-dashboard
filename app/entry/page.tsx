@@ -235,13 +235,8 @@ export default function EntryPage() {
   function getFieldsForLob(lob: string) {
     if (lob === 'SSD') {
       return [
-        { key: 'capd', label: 'CAPD', hint: 'Calls made' },
-        { key: 'signed_retainers', label: 'Signed', hint: 'Signed retainers' },
-        { key: 'unsigned_retainers', label: 'Unsigned', hint: 'Unsigned retainers' },
-        { key: 'rfc_sent', label: 'RFC', hint: 'RFC cases sent' },
-        { key: 'crh', label: 'CRH', hint: 'Client Refused Help' },
-        { key: 'case_rejected', label: 'Case Rejected', hint: 'Cases rejected' },
-        { key: 'converted_cases', label: 'Converted', hint: 'Converted to Case' },
+        { key: 'capd', label: 'CAPD (Calls Made)', hint: 'Total calls made' },
+        { key: 'inbound_calls', label: 'Inbound Calls', hint: 'Inbound calls answered' },
       ] as const
     }
     return [
@@ -415,15 +410,16 @@ export default function EntryPage() {
                           ))}
                         </div>
 
-                        {/* Live rate */}
+                        {/* Live rate & Tracker badges */}
                         {entry.lob === 'SSD' ? (
-                          (entry.signed_retainers || 0) > 0 && (
-                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                              Converted: <span style={{ color: '#10b981', fontWeight: 700 }}>{entry.converted_cases}</span>
-                              {' / '}Signed: <span style={{ fontWeight: 600 }}>{entry.signed_retainers}</span>
-                              {' · '}Rate: <span style={{ color: '#b82105', fontWeight: 700 }}>{rate}</span>
-                            </div>
-                          )
+                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                              💼 SSD Tracker Live
+                            </span>
+                            <span>
+                              Signed: <strong style={{ color: '#10b981' }}>{entry.signed_retainers || 0}</strong> · Unsigned: <strong style={{ color: '#f59e0b' }}>{entry.unsigned_retainers || 0}</strong> · RFC: <strong style={{ color: '#c084fc' }}>{entry.rfc_sent || 0}</strong> · Converted: <strong style={{ color: '#06b6d4' }}>{entry.converted_cases || 0}</strong>
+                            </span>
+                          </div>
                         ) : (
                           <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 10, background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>

@@ -147,7 +147,7 @@ export function recordUploadAudit({
   userId?: number
   username: string
   userName?: string
-  uploadType: 'call_report' | 'eod_report' | 'va_leads' | 'qa_scores' | 'apps_team' | 'pip_doc'
+  uploadType: 'call_report' | 'eod_report' | 'va_leads' | 'ssd_leads' | 'ssd_converted' | 'qa_scores' | 'apps_team' | 'pip_doc'
   filename: string
   buffer: Buffer
   rowsProcessed: number
