@@ -224,6 +224,21 @@ export async function GET(req: NextRequest) {
 
     const repsList = Array.from(repsMap.values()).sort((a, b) => a.rep_name.localeCompare(b.rep_name))
 
+    const historicalReps = db.prepare(`
+      SELECT DISTINCT rep_name, rep_username 
+      FROM ssd_lead_records 
+      WHERE rep_name IS NOT NULL AND rep_name != ''
+    `).all() as { rep_name: string; rep_username: string }[]
+
+    const historicalList = historicalReps
+      .filter(h => h.rep_name && !repsMap.has(h.rep_name.toLowerCase()))
+      .map(h => ({
+        rep_name: h.rep_name,
+        rep_username: h.rep_username || h.rep_name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        is_historical: true,
+      }))
+      .sort((a, b) => a.rep_name.localeCompare(b.rep_name))
+
     return NextResponse.json({
       entries,
       summary: {
@@ -242,7 +257,9 @@ export async function GET(req: NextRequest) {
         reasons_breakdown: reasonsBreakdown,
         claims_breakdown: claimsBreakdown,
       },
-      reps_list: repsList,
+      reps: repsList,
+      active_reps: repsList,
+      historical_reps: historicalList,
       is_personal_view: userRole === 'regular' && userLob === 'SSD',
     })
   } catch (err: any) {

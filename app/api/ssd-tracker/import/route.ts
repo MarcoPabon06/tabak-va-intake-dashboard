@@ -30,13 +30,13 @@ function parseDateString(dateVal: any): string {
 
 function normalizeStatus(raw: string): string {
   const norm = raw.trim().toLowerCase()
+  if (norm.includes('resched') || norm.includes('appointment')) return 'Appointment Rescheduled'
   if (norm.includes('paper') && norm.includes('retainer')) return 'Paper Retainer Sent'
   if (norm.includes('signed') || norm.includes('signed e-sign')) return 'Signed E-Sign'
-  if (norm.includes('sent e-sign') || norm.includes('sent esign') || norm.includes('e-sign sent')) return 'Sent E-Sign'
-  if (norm.includes('refused') || norm.includes('crh') || norm.includes('client refused')) return 'Client Refused Help'
-  if (norm.includes('rejected') || norm.includes('case rejected')) return 'Case Rejected'
+  if (norm.includes('sent e-sign') || norm.includes('sent esign') || norm.includes('sent e-sing') || norm.includes('e-sign sent')) return 'Sent E-Sign'
+  if (norm.includes('refuse') || norm.includes('crh') || norm.includes('client refused')) return 'Client Refused Help'
+  if (norm.includes('reject') || norm.includes('case rejected') || norm.includes('not sufficiently disabled')) return 'Case Rejected'
   if (norm.includes('rfc') || norm.includes('sent rfc')) return 'Sent RFC'
-  if (norm.includes('reschedule') || norm.includes('appointment')) return 'Appointment Rescheduled'
 
   // Exact match fallback
   const exact = SSD_STATUS_OPTIONS.find((s) => s.toLowerCase() === norm)
@@ -58,12 +58,12 @@ function normalizeClaimType(raw: string): string | null {
 function normalizeOutcomeReason(raw: string): string | null {
   if (!raw) return null
   const norm = raw.trim().toLowerCase()
-  if (norm.includes('already') || norm.includes('represented')) return 'Already Represented'
-  if (norm.includes('not interested') || norm.includes('uninterested')) return 'Not interested'
+  if (norm.includes('already') && (norm.includes('represented') || norm.includes('representation') || norm.includes('has representation'))) return 'Already Represented'
+  if (norm.includes('earning more') || norm.includes('more than allowed') || norm.includes('earning') || norm.includes('leading is more')) return 'Leading is more than allowed'
   if (norm.includes('not sufficiently disabled') || norm.includes('sufficiently disabled') || norm.includes('not disabled')) return 'Not sufficiently disabled'
-  if (norm.includes('working full time') || norm.includes('full time')) return 'Lead is working full time'
-  if (norm.includes('more than allowed') || norm.includes('leading is more')) return 'Leading is more than allowed'
-  if (norm.includes('other')) return 'Other'
+  if (norm.includes('working full time') || norm.includes('full time') || norm.includes('working over')) return 'Lead is working full time'
+  if (norm.includes('not interested') || norm.includes('uninterested') || norm.includes('removed from')) return 'Not interested'
+  if (norm.includes('other') || norm.length > 0) return 'Other'
 
   const exact = SSD_OUTCOME_REASONS.find((r) => r.toLowerCase() === norm)
   return exact || 'Other'
@@ -115,27 +115,63 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Failed to parse Excel file: ${err.message}` }, { status: 400 })
   }
 
-  const firstSheetName = workbook.SheetNames[0]
-  const worksheet = workbook.Sheets[firstSheetName]
-  const rawRows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 })
+  // Smart Sheet Finder: find sheet containing 'ssd', 'eod', 'tracker', 'leads', or the sheet with the most rows
+  let targetSheet = workbook.SheetNames.find(n => {
+    const lower = n.toLowerCase()
+    return lower.includes('ssd') || lower.includes('eod') || lower.includes('tracker') || lower.includes('leads')
+  }) || workbook.SheetNames[0]
 
-  if (rawRows.length < 2) {
-    return NextResponse.json({ error: 'Spreadsheet is empty or missing data rows' }, { status: 400 })
+  if (workbook.SheetNames.length > 1) {
+    let maxRows = 0
+    for (const name of workbook.SheetNames) {
+      const ws = workbook.Sheets[name]
+      if (ws && ws['!ref']) {
+        const range = XLSX.utils.decode_range(ws['!ref'])
+        const rowCount = range.e.r - range.s.r + 1
+        if (rowCount > maxRows) {
+          maxRows = rowCount
+          targetSheet = name
+        }
+      }
+    }
   }
 
-  const headerRow = rawRows[0].map((h: any) => String(h || '').trim().toLowerCase())
+  const worksheet = workbook.Sheets[targetSheet]
+  if (!worksheet) {
+    return NextResponse.json({ error: 'No valid sheet found in Excel workbook' }, { status: 400 })
+  }
+
+  const rawRows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 })
+  if (rawRows.length < 2) {
+    return NextResponse.json({ error: `Selected sheet "${targetSheet}" is empty or missing data rows` }, { status: 400 })
+  }
+
+  // Find header row (check first 10 rows)
+  let headerIdx = 0
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const row = rawRows[i]
+    if (Array.isArray(row)) {
+      const rowStr = row.map(c => String(c || '').toLowerCase()).join(' ')
+      if (rowStr.includes('rep') || rowStr.includes('client') || rowStr.includes('lead') || rowStr.includes('status')) {
+        headerIdx = i
+        break
+      }
+    }
+  }
+
+  const headerRow = (rawRows[headerIdx] || []).map((h: any) => String(h || '').trim().toLowerCase())
 
   // Find column indices
-  let iRep = headerRow.findIndex((h: string) => h.includes('rep') || h.includes('agent') || h.includes('specialist'))
-  let iClient = headerRow.findIndex((h: string) => h.includes('lead') && h.includes('name') || h.includes('client') || h.includes('name'))
-  let iLeadId = headerRow.findIndex((h: string) => h.includes('lead id') || h.includes('leadid') || h.includes('id'))
-  let iDate = headerRow.findIndex((h: string) => h.includes('date'))
-  let iStatus = headerRow.findIndex((h: string) => h.includes('status'))
+  let iRep = headerRow.findIndex((h: string) => h.includes('rep') || h.includes('agent') || h.includes('specialist') || h.includes('asesor'))
+  let iClient = headerRow.findIndex((h: string) => (h.includes('lead') && h.includes('name')) || h.includes('client') || (h.includes('name') && !h.includes('rep')))
+  let iLeadId = headerRow.findIndex((h: string) => h.includes('lead no') || h.includes('lead #') || h.includes('lead id') || h.includes('leadid') || h.includes('id') || h.includes('case'))
+  let iDate = headerRow.findIndex((h: string) => h.includes('date') || h.includes('fecha'))
+  let iStatus = headerRow.findIndex((h: string) => h.includes('status') || h.includes('estado'))
   let iClaimType = headerRow.findIndex((h: string) => h.includes('claim') || h.includes('type'))
-  let iReason = headerRow.findIndex((h: string) => h.includes('reason') || h.includes('outcome'))
-  let iOtherNotes = headerRow.findIndex((h: string) => h.includes('other') || h.includes('note') || h.includes('comment'))
+  let iReason = headerRow.findIndex((h: string) => h.includes('reasoning') || h.includes('reason') || h.includes('outcome') || h.includes('motivo'))
+  let iOtherNotes = headerRow.findIndex((h: string) => h.includes('other') || h.includes('note') || h.includes('comment') || h.includes('detail') || h.includes('detalles'))
 
-  // Fallback to sequential standard columns if not found
+  // Fallback to sequential standard 8-column layout if headers not fully identified
   if (iRep === -1) iRep = 0
   if (iClient === -1) iClient = 1
   if (iLeadId === -1) iLeadId = 2
@@ -145,7 +181,7 @@ export async function POST(req: NextRequest) {
   if (iReason === -1) iReason = 6
   if (iOtherNotes === -1) iOtherNotes = 7
 
-  const dataRows = rawRows.slice(1)
+  const dataRows = rawRows.slice(headerIdx + 1)
   const db = getDb()
 
   let imported = 0
@@ -181,14 +217,20 @@ export async function POST(req: NextRequest) {
       if (!row || !Array.isArray(row) || row.length === 0) continue
 
       let clientName = row[iClient] ? String(row[iClient]).trim() : ''
-      if (!clientName) {
+      const repName = row[iRep] ? String(row[iRep]).trim() : ''
+      const leadId = row[iLeadId] ? String(row[iLeadId]).trim() : null
+
+      if (!clientName && !repName && !leadId) {
         skipped++
         continue
       }
 
-      const repName = row[iRep] ? String(row[iRep]).trim() : sessionDisplayName
-      const repUsername = repName.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const leadId = row[iLeadId] ? String(row[iLeadId]).trim() : null
+      if (!clientName) {
+        clientName = leadId ? `Lead #${leadId}` : 'Unnamed Client'
+      }
+
+      const finalRepName = repName || sessionDisplayName
+      const repUsername = finalRepName.toLowerCase().replace(/[^a-z0-9]/g, '')
 
       const dateStr = parseDateString(row[iDate])
       const rawStatus = row[iStatus] ? String(row[iStatus]).trim() : 'Sent E-Sign'
@@ -198,9 +240,10 @@ export async function POST(req: NextRequest) {
       const claimType = normalizeClaimType(rawClaim)
 
       const rawReason = row[iReason] ? String(row[iReason]).trim() : ''
-      const outcomeReason = rawReason ? normalizeOutcomeReason(rawReason) : null
+      const rawOther = row[iOtherNotes] ? String(row[iOtherNotes]).trim() : ''
+      const outcomeReason = normalizeOutcomeReason(rawReason || rawOther)
 
-      let otherNotes = row[iOtherNotes] ? String(row[iOtherNotes]).trim() : null
+      let otherNotes = rawOther || (rawReason && outcomeReason === 'Other' ? rawReason : null)
       const signedAt = status === 'Signed E-Sign' ? `${dateStr} 12:00:00` : null
 
       otherNotes = otherNotes ? maskSensitivePII(otherNotes) : null
@@ -217,7 +260,7 @@ export async function POST(req: NextRequest) {
 
       if (existing) {
         updateStmt.run(
-          repName,
+          finalRepName,
           repUsername,
           clientName,
           dateStr,
@@ -232,7 +275,7 @@ export async function POST(req: NextRequest) {
         updated++
       } else {
         insertStmt.run(
-          repName,
+          finalRepName,
           repUsername,
           clientName,
           leadId,

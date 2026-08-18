@@ -83,6 +83,7 @@ export default function SSDTrackerPage() {
   const [entries, setEntries] = useState<SSDLeadRecord[]>([])
   const [summary, setSummary] = useState<SsdSummary | null>(null)
   const [repsList, setRepsList] = useState<{ rep_name: string; rep_username: string }[]>([])
+  const [historicalReps, setHistoricalReps] = useState<{ rep_name: string; rep_username: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -161,7 +162,8 @@ export default function SSDTrackerPage() {
       const json = await safeFetchJson(`/api/ssd-tracker?${params.toString()}`)
       setEntries(json.entries || [])
       setSummary(json.summary || null)
-      if (json.reps_list) setRepsList(json.reps_list)
+      if (json.active_reps || json.reps) setRepsList(json.active_reps || json.reps)
+      if (json.historical_reps) setHistoricalReps(json.historical_reps)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -631,16 +633,29 @@ export default function SSDTrackerPage() {
             {(isSuper || isAdmin) && (
               <select
                 className="input-field"
-                style={{ width: 180, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                style={{ width: 190, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
                 value={repFilter}
                 onChange={(e) => setRepFilter(e.target.value)}
               >
                 <option value="All" style={{ background: '#0a1628' }}>All Specialists</option>
-                {repsList.map((r) => (
-                  <option key={r.rep_username} value={r.rep_username} style={{ background: '#0a1628' }}>
-                    {r.rep_name}
-                  </option>
-                ))}
+                {repsList.length > 0 && (
+                  <optgroup label="Active Specialists" style={{ background: '#0a1628', color: '#60a5fa' }}>
+                    {repsList.map((r) => (
+                      <option key={r.rep_username} value={r.rep_username} style={{ background: '#0a1628', color: '#fff' }}>
+                        {r.rep_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {historicalReps.length > 0 && (
+                  <optgroup label="Historical / Inactive" style={{ background: '#0a1628', color: '#9ca3af' }}>
+                    {historicalReps.map((r) => (
+                      <option key={r.rep_username} value={r.rep_username} style={{ background: '#0a1628', color: '#d1d5db' }}>
+                        {r.rep_name} (Past)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             )}
 
