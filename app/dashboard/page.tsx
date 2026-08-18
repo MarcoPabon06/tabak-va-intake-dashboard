@@ -46,12 +46,34 @@ export default function DashboardPage() {
   const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
 
   async function handleCopyEODReport() {
+    let mtdPerfData = data
+    try {
+      if (selectedLob !== 'APPS') {
+        const toDateObj = new Date(to + 'T00:00:00')
+        const mtdFrom = format(startOfMonth(toDateObj), 'yyyy-MM-dd')
+        if (mtdFrom !== from || mtdFrom !== to) {
+          const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
+          const res = await fetch(`/api/performance?from=${mtdFrom}&to=${to}${lobParam}`)
+          if (res.ok) {
+            const json = await res.json()
+            if (Array.isArray(json)) mtdPerfData = json
+          }
+        }
+      }
+    } catch {
+      // fallback to data
+    }
+
     const { html, text } = generateEODReportHtml({
       lob: selectedLob,
       from,
       to,
       perfData: data,
       appsData: appsData,
+      mtdPerfData,
+      teamLeader: userName || 'Marco Pabon',
+      teamManager: 'Ryan Gwinn',
+      schedule: '8AM - 5PM',
     })
 
     try {

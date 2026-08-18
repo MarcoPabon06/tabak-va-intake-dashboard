@@ -1,6 +1,6 @@
 import { format } from 'date-fns'
 
-interface PerformanceRow {
+export interface PerformanceRow {
   date: string
   agent_name: string
   capd: number
@@ -16,7 +16,7 @@ interface PerformanceRow {
   present: string
 }
 
-interface AppsRow {
+export interface AppsRow {
   id: number
   lead_id: string
   client_name: string
@@ -27,74 +27,57 @@ interface AppsRow {
   rep_name: string
 }
 
-export function generateEODReportHtml(params: {
+export interface EODReportParams {
   lob: string
   from: string
   to: string
   perfData: PerformanceRow[]
   appsData: AppsRow[]
-}): { html: string; text: string } {
-  const { lob, from, to, perfData, appsData } = params
+  mtdPerfData?: PerformanceRow[]
+  teamLeader?: string
+  teamManager?: string
+  schedule?: string
+}
 
-  const formattedFrom = from ? format(new Date(from + 'T00:00:00'), 'MMM d, yyyy') : 'Today'
-  const formattedTo = to ? format(new Date(to + 'T00:00:00'), 'MMM d, yyyy') : 'Today'
-  const dateRangeStr = from === to ? formattedFrom : `${formattedFrom} – ${formattedTo}`
+export function generateEODReportHtml(params: EODReportParams): { html: string; text: string } {
+  const {
+    lob,
+    from,
+    to,
+    perfData = [],
+    appsData = [],
+    mtdPerfData = [],
+    teamLeader = 'Marco Pabon',
+    teamManager = 'Ryan Gwinn',
+    schedule = '8AM - 5PM',
+  } = params
 
-  let lobLabel = 'All Divisions'
-  if (lob === 'VA') lobLabel = 'Veterans Benefits Division (VA Intake)'
-  if (lob === 'SSD') lobLabel = 'Social Security Disability Division (SSD Intake)'
-  if (lob === 'APPS') lobLabel = 'Applications Team (SSA Filings)'
+  // Format date in M/D/YYYY
+  const parseDateStr = (dStr: string) => {
+    if (!dStr) return new Date()
+    const parts = dStr.split('-')
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
+    }
+    return new Date(dStr)
+  }
 
-  const themeColor = lob === 'SSD' ? '#be185d' : lob === 'APPS' ? '#1d4ed8' : '#b82105'
+  const dFrom = parseDateStr(from)
+  const dTo = parseDateStr(to)
+  const formattedFrom = format(dFrom, 'M/d/yyyy')
+  const formattedTo = format(dTo, 'M/d/yyyy')
+  const dateDisplay = from === to ? formattedFrom : `${formattedFrom} - ${formattedTo}`
 
-  // Outlook Dark Mode CSS Overrides snippet
-  const headStyle = `
-    <meta name="color-scheme" content="light dark">
-    <meta name="supported-color-schemes" content="light dark">
-    <style>
-      :root { color-scheme: light dark; supported-color-schemes: light dark; }
-      @media (prefers-color-scheme: dark) {
-        .eod-container { background-color: #0f172a !important; color: #ffffff !important; border-color: #334155 !important; }
-        .eod-title { color: #ffffff !important; }
-        .eod-sub { color: #cbd5e1 !important; }
-        .eod-card { background-color: #1e293b !important; border-color: #475569 !important; }
-        .eod-card-label { color: #cbd5e1 !important; }
-        .eod-card-val-green { color: #34d399 !important; }
-        .eod-card-val-blue { color: #60a5fa !important; }
-        .eod-card-val-purple { color: #c084fc !important; }
-        .eod-card-val-pink { color: #f472b6 !important; }
-        .eod-card-val-amber { color: #fbbf24 !important; }
-        .eod-card-val-dark { color: #ffffff !important; }
-        .eod-mvp { background-color: #31103f !important; border-color: #a855f7 !important; color: #f5d0fe !important; }
-        .eod-mvp-text { color: #f0abfc !important; }
-        .eod-table-th { background-color: #1e293b !important; color: #ffffff !important; border-color: #475569 !important; }
-        .eod-row-even { background-color: #0f172a !important; color: #ffffff !important; }
-        .eod-row-odd { background-color: #1e293b !important; color: #ffffff !important; }
-        .eod-td { border-color: #334155 !important; color: #ffffff !important; }
-        .eod-td-bold { color: #ffffff !important; }
-        .eod-td-green { color: #34d399 !important; }
-        .eod-td-blue { color: #60a5fa !important; }
-        .eod-td-amber { color: #fbbf24 !important; }
-        .eod-td-pink { color: #f472b6 !important; }
-      }
-      [data-ogsc] .eod-container { background-color: #0f172a !important; color: #ffffff !important; }
-      [data-ogsc] .eod-card { background-color: #1e293b !important; border-color: #475569 !important; }
-      [data-ogsc] .eod-card-label { color: #cbd5e1 !important; }
-      [data-ogsc] .eod-table-th { background-color: #1e293b !important; color: #ffffff !important; }
-      [data-ogsc] .eod-td { color: #ffffff !important; }
-    </style>
-  `
+  let lobLabel = 'Veterans Benefits'
+  if (lob === 'SSD') lobLabel = 'Social Security Disability'
+  if (lob === 'APPS') lobLabel = 'Applications Team'
 
-  // ── APPS TEAM REPORT ──
+  // ─────────────────────────────────────────────────────────────
+  // 1. APPS DIVISION REPORT
+  // ─────────────────────────────────────────────────────────────
   if (lob === 'APPS') {
-    const totalApps = appsData.length
-    const convertedApps = appsData.filter(e => e.converted === 'YES').length
-    const pendingApps = appsData.filter(e => e.converted === 'NO').length
-    const rate = totalApps > 0 ? ((convertedApps / totalApps) * 100).toFixed(1) : '0.0'
-
-    // Group by Rep
     const repStats: Record<string, { total: number; converted: number; pending: number }> = {}
-    appsData.forEach(e => {
+    appsData.forEach((e) => {
       const rep = e.rep_name || 'Apps Rep'
       if (!repStats[rep]) repStats[rep] = { total: 0, converted: 0, pending: 0 }
       repStats[rep].total++
@@ -102,294 +85,338 @@ export function generateEODReportHtml(params: {
       else repStats[rep].pending++
     })
 
-    const repRows = Object.entries(repStats)
-      .map(([rep, s]) => ({
-        rep,
-        total: s.total,
-        converted: s.converted,
-        pending: s.pending,
-        rate: s.total > 0 ? ((s.converted / s.total) * 100).toFixed(1) : '0.0'
-      }))
-      .sort((a, b) => b.converted - a.converted)
+    const repRows = Object.entries(repStats).map(([rep, s]) => ({
+      rep,
+      total: s.total,
+      converted: s.converted,
+      pending: s.pending,
+      rate: s.total > 0 ? `${Math.round((s.converted / s.total) * 100)}%` : '0%',
+    }))
 
-    const mvp = repRows[0]
+    const totalApps = appsData.length
+    const totalConverted = appsData.filter((e) => e.converted === 'YES').length
+    const totalPending = appsData.filter((e) => e.converted === 'NO').length
+    const overallRate = totalApps > 0 ? `${Math.round((totalConverted / totalApps) * 100)}%` : '0%'
 
     const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      ${headStyle}
-    </head>
-    <body style="margin: 0; padding: 0; background-color: #ffffff;">
-      <div class="eod-container" style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #0f172a; line-height: 1.5; background: #ffffff; padding: 22px; border-radius: 8px; border: 1px solid #cbd5e1; margin: 0 auto;">
-        
-        <!-- Header -->
-        <div style="border-bottom: 3px solid ${themeColor}; padding-bottom: 12px; margin-bottom: 18px;">
-          <h2 class="eod-title" style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px; font-weight: 800;">📲 End of Day (EOD) Performance Report</h2>
-          <div class="eod-sub" style="color: #475569; font-size: 13px; font-weight: 600;">
-            <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
-          </div>
-        </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tabak LLC EOD Report - ${lobLabel}</title>
+</head>
+<body style="margin: 0; padding: 10px; font-family: Calibri, Arial, sans-serif; background-color: #ffffff; color: #000000;">
+  <div style="max-width: 900px; margin: 0 auto;">
+    
+    <!-- Header & Metadata Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="2" style="background-color: #205527; color: #ffffff; font-size: 16px; font-weight: bold; padding: 6px 10px; text-align: center; border: 1px solid #000000;">
+          Tabak LLC EOD Report
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 25%; font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">LOB:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${lobLabel}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Date:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${dateDisplay}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Team Leader:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamLeader}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Team Manager</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamManager}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Schedule</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${schedule}</td>
+      </tr>
+    </table>
 
-        <!-- Executive Summary Cards -->
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <tr>
-            <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Total Apps</div>
-              <div class="eod-card-val-dark" style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px;">${totalApps}</div>
-            </td>
-            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Converted (YES)</div>
-              <div class="eod-card-val-green" style="font-size: 22px; font-weight: 800; color: #047857; margin-top: 4px;">${convertedApps}</div>
-            </td>
-            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Pending (NO)</div>
-              <div class="eod-card-val-amber" style="font-size: 22px; font-weight: 800; color: #b45309; margin-top: 4px;">${pendingApps}</div>
-            </td>
-            <td className="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-              <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
-              <div class="eod-card-val-blue" style="font-size: 22px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${rate}%</div>
-            </td>
-          </tr>
-        </table>
+    <!-- Daily Performance Summary Table -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: center;">
+      <thead>
+        <tr>
+          <th colspan="5" style="background-color: #000000; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 10px; text-align: center; border: 1px solid #000000;">
+            Daily Performance Summary
+          </th>
+        </tr>
+        <tr style="background-color: #205527; color: #ffffff; font-weight: bold;">
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Agent name</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Apps Filed</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Converted (YES)</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Pending (NO)</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Conv. Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${repRows
+          .map(
+            (r) => `
+        <tr style="background-color: #ffffff; color: #000000;">
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.rep}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.total}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.converted}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.pending}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.rate}</td>
+        </tr>`
+          )
+          .join('')}
+        <tr style="background-color: #f1f5f9; color: #000000; font-weight: bold;">
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Total</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalApps}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalConverted}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalPending}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${overallRate}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`
 
-        ${mvp ? `
-        <!-- MVP Highlight -->
-        <div class="eod-mvp" style="background: #fdf4ff; border: 1px solid #d8b4fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
-          <span style="font-size: 14px; font-weight: bold; color: #7e22ce;">🏆 Top Performer: ${mvp.rep}</span>
-          <span class="eod-mvp-text" style="font-size: 13px; color: #6b21a8; font-weight: 600; margin-left: 12px;">${mvp.converted} Converted Cases (${mvp.rate}% Conversion)</span>
-        </div>
-        ` : ''}
-
-        <!-- Detailed Breakdown Table -->
-        <h3 class="eod-title" style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0; font-weight: 800;">Representative Breakdown</h3>
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
-          <thead>
-            <tr>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: left;">Representative</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Apps Filed</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Converted</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Pending</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Conv. Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${repRows.map((r, i) => `
-              <tr class="${i % 2 === 0 ? 'eod-row-even' : 'eod-row-odd'}" style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-                <td class="eod-td eod-td-bold" style="padding: 9px 12px; border: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${r.rep}</td>
-                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.total}</td>
-                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.converted}</td>
-                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.pending}</td>
-                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #1d4ed8;">${r.rate}%</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-
-        <!-- Footer -->
-        <div class="eod-sub" style="font-size: 11px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 10px; text-align: center;">
-          Report generated from Tabak LLC Dashboard · Confidential Internal Report
-        </div>
-      </div>
-    </body>
-    </html>
-    `
-
-    const text = `📊 EOD REPORT - ${lobLabel}\nPeriod: ${dateRangeStr}\n\nSummary:\n- Total Apps Filed: ${totalApps}\n- Converted (YES): ${convertedApps}\n- Pending (NO): ${pendingApps}\n- Conversion Rate: ${rate}%\n\nRepresentative Breakdown:\n` +
-      repRows.map(r => `• ${r.rep}: ${r.total} Filed | ${r.converted} Converted | ${r.pending} Pending | ${r.rate}% Rate`).join('\n')
-
+    const text = `Tabak LLC EOD Report - ${lobLabel}\nDate: ${dateDisplay}\nTeam Leader: ${teamLeader} | Manager: ${teamManager}\n\nSummary:\nTotal Apps: ${totalApps} | Converted: ${totalConverted} | Pending: ${totalPending} | Conv. Rate: ${overallRate}\n`
     return { html, text }
   }
 
-  // ── INTAKE (VA / SSD / ALL) REPORT ──
-  const isSSD = lob === 'SSD'
+  // ─────────────────────────────────────────────────────────────
+  // 2. VA / INTAKE DIVISION REPORT (Exact Spreadsheet Layout)
+  // ─────────────────────────────────────────────────────────────
 
-  const agentStats: Record<string, {
-    signed: number
-    unsigned: number
-    converted: number
-    rfc: number
-    capd_total: number
-    days: number
-  }> = {}
+  // Attendance Counts
+  let presentCount = 0
+  let tardyCount = 0
+  let absentCount = 0
 
-  perfData.forEach(r => {
-    if (!agentStats[r.agent_name]) {
-      agentStats[r.agent_name] = { signed: 0, unsigned: 0, converted: 0, rfc: 0, capd_total: 0, days: 0 }
+  // Group performance rows by Agent for the selected date
+  const agentDailyMap: Record<
+    string,
+    {
+      agent_name: string
+      capd: number
+      inbound_calls: number
+      case_rejected: number
+      crh: number
+      signed_retainers: number
+      unsigned_retainers: number
+      total_case_wanted: number
+      present: string
     }
-    const a = agentStats[r.agent_name]
-    a.signed += r.signed_retainers || 0
-    a.unsigned += r.unsigned_retainers || 0
-    a.converted += r.converted_cases || 0
-    a.rfc += r.rfc_sent || 0
-    a.capd_total += r.capd || 0
-    a.days++
+  > = {}
+
+  perfData.forEach((row) => {
+    const name = row.agent_name ? row.agent_name.trim() : 'Unknown'
+    if (!agentDailyMap[name]) {
+      agentDailyMap[name] = {
+        agent_name: name,
+        capd: 0,
+        inbound_calls: 0,
+        case_rejected: 0,
+        crh: 0,
+        signed_retainers: 0,
+        unsigned_retainers: 0,
+        total_case_wanted: 0,
+        present: row.present || 'Present',
+      }
+    }
+    const a = agentDailyMap[name]
+    a.capd += row.capd || 0
+    a.inbound_calls += row.inbound_calls || 0
+    a.case_rejected += row.case_rejected || 0
+    a.crh += row.crh || 0
+    a.signed_retainers += row.signed_retainers || 0
+    a.unsigned_retainers += row.unsigned_retainers || 0
+    a.total_case_wanted += row.total_case_wanted !== undefined ? row.total_case_wanted : ((row.signed_retainers || 0) + (row.unsigned_retainers || 0))
+    a.present = row.present || a.present
   })
 
-  const totalSigned = perfData.reduce((s, r) => s + (r.signed_retainers || 0), 0)
-  const totalUnsigned = perfData.reduce((s, r) => s + (r.unsigned_retainers || 0), 0)
-  const totalConverted = perfData.reduce((s, r) => s + (r.converted_cases || 0), 0)
-  const totalRfc = perfData.reduce((s, r) => s + (r.rfc_sent || 0), 0)
-  const totalCases = totalSigned + totalUnsigned
+  // Calculate Attendance counts from all agents logged
+  Object.values(agentDailyMap).forEach((a) => {
+    const status = (a.present || 'Present').toLowerCase()
+    if (status.includes('tardy')) tardyCount++
+    else if (status.includes('absent')) absentCount++
+    else presentCount++
+  })
 
-  const teamConvRate = isSSD
-    ? (totalSigned > 0 ? ((totalConverted / totalSigned) * 100).toFixed(1) : '0.0')
-    : (totalCases > 0 ? ((totalSigned / totalCases) * 100).toFixed(1) : '0.0')
+  // If no rows were present, fallback
+  if (Object.keys(agentDailyMap).length === 0) {
+    presentCount = 0
+    tardyCount = 0
+    absentCount = 0
+  }
 
-  const totalDays = new Set(perfData.map(r => r.date)).size
-  const avgCapd = totalDays > 0 ? Math.round(perfData.reduce((s, r) => s + (r.capd || 0), 0) / totalDays) : 0
+  // Calculate Month-to-Date (MTD) Running Retainers per specialist
+  const mtdSignedMap: Record<string, number> = {}
+  const mtdUnsignedMap: Record<string, number> = {}
 
-  const agentRows = Object.entries(agentStats)
-    .map(([agent, s]) => {
-      let rate = '0.0'
-      let signedRate = '0.0'
-      if (isSSD) {
-        rate = s.signed > 0 ? ((s.converted / s.signed) * 100).toFixed(1) : '0.0'
-        const total = s.signed + s.unsigned
-        signedRate = total > 0 ? ((s.signed / total) * 100).toFixed(1) : '0.0'
-      } else {
-        const total = s.signed + s.unsigned
-        rate = total > 0 ? ((s.signed / total) * 100).toFixed(1) : '0.0'
+  const sourceForMtd = mtdPerfData.length > 0 ? mtdPerfData : perfData
+  sourceForMtd.forEach((row) => {
+    const name = row.agent_name ? row.agent_name.trim() : 'Unknown'
+    mtdSignedMap[name] = (mtdSignedMap[name] || 0) + (row.signed_retainers || 0)
+    mtdUnsignedMap[name] = (mtdUnsignedMap[name] || 0) + (row.unsigned_retainers || 0)
+  })
+
+  // Build sorted agent rows
+  const agentRows = Object.values(agentDailyMap)
+    .map((a) => {
+      const totalWanted = a.signed_retainers + a.unsigned_retainers
+      const successRate = totalWanted > 0 ? `${Math.round((a.signed_retainers / totalWanted) * 100)}%` : '100%'
+      const runningSigned = mtdSignedMap[a.agent_name] !== undefined ? mtdSignedMap[a.agent_name] : a.signed_retainers
+      const runningUnsigned = mtdUnsignedMap[a.agent_name] !== undefined ? mtdUnsignedMap[a.agent_name] : a.unsigned_retainers
+
+      return {
+        ...a,
+        total_case_wanted: totalWanted,
+        successRate,
+        runningSigned,
+        runningUnsigned,
       }
-      const capdAvg = s.days > 0 ? Math.round(s.capd_total / s.days) : 0
-      return { agent, signed: s.signed, unsigned: s.unsigned, converted: s.converted, rfc: s.rfc, rate, signedRate, capdAvg }
     })
-    .sort((a, b) => isSSD ? b.converted - a.converted : b.signed - a.signed)
+    .sort((a, b) => a.agent_name.localeCompare(b.agent_name))
 
-  const mvp = agentRows[0]
-  const teamSignedRate = totalCases > 0 ? ((totalSigned / totalCases) * 100).toFixed(1) : '0.0'
+  // Calculate Totals
+  const totalCapd = agentRows.reduce((sum, r) => sum + r.capd, 0)
+  const totalInbound = agentRows.reduce((sum, r) => sum + r.inbound_calls, 0)
+  const totalRejected = agentRows.reduce((sum, r) => sum + r.case_rejected, 0)
+  const totalCrh = agentRows.reduce((sum, r) => sum + r.crh, 0)
+  const totalSigned = agentRows.reduce((sum, r) => sum + r.signed_retainers, 0)
+  const totalUnsigned = agentRows.reduce((sum, r) => sum + r.unsigned_retainers, 0)
+  const totalCaseWanted = totalSigned + totalUnsigned
+  const totalSuccessRate = totalCaseWanted > 0 ? `${Math.round((totalSigned / totalCaseWanted) * 100)}%` : '100%'
+  const totalRunningSigned = agentRows.reduce((sum, r) => sum + r.runningSigned, 0)
+  const totalRunningUnsigned = agentRows.reduce((sum, r) => sum + r.runningUnsigned, 0)
 
   const html = `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    ${headStyle}
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #ffffff;">
-    <div class="eod-container" style="font-family: Arial, Helvetica, sans-serif; max-width: 650px; color: #0f172a; line-height: 1.5; background: #ffffff; padding: 22px; border-radius: 8px; border: 1px solid #cbd5e1; margin: 0 auto;">
-      
-      <!-- Header -->
-      <div style="border-bottom: 3px solid ${themeColor}; padding-bottom: 12px; margin-bottom: 18px;">
-        <h2 class="eod-title" style="color: #0f172a; margin: 0 0 4px 0; font-size: 20px; font-weight: 800;">📊 End of Day (EOD) Performance Report</h2>
-        <div class="eod-sub" style="color: #475569; font-size: 13px; font-weight: 600;">
-          <strong>Division:</strong> ${lobLabel} &nbsp;|&nbsp; <strong>Period:</strong> ${dateRangeStr}
-        </div>
-      </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tabak LLC EOD Report - ${lobLabel}</title>
+</head>
+<body style="margin: 0; padding: 10px; font-family: Calibri, Arial, sans-serif; background-color: #ffffff; color: #000000;">
+  <div style="max-width: 1050px; margin: 0 auto;">
+    
+    <!-- 1. Header & Metadata Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="2" style="background-color: #205527; color: #ffffff; font-size: 16px; font-weight: bold; padding: 6px 10px; text-align: center; border: 1px solid #000000;">
+          Tabak LLC EOD Report
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 25%; font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">LOB:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${lobLabel}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Date:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${dateDisplay}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Team Leader:</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamLeader}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Team Manager</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamManager}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: right; background-color: #ffffff;">Schedule</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${schedule}</td>
+      </tr>
+    </table>
 
-      <!-- Executive Summary Cards -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+    <!-- 2. Attendance Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="4" style="background-color: #000000; color: #ffffff; font-size: 14px; font-weight: bold; padding: 5px 10px; text-align: center; border: 1px solid #000000;">
+          Attendance
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 25%; font-weight: 500; padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;">Present</td>
+        <td style="width: 25%; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${presentCount}</td>
+        <td style="width: 25%; padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+        <td style="width: 25%; padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+      </tr>
+      <tr>
+        <td style="font-weight: 500; padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;">Tardy</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${tardyCount}</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+      </tr>
+      <tr>
+        <td style="font-weight: 500; padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;">Absent</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${absentCount}</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; background-color: #ffffff;"></td>
+      </tr>
+    </table>
+
+    <!-- 3. Daily Performance Summary Table -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: center;">
+      <thead>
         <tr>
-          ${isSSD ? `
-          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Converted Cases</div>
-            <div class="eod-card-val-green" style="font-size: 20px; font-weight: 800; color: #047857; margin-top: 4px;">${totalConverted}</div>
-          </td>
-          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
-            <div class="eod-card-val-blue" style="font-size: 20px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${totalSigned}</div>
-          </td>
-          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Rate</div>
-            <div class="eod-card-val-purple" style="font-size: 20px; font-weight: 800; color: #7e22ce; margin-top: 4px;">${teamSignedRate}%</div>
-          </td>
-          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">Case Conv. Rate</div>
-            <div class="eod-card-val-pink" style="font-size: 20px; font-weight: 800; color: #be185d; margin-top: 4px;">${teamConvRate}%</div>
-          </td>
-          <td class="eod-card" style="width: 20%; padding: 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 10px; color: #475569; font-weight: bold; text-transform: uppercase;">RFC Sent</div>
-            <div class="eod-card-val-dark" style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px;">${totalRfc}</div>
-          </td>
-          ` : `
-          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Signed Retainers</div>
-            <div class="eod-card-val-green" style="font-size: 22px; font-weight: 800; color: #047857; margin-top: 4px;">${totalSigned}</div>
-          </td>
-          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Unsigned</div>
-            <div class="eod-card-val-amber" style="font-size: 22px; font-weight: 800; color: #b45309; margin-top: 4px;">${totalUnsigned}</div>
-          </td>
-          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Conv. Rate</div>
-            <div class="eod-card-val-blue" style="font-size: 22px; font-weight: 800; color: #1d4ed8; margin-top: 4px;">${teamConvRate}%</div>
-          </td>
-          <td class="eod-card" style="width: 25%; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center;">
-            <div class="eod-card-label" style="font-size: 11px; color: #475569; font-weight: bold; text-transform: uppercase;">Avg CAPD</div>
-            <div class="eod-card-val-dark" style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px;">${avgCapd}</div>
-          </td>
-          `}
+          <th colspan="11" style="background-color: #000000; color: #ffffff; font-size: 14px; font-weight: bold; padding: 6px 10px; text-align: center; border: 1px solid #000000;">
+            Daily Performance Summary
+          </th>
         </tr>
-      </table>
+        <tr style="background-color: #205527; color: #ffffff; font-weight: bold; font-size: 12px;">
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Agent name</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">CAPD</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Inbound calls</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Case Rejected</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">CRH</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Signed Retainers</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Unsigned</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Total Case Wanted</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Signed success rate</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Running Signed Retainers</th>
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Running Unsigned Retainers</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${agentRows
+          .map(
+            (r) => `
+        <tr style="background-color: #ffffff; color: #000000;">
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.agent_name}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.capd}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.inbound_calls}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.case_rejected}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.crh}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.signed_retainers}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.unsigned_retainers}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.total_case_wanted}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.successRate}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.runningSigned}</td>
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: center;">${r.runningUnsigned}</td>
+        </tr>`
+          )
+          .join('')}
+        <tr style="background-color: #f1f5f9; color: #000000; font-weight: bold;">
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">Total</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalCapd}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalInbound}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalRejected}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalCrh}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalSigned}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalUnsigned}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalCaseWanted}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalSuccessRate}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalRunningSigned}</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: center;">${totalRunningUnsigned}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`
 
-      ${mvp ? `
-      <!-- MVP Highlight -->
-      <div class="eod-mvp" style="background: #fdf4ff; border: 1px solid #d8b4fe; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px;">
-        <span style="font-size: 14px; font-weight: bold; color: #7e22ce;">🏆 Top Performer: ${mvp.agent}</span>
-        <span class="eod-mvp-text" style="font-size: 13px; color: #6b21a8; font-weight: 600; margin-left: 12px;">${isSSD ? `${mvp.converted} Converted Cases (${mvp.signedRate}% Signed | ${mvp.rate}% Case Conv.)` : `${mvp.signed} Signed Retainers (${mvp.rate}% Conversion)`}</span>
-      </div>
-      ` : ''}
-
-      <!-- Detailed Breakdown Table -->
-      <h3 class="eod-title" style="font-size: 15px; color: #0f172a; margin: 0 0 10px 0; font-weight: 800;">Specialist Performance Breakdown</h3>
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
-        <thead>
-          <tr>
-            <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: left;">Specialist</th>
-            ${isSSD ? `
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Converted</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Unsigned</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed Rate</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Case Conv. Rate</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">RFC Sent</th>
-            ` : `
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Signed</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Unsigned</th>
-              <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Conv. Rate</th>
-            `}
-            <th class="eod-table-th" style="padding: 10px 12px; background-color: #1e293b; color: #ffffff !important; font-weight: bold; border: 1px solid #1e293b; text-align: right;">Avg CAPD</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${agentRows.map((r, i) => `
-            <tr class="${i % 2 === 0 ? 'eod-row-even' : 'eod-row-odd'}" style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-              <td class="eod-td eod-td-bold" style="padding: 9px 12px; border: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${r.agent}</td>
-              ${isSSD ? `
-                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.converted}</td>
-                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #1d4ed8;">${r.signed}</td>
-                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.unsigned}</td>
-                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #7e22ce;">${r.signedRate}%</td>
-                <td class="eod-td eod-td-pink" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #be185d;">${r.rate}%</td>
-                <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.rfc}</td>
-              ` : `
-                <td class="eod-td eod-td-green" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #047857; font-weight: bold;">${r.signed}</td>
-                <td class="eod-td eod-td-amber" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #b45309;">${r.unsigned}</td>
-                <td class="eod-td eod-td-blue" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold; color: #1d4ed8;">${r.rate}%</td>
-              `}
-              <td class="eod-td" style="padding: 9px 12px; border: 1px solid #cbd5e1; text-align: right; color: #0f172a;">${r.capdAvg}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-
-      <!-- Footer -->
-      <div class="eod-sub" style="font-size: 11px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 10px; text-align: center;">
-        Report generated from Tabak LLC Dashboard · Confidential Internal Report
-      </div>
-    </div>
-  </body>
-  </html>
-  `
-
-  const text = `📊 EOD REPORT - ${lobLabel}\nPeriod: ${dateRangeStr}\n\nSummary:\n` +
-    (isSSD 
-      ? `- Converted Cases: ${totalConverted}\n- Signed Retainers: ${totalSigned}\n- Signed Rate: ${teamSignedRate}%\n- Case Conv. Rate: ${teamConvRate}%\n- RFC Sent: ${totalRfc}\n`
-      : `- Signed Retainers: ${totalSigned}\n- Unsigned: ${totalUnsigned}\n- Conv. Rate: ${teamConvRate}%\n- Avg CAPD: ${avgCapd}\n`) +
-    `\nSpecialist Breakdown:\n` +
-    agentRows.map(r => isSSD 
-      ? `• ${r.agent}: ${r.converted} Converted | ${r.signed} Signed | ${r.signedRate}% Signed Rate | ${r.rate}% Case Conv. Rate` 
-      : `• ${r.agent}: ${r.signed} Signed | ${r.unsigned} Unsigned | ${r.rate}% Rate | ${r.capdAvg} CAPD`
-    ).join('\n')
+  const text = `Tabak LLC EOD Report - ${lobLabel}\nDate: ${dateDisplay}\nTeam Leader: ${teamLeader} | Manager: ${teamManager} | Schedule: ${schedule}\n\nAttendance:\nPresent: ${presentCount} | Tardy: ${tardyCount} | Absent: ${absentCount}\n\nDaily Performance Summary:\nTotal: CAPD ${totalCapd} | Inbound ${totalInbound} | Rejected ${totalRejected} | CRH ${totalCrh} | Signed ${totalSigned} | Unsigned ${totalUnsigned} | Total Case Wanted ${totalCaseWanted} | Signed Rate ${totalSuccessRate} | Running Signed ${totalRunningSigned} | Running Unsigned ${totalRunningUnsigned}\n`
 
   return { html, text }
 }

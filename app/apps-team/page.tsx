@@ -282,10 +282,13 @@ export default function AppsTeamPage() {
   async function handleCopyEODReport() {
     const { html, text } = generateEODReportHtml({
       lob: 'APPS',
-      from: '',
-      to: '',
+      from: from || format(new Date(), 'yyyy-MM-dd'),
+      to: to || format(new Date(), 'yyyy-MM-dd'),
       perfData: [],
       appsData: entries,
+      teamLeader: userName || 'Marco Pabon',
+      teamManager: 'Ryan Gwinn',
+      schedule: '8AM - 5PM',
     })
 
     try {
