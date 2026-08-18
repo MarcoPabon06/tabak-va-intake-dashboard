@@ -88,6 +88,10 @@ export default function SSDTrackerPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number | 'all'>(50)
+
   // Modals
   const [showLogModal, setShowLogModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -164,6 +168,7 @@ export default function SSDTrackerPage() {
       setSummary(json.summary || null)
       if (json.active_reps || json.reps) setRepsList(json.active_reps || json.reps)
       if (json.historical_reps) setHistoricalReps(json.historical_reps)
+      setCurrentPage(1)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -410,6 +415,15 @@ export default function SSDTrackerPage() {
       </span>
     )
   }
+
+  // Computed paginated entries
+  const totalRecords = entries.length
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(totalRecords / (pageSize as number)) || 1
+  const paginatedEntries = useMemo(() => {
+    if (pageSize === 'all') return entries
+    const start = (currentPage - 1) * (pageSize as number)
+    return entries.slice(start, start + (pageSize as number))
+  }, [entries, currentPage, pageSize])
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -703,7 +717,7 @@ export default function SSDTrackerPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((record) => {
+                {paginatedEntries.map((record) => {
                   const daysOld = differenceInDays(new Date(), new Date(record.date))
                   const isPending = record.status === 'Sent E-Sign' || record.status === 'Paper Retainer Sent'
 
@@ -802,6 +816,63 @@ export default function SSDTrackerPage() {
                 })}
               </tbody>
             </table>
+          )}
+
+          {/* Pagination Controls */}
+          {totalRecords > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Showing <strong>{pageSize === 'all' ? 1 : Math.min((currentPage - 1) * (pageSize as number) + 1, totalRecords)}</strong> to{' '}
+                <strong>{pageSize === 'all' ? totalRecords : Math.min(currentPage * (pageSize as number), totalRecords)}</strong> of{' '}
+                <strong>{totalRecords.toLocaleString()}</strong> leads
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Rows:</span>
+                  <select
+                    className="input-field"
+                    style={{ padding: '4px 8px', fontSize: 12, margin: 0, width: 75, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                    value={pageSize}
+                    onChange={(e) => {
+                      const val = e.target.value === 'all' ? 'all' : parseInt(e.target.value)
+                      setPageSize(val)
+                      setCurrentPage(1)
+                    }}
+                  >
+                    <option value={25} style={{ background: '#0a1628' }}>25</option>
+                    <option value={50} style={{ background: '#0a1628' }}>50</option>
+                    <option value={100} style={{ background: '#0a1628' }}>100</option>
+                    <option value={250} style={{ background: '#0a1628' }}>250</option>
+                    <option value="all" style={{ background: '#0a1628' }}>All</option>
+                  </select>
+                </div>
+
+                {pageSize !== 'all' && totalPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12, opacity: currentPage === 1 ? 0.4 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    >
+                      ◀ Prev
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                      Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+                    </span>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12, opacity: currentPage === totalPages ? 0.4 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

@@ -47,57 +47,81 @@ export async function GET(req: NextRequest) {
 
   const rows = db.prepare(query).all(...params) as any[]
 
-  // Dynamically enhance VA and SSD specialist performance with live tracker records
+  // Single Batch SQL Aggregations for VA and SSD to eliminate N+1 query bottleneck
+  const vaAggRows = db.prepare(`
+    SELECT 
+      date,
+      LOWER(TRIM(rep_name)) as rep_name_clean,
+      LOWER(TRIM(rep_username)) as rep_username_clean,
+      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed,
+      SUM(CASE WHEN status IN ('Sent E-Sign', 'Sign Follow Up') THEN 1 ELSE 0 END) as unsigned,
+      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
+      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected
+    FROM va_lead_records
+    WHERE date >= ? AND date <= ?
+    GROUP BY date, rep_name_clean, rep_username_clean
+  `).all(from, to) as any[]
+
+  const vaMap = new Map<string, any>()
+  for (const r of vaAggRows) {
+    if (r.rep_name_clean) vaMap.set(`${r.date}___${r.rep_name_clean}`, r)
+    if (r.rep_username_clean) vaMap.set(`${r.date}___${r.rep_username_clean}`, r)
+  }
+
+  const ssdAggRows = db.prepare(`
+    SELECT 
+      date,
+      LOWER(TRIM(rep_name)) as rep_name_clean,
+      LOWER(TRIM(rep_username)) as rep_username_clean,
+      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed,
+      SUM(CASE WHEN status IN ('Sent E-Sign', 'Paper Retainer Sent') THEN 1 ELSE 0 END) as unsigned,
+      SUM(CASE WHEN status = 'Sent RFC' THEN 1 ELSE 0 END) as rfc,
+      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
+      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected,
+      SUM(CASE WHEN is_converted = 1 THEN 1 ELSE 0 END) as converted
+    FROM ssd_lead_records
+    WHERE date >= ? AND date <= ?
+    GROUP BY date, rep_name_clean, rep_username_clean
+  `).all(from, to) as any[]
+
+  const ssdMap = new Map<string, any>()
+  for (const r of ssdAggRows) {
+    if (r.rep_name_clean) ssdMap.set(`${r.date}___${r.rep_name_clean}`, r)
+    if (r.rep_username_clean) ssdMap.set(`${r.date}___${r.rep_username_clean}`, r)
+  }
+
+  // Dynamically enhance VA and SSD specialist performance with batch tracker records
   const enhancedRows = rows.map((row) => {
+    const key = `${row.date}___${row.agent_name.toLowerCase().trim()}`
     if (row.lob === 'VA') {
-      const leads = db.prepare(`
-        SELECT status FROM va_lead_records 
-        WHERE date = ? AND (LOWER(rep_name) = LOWER(?) OR rep_username = ?)
-      `).all(row.date, row.agent_name, row.agent_name) as { status: string }[]
-
-      if (leads.length > 0) {
-        const signed = leads.filter((l) => l.status === 'Signed E-Sign').length
-        const unsigned = leads.filter((l) => l.status === 'Sent E-Sign' || l.status === 'Sign Follow Up').length
-        const crh = leads.filter((l) => l.status === 'Client Refused Help').length
-        const rejected = leads.filter((l) => l.status === 'Case Rejected').length
-        const total = signed + unsigned
-
+      const vaData = vaMap.get(key)
+      if (vaData) {
+        const total = (vaData.signed || 0) + (vaData.unsigned || 0)
         return {
           ...row,
-          signed_retainers: signed,
-          unsigned_retainers: unsigned,
-          crh: crh,
-          case_rejected: rejected,
+          signed_retainers: vaData.signed || 0,
+          unsigned_retainers: vaData.unsigned || 0,
+          crh: vaData.crh || 0,
+          case_rejected: vaData.rejected || 0,
           total_case_wanted: total,
-          signed_success_rate: total > 0 ? signed / total : 0,
+          signed_success_rate: total > 0 ? (vaData.signed || 0) / total : 0,
         }
       }
     } else if (row.lob === 'SSD') {
-      const leads = db.prepare(`
-        SELECT status, is_converted FROM ssd_lead_records 
-        WHERE date = ? AND (LOWER(rep_name) = LOWER(?) OR rep_username = ?)
-      `).all(row.date, row.agent_name, row.agent_name) as { status: string; is_converted: number }[]
-
-      if (leads.length > 0) {
-        const signed = leads.filter((l) => l.status === 'Signed E-Sign').length
-        const unsigned = leads.filter((l) => l.status === 'Sent E-Sign' || l.status === 'Paper Retainer Sent').length
-        const rfc = leads.filter((l) => l.status === 'Sent RFC').length
-        const crh = leads.filter((l) => l.status === 'Client Refused Help').length
-        const rejected = leads.filter((l) => l.status === 'Case Rejected').length
-        const converted = leads.filter((l) => l.is_converted === 1).length
-        const total = signed + unsigned
-        const maxConverted = Math.max(row.converted_cases || 0, converted)
-
+      const ssdData = ssdMap.get(key)
+      if (ssdData) {
+        const total = (ssdData.signed || 0) + (ssdData.unsigned || 0)
+        const maxConverted = Math.max(row.converted_cases || 0, ssdData.converted || 0)
         return {
           ...row,
-          signed_retainers: signed,
-          unsigned_retainers: unsigned,
-          rfc_sent: rfc,
-          crh: crh,
-          case_rejected: rejected,
+          signed_retainers: ssdData.signed || 0,
+          unsigned_retainers: ssdData.unsigned || 0,
+          rfc_sent: ssdData.rfc || 0,
+          crh: ssdData.crh || 0,
+          case_rejected: ssdData.rejected || 0,
           converted_cases: maxConverted,
           total_case_wanted: total,
-          signed_success_rate: signed > 0 ? maxConverted / signed : (total > 0 ? signed / total : 0),
+          signed_success_rate: (ssdData.signed || 0) > 0 ? maxConverted / ssdData.signed : (total > 0 ? ssdData.signed / total : 0),
         }
       }
     }

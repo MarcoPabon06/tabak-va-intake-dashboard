@@ -236,6 +236,9 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_va_leads_date ON va_lead_records(date);
     CREATE INDEX IF NOT EXISTS idx_va_leads_rep ON va_lead_records(rep_username);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_date_rep ON va_lead_records(date, rep_username);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_date_repname ON va_lead_records(date, rep_name);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_status_date ON va_lead_records(status, date);
     CREATE INDEX IF NOT EXISTS idx_va_leads_status ON va_lead_records(status);
     CREATE INDEX IF NOT EXISTS idx_va_leads_lead_id ON va_lead_records(lead_id);
 
@@ -267,9 +270,13 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_ssd_leads_date ON ssd_lead_records(date);
     CREATE INDEX IF NOT EXISTS idx_ssd_leads_rep ON ssd_lead_records(rep_username);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_date_rep ON ssd_lead_records(date, rep_username);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_date_repname ON ssd_lead_records(date, rep_name);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_status_date ON ssd_lead_records(status, date);
     CREATE INDEX IF NOT EXISTS idx_ssd_leads_status ON ssd_lead_records(status);
     CREATE INDEX IF NOT EXISTS idx_ssd_leads_lead_id ON ssd_lead_records(lead_id);
     CREATE INDEX IF NOT EXISTS idx_ssd_leads_claim_type ON ssd_lead_records(claim_type);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_converted ON ssd_lead_records(is_converted, date);
 
     CREATE TABLE IF NOT EXISTS upload_audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

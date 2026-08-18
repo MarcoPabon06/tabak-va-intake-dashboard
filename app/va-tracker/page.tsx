@@ -117,6 +117,10 @@ export default function VaTrackerPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [viewTab, setViewTab] = useState<'all' | 'pending' | 'signed' | 'refused'>('all')
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number | 'all'>(50)
+
   // Modals
   const [showLogModal, setShowLogModal] = useState(false)
   const [editingRecord, setEditingRecord] = useState<VaLeadRecord | null>(null)
@@ -219,6 +223,15 @@ export default function VaTrackerPage() {
     }
     return entries
   }, [entries, viewTab])
+
+  // Computed paginated entries
+  const totalRecords = displayedEntries.length
+  const totalPages = pageSize === 'all' ? 1 : Math.ceil(totalRecords / (pageSize as number)) || 1
+  const paginatedEntries = useMemo(() => {
+    if (pageSize === 'all') return displayedEntries
+    const start = (currentPage - 1) * (pageSize as number)
+    return displayedEntries.slice(start, start + (pageSize as number))
+  }, [displayedEntries, currentPage, pageSize])
 
   // Export to XLSX
   function handleExportExcel() {
@@ -592,7 +605,7 @@ export default function VaTrackerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayedEntries.map((e) => (
+                    {paginatedEntries.map((e) => (
                       <tr
                         key={e.id}
                         style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s ease' }}
@@ -687,6 +700,63 @@ export default function VaTrackerPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {totalRecords > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  Showing <strong>{pageSize === 'all' ? 1 : Math.min((currentPage - 1) * (pageSize as number) + 1, totalRecords)}</strong> to{' '}
+                  <strong>{pageSize === 'all' ? totalRecords : Math.min(currentPage * (pageSize as number), totalRecords)}</strong> of{' '}
+                  <strong>{totalRecords.toLocaleString()}</strong> leads
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Rows:</span>
+                    <select
+                      className="input-field"
+                      style={{ padding: '4px 8px', fontSize: 12, margin: 0, width: 75, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                      value={pageSize}
+                      onChange={(e) => {
+                        const val = e.target.value === 'all' ? 'all' : parseInt(e.target.value)
+                        setPageSize(val)
+                        setCurrentPage(1)
+                      }}
+                    >
+                      <option value={25} style={{ background: '#0a1628' }}>25</option>
+                      <option value={50} style={{ background: '#0a1628' }}>50</option>
+                      <option value={100} style={{ background: '#0a1628' }}>100</option>
+                      <option value={250} style={{ background: '#0a1628' }}>250</option>
+                      <option value="all" style={{ background: '#0a1628' }}>All</option>
+                    </select>
+                  </div>
+
+                  {pageSize !== 'all' && totalPages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        className="btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 12, opacity: currentPage === 1 ? 0.4 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      >
+                        ◀ Prev
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                        Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong>
+                      </span>
+                      <button
+                        className="btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 12, opacity: currentPage === totalPages ? 0.4 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      >
+                        Next ▶
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

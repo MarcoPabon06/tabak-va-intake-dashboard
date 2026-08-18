@@ -120,64 +120,85 @@ export async function GET(req: NextRequest) {
 
     const entries = db.prepare(query).all(...params) as any[]
 
-    // Calculate Metrics for the filtered period
-    let metricsQuery = `SELECT * FROM ssd_lead_records WHERE 1=1`
+    // Fast SQL Aggregate Metrics Calculation
+    let whereClause = ` WHERE 1=1`
     const metricsParams: any[] = []
 
     if (userRole === 'regular' && userLob === 'SSD') {
-      metricsQuery += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
+      whereClause += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
       metricsParams.push(currentUsername, currentDisplayName)
     } else if (rep && rep !== 'All') {
-      metricsQuery += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
+      whereClause += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
       metricsParams.push(rep, rep)
     }
 
     if (from) {
-      metricsQuery += ` AND date >= ?`
+      whereClause += ` AND date >= ?`
       metricsParams.push(from)
     }
     if (to) {
-      metricsQuery += ` AND date <= ?`
+      whereClause += ` AND date <= ?`
       metricsParams.push(to)
     }
 
-    const allPeriodEntries = db.prepare(metricsQuery).all(...metricsParams) as any[]
+    const aggStats = db.prepare(`
+      SELECT 
+        COUNT(*) as total_leads,
+        SUM(CASE WHEN status = 'Sent E-Sign' THEN 1 ELSE 0 END) as sent_esigns,
+        SUM(CASE WHEN status = 'Paper Retainer Sent' THEN 1 ELSE 0 END) as paper_sent,
+        SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed_esigns,
+        SUM(CASE WHEN status = 'Sent RFC' THEN 1 ELSE 0 END) as sent_rfc,
+        SUM(CASE WHEN status = 'Appointment Rescheduled' THEN 1 ELSE 0 END) as rescheduled,
+        SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh_count,
+        SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected_count,
+        SUM(CASE WHEN is_converted = 1 THEN 1 ELSE 0 END) as converted_count
+      FROM ssd_lead_records
+      ${whereClause}
+    `).get(...metricsParams) as any || {}
 
-    const totalLeads = allPeriodEntries.length
-    const sentEsigns = allPeriodEntries.filter((e) => e.status === 'Sent E-Sign').length
-    const paperSent = allPeriodEntries.filter((e) => e.status === 'Paper Retainer Sent').length
+    const totalLeads = aggStats.total_leads || 0
+    const sentEsigns = aggStats.sent_esigns || 0
+    const paperSent = aggStats.paper_sent || 0
     const pendingSignatures = sentEsigns + paperSent
-    const signedEsigns = allPeriodEntries.filter((e) => e.status === 'Signed E-Sign').length
-    const sentRfc = allPeriodEntries.filter((e) => e.status === 'Sent RFC').length
-    const rescheduled = allPeriodEntries.filter((e) => e.status === 'Appointment Rescheduled').length
-    const crhCount = allPeriodEntries.filter((e) => e.status === 'Client Refused Help').length
-    const rejectedCount = allPeriodEntries.filter((e) => e.status === 'Case Rejected').length
-    const convertedCount = allPeriodEntries.filter((e) => e.is_converted === 1).length
+    const signedEsigns = aggStats.signed_esigns || 0
+    const sentRfc = aggStats.sent_rfc || 0
+    const rescheduled = aggStats.rescheduled || 0
+    const crhCount = aggStats.crh_count || 0
+    const rejectedCount = aggStats.rejected_count || 0
+    const convertedCount = aggStats.converted_count || 0
 
     const totalEsignPool = pendingSignatures + signedEsigns
     const signedSuccessRate = totalEsignPool > 0 ? ((signedEsigns / totalEsignPool) * 100).toFixed(1) : '0.0'
     const caseConversionRate = signedEsigns > 0 ? ((convertedCount / signedEsigns) * 100).toFixed(1) : '0.0'
 
-    // Outcome Reasons breakdown
+    // Fast Outcome Reasons Breakdown
     const reasonsBreakdown: Record<string, number> = {}
     for (const reason of SSD_OUTCOME_REASONS) {
       reasonsBreakdown[reason] = 0
     }
-    for (const entry of allPeriodEntries) {
-      if (entry.outcome_reason) {
-        reasonsBreakdown[entry.outcome_reason] = (reasonsBreakdown[entry.outcome_reason] || 0) + 1
-      }
+    const reasonRows = db.prepare(`
+      SELECT outcome_reason, COUNT(*) as cnt
+      FROM ssd_lead_records
+      ${whereClause} AND outcome_reason IS NOT NULL AND outcome_reason != ''
+      GROUP BY outcome_reason
+    `).all(...metricsParams) as { outcome_reason: string; cnt: number }[]
+    for (const r of reasonRows) {
+      if (r.outcome_reason) reasonsBreakdown[r.outcome_reason] = r.cnt
     }
 
-    // Claim Types breakdown
+    // Fast Claim Types Breakdown
     const claimsBreakdown: Record<string, number> = {}
     for (const claim of SSD_CLAIM_TYPES) {
       claimsBreakdown[claim] = 0
     }
-    for (const entry of allPeriodEntries) {
-      if (entry.claim_type) {
-        claimsBreakdown[entry.claim_type] = (claimsBreakdown[entry.claim_type] || 0) + 1
-      }
+    const claimRows = db.prepare(`
+      SELECT claim_type, COUNT(*) as cnt
+      FROM ssd_lead_records
+      ${whereClause} AND claim_type IS NOT NULL AND claim_type != ''
+      GROUP BY claim_type
+    `).all(...metricsParams) as { claim_type: string; cnt: number }[]
+    for (const c of claimRows) {
+      if (c.claim_type) claimsBreakdown[c.claim_type] = c.cnt
     }
 
     // Get all active SSD Intake Reps strictly from active users and active agents

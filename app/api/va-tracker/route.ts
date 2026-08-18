@@ -128,49 +128,63 @@ export async function GET(req: NextRequest) {
 
   const entries = db.prepare(query).all(...params) as any[]
 
-  // Calculate Metrics for the filtered period
-  let metricsQuery = `SELECT * FROM va_lead_records WHERE 1=1`
+  // Fast SQL Aggregate Metrics Calculation for VA
+  let whereClause = ` WHERE 1=1`
   const metricsParams: any[] = []
 
   if (userRole === 'regular' && userLob === 'VA') {
-    metricsQuery += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
+    whereClause += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
     metricsParams.push(currentUsername, currentDisplayName)
   } else if (rep && rep !== 'All') {
-    metricsQuery += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
+    whereClause += ` AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))`
     metricsParams.push(rep, rep)
   }
 
   if (from) {
-    metricsQuery += ` AND date >= ?`
+    whereClause += ` AND date >= ?`
     metricsParams.push(from)
   }
   if (to) {
-    metricsQuery += ` AND date <= ?`
+    whereClause += ` AND date <= ?`
     metricsParams.push(to)
   }
 
-  const allPeriodEntries = db.prepare(metricsQuery).all(...metricsParams) as any[]
+  const aggStats = db.prepare(`
+    SELECT 
+      COUNT(*) as total_leads,
+      SUM(CASE WHEN status = 'Sent E-Sign' THEN 1 ELSE 0 END) as sent_esigns,
+      SUM(CASE WHEN status = 'Sign Follow Up' THEN 1 ELSE 0 END) as follow_ups,
+      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed_esigns,
+      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh_count,
+      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected_count
+    FROM va_lead_records
+    ${whereClause}
+  `).get(...metricsParams) as any || {}
 
-  const totalLeads = allPeriodEntries.length
-  const sentEsigns = allPeriodEntries.filter((e) => e.status === 'Sent E-Sign').length
-  const followUps = allPeriodEntries.filter((e) => e.status === 'Sign Follow Up').length
+  const totalLeads = aggStats.total_leads || 0
+  const sentEsigns = aggStats.sent_esigns || 0
+  const followUps = aggStats.follow_ups || 0
   const pendingSignatures = sentEsigns + followUps
-  const signedEsigns = allPeriodEntries.filter((e) => e.status === 'Signed E-Sign').length
-  const crhCount = allPeriodEntries.filter((e) => e.status === 'Client Refused Help').length
-  const rejectedCount = allPeriodEntries.filter((e) => e.status === 'Case Rejected').length
+  const signedEsigns = aggStats.signed_esigns || 0
+  const crhCount = aggStats.crh_count || 0
+  const rejectedCount = aggStats.rejected_count || 0
 
   const totalEsignPool = pendingSignatures + signedEsigns
   const conversionRate = totalEsignPool > 0 ? ((signedEsigns / totalEsignPool) * 100).toFixed(1) : '0.0'
 
-  // Reason breakdown
+  // Fast Reason Breakdown
   const reasonsBreakdown: Record<string, number> = {}
   for (const reason of VA_OUTCOME_REASONS) {
     reasonsBreakdown[reason] = 0
   }
-  for (const entry of allPeriodEntries) {
-    if (entry.outcome_reason) {
-      reasonsBreakdown[entry.outcome_reason] = (reasonsBreakdown[entry.outcome_reason] || 0) + 1
-    }
+  const reasonRows = db.prepare(`
+    SELECT outcome_reason, COUNT(*) as cnt
+    FROM va_lead_records
+    ${whereClause} AND outcome_reason IS NOT NULL AND outcome_reason != ''
+    GROUP BY outcome_reason
+  `).all(...metricsParams) as { outcome_reason: string; cnt: number }[]
+  for (const r of reasonRows) {
+    if (r.outcome_reason) reasonsBreakdown[r.outcome_reason] = r.cnt
   }
 
     // Get all active VA Intake Reps strictly from active users and active agents
