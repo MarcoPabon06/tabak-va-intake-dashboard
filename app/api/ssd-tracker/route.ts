@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Get all active SSD Intake Reps from users, agents, and lead records
+    // Get all active SSD Intake Reps strictly from active users and active agents
     const ssdUsers = db.prepare(`
       SELECT username AS rep_username, display_name
       FROM users 
@@ -176,20 +176,21 @@ export async function GET(req: NextRequest) {
     const ssdAgents = db.prepare(`
       SELECT name 
       FROM agents 
-      WHERE lob = 'SSD' AND (active = 1 OR active IS NULL)
+      WHERE lob = 'SSD' AND active = 1
     `).all() as { name: string }[]
 
-    const historicalReps = db.prepare(`
-      SELECT DISTINCT rep_name, rep_username 
-      FROM ssd_lead_records 
-      WHERE rep_name IS NOT NULL AND rep_name != ''
-    `).all() as { rep_name: string; rep_username: string }[]
+    const inactiveNames = new Set(
+      (db.prepare("SELECT display_name, username FROM users WHERE active = 0").all() as { display_name: string | null; username: string }[])
+        .flatMap(u => [u.display_name, u.username])
+        .filter(Boolean)
+        .map(n => (n as string).toLowerCase().trim())
+    )
 
     const repsMap = new Map<string, { rep_name: string; rep_username: string }>()
 
     for (const u of ssdUsers) {
       const name = (u.display_name || u.rep_username || '').trim()
-      if (name) {
+      if (name && !inactiveNames.has(name.toLowerCase()) && !inactiveNames.has(u.rep_username.toLowerCase())) {
         repsMap.set(name.toLowerCase(), {
           rep_name: name,
           rep_username: u.rep_username || name.toLowerCase().replace(/[^a-z0-9]/g, ''),
@@ -199,20 +200,10 @@ export async function GET(req: NextRequest) {
 
     for (const a of ssdAgents) {
       const name = (a.name || '').trim()
-      if (name && !repsMap.has(name.toLowerCase())) {
+      if (name && !inactiveNames.has(name.toLowerCase()) && !repsMap.has(name.toLowerCase())) {
         repsMap.set(name.toLowerCase(), {
           rep_name: name,
           rep_username: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
-        })
-      }
-    }
-
-    for (const h of historicalReps) {
-      const name = (h.rep_name || '').trim()
-      if (name && !repsMap.has(name.toLowerCase())) {
-        repsMap.set(name.toLowerCase(), {
-          rep_name: name,
-          rep_username: h.rep_username || name.toLowerCase().replace(/[^a-z0-9]/g, ''),
         })
       }
     }

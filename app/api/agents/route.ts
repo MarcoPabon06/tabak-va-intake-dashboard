@@ -17,37 +17,60 @@ export async function GET(req: NextRequest) {
     ? (Array.isArray(userPerms?.allowedLobs) ? userPerms.allowedLobs : [userLob])
     : ['VA', 'SSD', 'APPS']
 
-  let agents: any[]
-  if (userRole === 'regular') {
-    agents = db.prepare('SELECT * FROM agents WHERE lob = ? ORDER BY name').all(userLob)
-  } else if (userRole === 'admin' && !allowedLobs.includes('All')) {
-    const placeholders = allowedLobs.map(() => '?').join(',')
-    agents = db.prepare(`SELECT * FROM agents WHERE lob IN (${placeholders}) ORDER BY name`).all(...allowedLobs)
-  } else {
-    agents = db.prepare('SELECT * FROM agents ORDER BY name').all()
-  }
-
-  // Fail-safe filtering for active agents (must exist as active regular specialist in users table)
-  let users = db.prepare("SELECT display_name, lob FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string; lob?: string }[]
+  // Dynamically query active regular specialists from live users and agents tables
+  let activeUsers = db.prepare("SELECT username, display_name, lob FROM users WHERE role = 'regular' AND active = 1").all() as { username: string; display_name: string | null; lob?: string }[]
+  
   if (userRole === 'admin' && !allowedLobs.includes('All')) {
-    users = users.filter(u => allowedLobs.includes(u.lob || 'VA'))
+    activeUsers = activeUsers.filter(u => allowedLobs.includes(u.lob || 'VA'))
+  } else if (userRole === 'regular') {
+    activeUsers = activeUsers.filter(u => (u.lob || 'VA') === userLob)
   }
 
-  const allowedAgents = users.map(u => u.display_name).filter(Boolean)
-  const filteredAgents = agents
-    .filter((a: any) => {
-      const normalized = a.name.trim().replace(/\s+/g, '').toLowerCase()
-      return allowedAgents.some(allowed => allowed.trim().replace(/\s+/g, '').toLowerCase() === normalized)
-    })
-    .map((a: any) => {
-      const match = users.find(u => u.display_name && u.display_name.trim().replace(/\s+/g, '').toLowerCase() === a.name.trim().replace(/\s+/g, '').toLowerCase())
-      return {
-        ...a,
-        lob: match?.lob || a.lob || 'VA',
-      }
-    })
+  const inactiveNames = new Set(
+    (db.prepare("SELECT display_name, username FROM users WHERE active = 0").all() as { display_name: string | null; username: string }[])
+      .flatMap(u => [u.display_name, u.username])
+      .filter(Boolean)
+      .map(n => (n as string).toLowerCase().trim())
+  )
 
-  return NextResponse.json(filteredAgents)
+  let rawAgents = db.prepare('SELECT * FROM agents WHERE active = 1').all() as any[]
+  if (userRole === 'admin' && !allowedLobs.includes('All')) {
+    rawAgents = rawAgents.filter(a => allowedLobs.includes(a.lob || 'VA'))
+  } else if (userRole === 'regular') {
+    rawAgents = rawAgents.filter(a => (a.lob || 'VA') === userLob)
+  }
+
+  const combinedMap = new Map<string, { id: number | string; name: string; active: number; lob: string }>()
+
+  // Add from users table
+  for (const u of activeUsers) {
+    const name = (u.display_name || u.username || '').trim()
+    if (name && !inactiveNames.has(name.toLowerCase())) {
+      combinedMap.set(name.toLowerCase(), {
+        id: u.username,
+        name,
+        active: 1,
+        lob: u.lob || 'VA',
+      })
+    }
+  }
+
+  // Add from agents table if not inactive
+  for (const a of rawAgents) {
+    const name = (a.name || '').trim()
+    if (name && !inactiveNames.has(name.toLowerCase()) && !combinedMap.has(name.toLowerCase())) {
+      combinedMap.set(name.toLowerCase(), {
+        id: a.id,
+        name,
+        active: 1,
+        lob: a.lob || 'VA',
+      })
+    }
+  }
+
+  const result = Array.from(combinedMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+
+  return NextResponse.json(result)
 }
 
 // POST /api/agents — add/update agent (master only)

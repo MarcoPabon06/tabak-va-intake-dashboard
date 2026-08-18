@@ -30,62 +30,47 @@ function parseDateString(str: string): string {
   return str
 }
 
-// Name Normalization & Alias Engine
+// Fully Dynamic Name Normalization & Fuzzy Alias Engine based on live active database agents
 export function normalizeAgentName(raw: string, activeAgents: string[] = []): string {
   if (!raw) return 'Unknown'
   const trimmed = raw.trim()
   const clean = trimmed.toLowerCase()
+  const cleanStripped = clean.replace(/[^a-z0-9]/g, '')
 
-  // Hardcoded alias matches for common CRM typos
-  if (clean.includes('daniel') && (clean.includes('castill') || clean.includes('castillo'))) {
-    return 'Daniel Castillo'
-  }
-  if (clean.includes('alejandra') && clean.includes('reyes')) {
-    return 'Alejandra NicoleReyes'
-  }
-  if (clean.includes('adriana') && clean.includes('soto')) {
-    return 'Adriana Soto'
-  }
-  if (clean.includes('oliver') && clean.includes('ortega')) {
-    return 'Oliver Ortega'
-  }
-  if (clean.includes('omar') && clean.includes('soto')) {
-    return 'Omar Soto'
-  }
-  if (clean.includes('felipe') && (clean.includes('latriglia') || clean.includes('latri'))) {
-    return 'Felipe Latriglia'
-  }
-  if (clean.includes('ana') && clean.includes('salas')) {
-    return 'Ana Salas'
-  }
-  if (clean.includes('karen') && clean.includes('morales')) {
-    return 'Karen Morales'
-  }
-  if (clean.includes('luis') && clean.includes('cepeda')) {
-    return 'Luis Cepeda'
-  }
-  if (clean.includes('jair') && clean.includes('torres')) {
-    return 'Jair Torres'
-  }
-  if (clean.includes('laura') && clean.includes('romero')) {
-    return 'Laura Romero'
-  }
-  if (clean.includes('daniel') && clean.includes('ayala')) {
-    return 'Daniel Ayala'
-  }
-  if (clean.includes('kevin') && clean.includes('morantes')) {
-    return 'Kevin Morantes'
-  }
-  if (clean.includes('oscar') && clean.includes('botello')) {
-    return 'Oscar Botello'
-  }
-
-  // Dynamic matching against active agents list
+  // 1. Exact match (case-insensitive)
   for (const agent of activeAgents) {
-    const agentClean = agent.toLowerCase().replace(/\s+/g, '')
-    const inputClean = clean.replace(/\s+/g, '')
-    if (agentClean === inputClean || agentClean.startsWith(inputClean) || inputClean.startsWith(agentClean)) {
+    if (agent.toLowerCase().trim() === clean) {
       return agent
+    }
+  }
+
+  // 2. Stripped whitespace/punctuation match
+  for (const agent of activeAgents) {
+    const agentStripped = agent.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (agentStripped === cleanStripped) {
+      return agent
+    }
+  }
+
+  // 3. Prefix/starts-with or contains match on stripped alphanumeric
+  for (const agent of activeAgents) {
+    const agentStripped = agent.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (agentStripped.length >= 4 && (agentStripped.startsWith(cleanStripped) || cleanStripped.startsWith(agentStripped))) {
+      return agent
+    }
+  }
+
+  // 4. Token-based matching (e.g. First Name + partial Last Name)
+  const inputTokens = clean.split(/\s+/).filter(Boolean)
+  if (inputTokens.length >= 2) {
+    for (const agent of activeAgents) {
+      const agentTokens = agent.toLowerCase().split(/\s+/).filter(Boolean)
+      if (agentTokens.length >= 2) {
+        // First name matches exactly and last name starts with input token
+        if (agentTokens[0] === inputTokens[0] && (agentTokens[1].startsWith(inputTokens[1]) || inputTokens[1].startsWith(agentTokens[1]))) {
+          return agent
+        }
+      }
     }
   }
 
@@ -203,9 +188,22 @@ export async function POST(req: NextRequest) {
 
   const db = getDb()
 
-  // Get active VA agents from users table for reference
-  const activeDbAgents = db.prepare("SELECT display_name FROM users WHERE role = 'regular' AND active = 1 AND lob = 'VA'").all() as { display_name: string }[]
-  const activeAgentNames = activeDbAgents.map(a => a.display_name).filter(Boolean)
+  // Dynamically get all active regular agents from live users & agents tables
+  const activeDbUsers = db.prepare("SELECT display_name, username FROM users WHERE role = 'regular' AND active = 1").all() as { display_name: string | null; username: string }[]
+  const activeDbAgents = db.prepare("SELECT name FROM agents WHERE active = 1").all() as { name: string }[]
+  const inactiveNames = new Set(
+    (db.prepare("SELECT display_name, username FROM users WHERE active = 0").all() as { display_name: string | null; username: string }[])
+      .flatMap(u => [u.display_name, u.username])
+      .filter(Boolean)
+      .map(n => (n as string).toLowerCase().trim())
+  )
+
+  const activeAgentNames = Array.from(
+    new Set([
+      ...activeDbUsers.map(u => u.display_name || u.username),
+      ...activeDbAgents.map(a => a.name)
+    ])
+  ).filter(name => name && !inactiveNames.has(name.toLowerCase().trim()))
 
   interface AgentDateGroup {
     date: string
