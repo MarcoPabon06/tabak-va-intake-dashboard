@@ -59,6 +59,7 @@ export default function SSDTrackerPage() {
   const isSuper = userRole === 'master' || userRole === 'superadmin'
   const isAdmin = userRole === 'admin'
   const isSSDTeam = userLob === 'SSD' || isSuper || (isAdmin && (user?.permissions?.allowedLobs?.includes('SSD') || user?.permissions?.allowedLobs?.includes('All')))
+  const canManageTeam = isSuper || (isAdmin && (user?.permissions?.allowedLobs?.includes('SSD') || user?.permissions?.allowedLobs?.includes('All') || userLob === 'SSD'))
 
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -432,27 +433,31 @@ export default function SSDTrackerPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button
-              className="btn-secondary"
-              style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(16,185,129,0.15)', borderColor: 'rgba(16,185,129,0.35)', color: '#34d399', fontWeight: 700 }}
-              onClick={() => setShowConvertedModal(true)}
-            >
-              🎉 Sync Converted Cases
-            </button>
-            <button
-              className="btn-secondary"
-              style={{ padding: '8px 16px', fontSize: 13 }}
-              onClick={() => setShowImportModal(true)}
-            >
-              📥 Import Spreadsheet
-            </button>
-            <button
-              className="btn-secondary"
-              style={{ padding: '8px 16px', fontSize: 13 }}
-              onClick={handleExportExcel}
-            >
-              📤 Export XLSX
-            </button>
+            {canManageTeam && (
+              <>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(16,185,129,0.15)', borderColor: 'rgba(16,185,129,0.35)', color: '#34d399', fontWeight: 700 }}
+                  onClick={() => setShowConvertedModal(true)}
+                >
+                  🎉 Sync Converted Cases
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '8px 16px', fontSize: 13 }}
+                  onClick={() => setShowImportModal(true)}
+                >
+                  📥 Import Spreadsheet
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '8px 16px', fontSize: 13 }}
+                  onClick={handleExportExcel}
+                >
+                  📤 Export XLSX
+                </button>
+              </>
+            )}
             <button
               className="btn-primary"
               style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700 }}

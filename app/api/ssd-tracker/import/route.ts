@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
-import { isAuthorizedForSsdTracker, SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '../route'
+import { isAuthorizedSsdTeamLead, SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '../route'
 import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
 
 function parseDateString(dateVal: any): string {
@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!isAuthorizedForSsdTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isAuthorizedSsdTeamLead(session)) {
+    return NextResponse.json({ error: 'Forbidden: Only SSD Team Leads and Admins can import spreadsheet leads' }, { status: 403 })
   }
 
   const formData = await req.formData()

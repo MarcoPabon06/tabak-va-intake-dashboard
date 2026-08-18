@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
-import { isAuthorizedForVaTracker, VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '../route'
+import { isAuthorizedVaTeamLead, VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '../route'
 import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
 
 function parseDateString(str: string): string {
@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!isAuthorizedForVaTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isAuthorizedVaTeamLead(session)) {
+    return NextResponse.json({ error: 'Forbidden: Only VA Team Leads and Admins can import spreadsheet leads' }, { status: 403 })
   }
 
   const formData = await req.formData()

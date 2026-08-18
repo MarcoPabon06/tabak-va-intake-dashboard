@@ -95,6 +95,13 @@ export default function VaTrackerPage() {
     conversion_rate: 0,
     reasons_breakdown: {},
   })
+  const user = session?.user as any
+  const userRole = user?.role || 'regular'
+  const userLob = user?.lob || 'VA'
+  const isSuper = userRole === 'master' || userRole === 'superadmin'
+  const isAdmin = userRole === 'admin'
+  const canManageTeam = isSuper || (isAdmin && (user?.permissions?.allowedLobs?.includes('VA') || user?.permissions?.allowedLobs?.includes('All') || userLob === 'VA'))
+
   const [repsList, setRepsList] = useState<{ rep_name: string; rep_username: string }[]>([])
   const [isPersonalView, setIsPersonalView] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -116,9 +123,7 @@ export default function VaTrackerPage() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [actionSuccessMsg, setActionSuccessMsg] = useState('')
 
-  const userRole = (session?.user as any)?.role || 'regular'
-  const userLob = (session?.user as any)?.lob || 'VA'
-  const isMaster = userRole === 'master' || userRole === 'superadmin' || userRole === 'admin'
+  const isMaster = isSuper || isAdmin
 
   // Debounce search query to prevent high-frequency API flooding
   useEffect(() => {
@@ -302,20 +307,24 @@ export default function VaTrackerPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowImportModal(true)}
-                className="btn-secondary"
-                style={{ fontSize: 12, fontWeight: 700 }}
-              >
-                📥 Import Excel
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="btn-secondary"
-                style={{ fontSize: 12, fontWeight: 700 }}
-              >
-                📤 Export XLSX
-              </button>
+              {canManageTeam && (
+                <>
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="btn-secondary"
+                    style={{ fontSize: 12, fontWeight: 700 }}
+                  >
+                    📥 Import Excel
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    className="btn-secondary"
+                    style={{ fontSize: 12, fontWeight: 700 }}
+                  >
+                    📤 Export XLSX
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setShowLogModal(true)}
                 className="btn-primary"

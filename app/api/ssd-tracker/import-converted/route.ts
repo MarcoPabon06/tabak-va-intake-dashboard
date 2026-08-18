@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
-import { isAuthorizedForSsdTracker } from '../route'
+import { isAuthorizedSsdTeamLead } from '../route'
 import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
 
 function parseIdleTimeDate(dateVal: any): string {
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (!isAuthorizedForSsdTracker(session)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isAuthorizedSsdTeamLead(session)) {
+    return NextResponse.json({ error: 'Forbidden: Only SSD Team Leads and Admins can sync converted cases' }, { status: 403 })
   }
 
   const formData = await req.formData()

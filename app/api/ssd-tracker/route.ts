@@ -25,6 +25,20 @@ export function isAuthorizedForSsdTracker(session: any): boolean {
   return false
 }
 
+export function isAuthorizedSsdTeamLead(session: any): boolean {
+  if (!session?.user) return false
+  const userRole = (session.user as any)?.role || 'regular'
+  const userLob = (session.user as any)?.lob || 'SSD'
+  const perms = (session.user as any)?.permissions
+
+  if (userRole === 'master' || userRole === 'superadmin') return true
+  if (userRole === 'admin') {
+    const allowedLobs: string[] = Array.isArray(perms?.allowedLobs) ? perms.allowedLobs : [userLob]
+    return userLob === 'SSD' || allowedLobs.includes('SSD') || allowedLobs.includes('All')
+  }
+  return false
+}
+
 // GET /api/ssd-tracker — Fetch leads & metrics
 export async function GET(req: NextRequest) {
   try {
