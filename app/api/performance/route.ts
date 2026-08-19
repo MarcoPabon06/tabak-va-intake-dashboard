@@ -47,13 +47,16 @@ export async function GET(req: NextRequest) {
 
   const rows = db.prepare(query).all(...params) as any[]
 
-  // Single Batch SQL Aggregations for VA and SSD to eliminate N+1 query bottleneck
-  const vaAggRows = db.prepare(`
+  // Single Batch SQL Aggregations for VA and SSD to attribute signed retainers & conversions by their actual effective dates
+  const vaMap = new Map<string, { signed: number; unsigned: number; crh: number; rejected: number; rep_name: string }>()
+
+  // 1. VA Logged activity on entered date (unsigned retainers, CRH, rejected)
+  const vaLoggedRows = db.prepare(`
     SELECT 
       date,
+      rep_name,
       LOWER(TRIM(rep_name)) as rep_name_clean,
       LOWER(TRIM(rep_username)) as rep_username_clean,
-      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed,
       SUM(CASE WHEN status IN ('Sent E-Sign', 'Sign Follow Up') THEN 1 ELSE 0 END) as unsigned,
       SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
       SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected
@@ -62,32 +65,153 @@ export async function GET(req: NextRequest) {
     GROUP BY date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  const vaMap = new Map<string, any>()
-  for (const r of vaAggRows) {
-    if (r.rep_name_clean) vaMap.set(`${r.date}___${r.rep_name_clean}`, r)
-    if (r.rep_username_clean) vaMap.set(`${r.date}___${r.rep_username_clean}`, r)
+  for (const r of vaLoggedRows) {
+    const keyName = `${r.date}___${r.rep_name_clean}`
+    const keyUser = `${r.date}___${r.rep_username_clean}`
+    
+    let item = vaMap.get(keyName)
+    if (!item) {
+      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, rep_name: r.rep_name }
+      vaMap.set(keyName, item)
+    }
+    item.unsigned += r.unsigned || 0
+    item.crh += r.crh || 0
+    item.rejected += r.rejected || 0
+
+    if (r.rep_username_clean && keyUser !== keyName) {
+      vaMap.set(keyUser, item)
+    }
   }
 
-  const ssdAggRows = db.prepare(`
+  // 2. VA Signed retainers attributed to ACTUAL signed date (signed_at)
+  const vaSignedRows = db.prepare(`
     SELECT 
-      date,
+      COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as signed_date,
+      rep_name,
       LOWER(TRIM(rep_name)) as rep_name_clean,
       LOWER(TRIM(rep_username)) as rep_username_clean,
-      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed,
+      COUNT(*) as signed
+    FROM va_lead_records
+    WHERE status = 'Signed E-Sign'
+      AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
+      AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
+    GROUP BY signed_date, rep_name_clean, rep_username_clean
+  `).all(from, to) as any[]
+
+  for (const r of vaSignedRows) {
+    const keyName = `${r.signed_date}___${r.rep_name_clean}`
+    const keyUser = `${r.signed_date}___${r.rep_username_clean}`
+
+    let item = vaMap.get(keyName)
+    if (!item) {
+      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, rep_name: r.rep_name }
+      vaMap.set(keyName, item)
+    }
+    item.signed += r.signed || 0
+
+    if (r.rep_username_clean && keyUser !== keyName) {
+      vaMap.set(keyUser, item)
+    }
+  }
+
+  // SSD Map
+  const ssdMap = new Map<string, { signed: number; unsigned: number; rfc: number; crh: number; rejected: number; converted: number; rep_name: string }>()
+
+  // 1. SSD Logged activity on entered date (unsigned, RFC, CRH, rejected)
+  const ssdLoggedRows = db.prepare(`
+    SELECT 
+      date,
+      rep_name,
+      LOWER(TRIM(rep_name)) as rep_name_clean,
+      LOWER(TRIM(rep_username)) as rep_username_clean,
       SUM(CASE WHEN status IN ('Sent E-Sign', 'Paper Retainer Sent') THEN 1 ELSE 0 END) as unsigned,
       SUM(CASE WHEN status = 'Sent RFC' THEN 1 ELSE 0 END) as rfc,
       SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
-      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected,
-      SUM(CASE WHEN is_converted = 1 THEN 1 ELSE 0 END) as converted
+      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected
     FROM ssd_lead_records
     WHERE date >= ? AND date <= ?
     GROUP BY date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  const ssdMap = new Map<string, any>()
-  for (const r of ssdAggRows) {
-    if (r.rep_name_clean) ssdMap.set(`${r.date}___${r.rep_name_clean}`, r)
-    if (r.rep_username_clean) ssdMap.set(`${r.date}___${r.rep_username_clean}`, r)
+  for (const r of ssdLoggedRows) {
+    const keyName = `${r.date}___${r.rep_name_clean}`
+    const keyUser = `${r.date}___${r.rep_username_clean}`
+
+    let item = ssdMap.get(keyName)
+    if (!item) {
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
+      ssdMap.set(keyName, item)
+    }
+    item.unsigned += r.unsigned || 0
+    item.rfc += r.rfc || 0
+    item.crh += r.crh || 0
+    item.rejected += r.rejected || 0
+
+    if (r.rep_username_clean && keyUser !== keyName) {
+      ssdMap.set(keyUser, item)
+    }
+  }
+
+  // 2. SSD Signed retainers attributed to ACTUAL signed date (signed_at)
+  const ssdSignedRows = db.prepare(`
+    SELECT 
+      COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as signed_date,
+      rep_name,
+      LOWER(TRIM(rep_name)) as rep_name_clean,
+      LOWER(TRIM(rep_username)) as rep_username_clean,
+      COUNT(*) as signed
+    FROM ssd_lead_records
+    WHERE status = 'Signed E-Sign'
+      AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
+      AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
+    GROUP BY signed_date, rep_name_clean, rep_username_clean
+  `).all(from, to) as any[]
+
+  for (const r of ssdSignedRows) {
+    const keyName = `${r.signed_date}___${r.rep_name_clean}`
+    const keyUser = `${r.signed_date}___${r.rep_username_clean}`
+
+    let item = ssdMap.get(keyName)
+    if (!item) {
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
+      ssdMap.set(keyName, item)
+    }
+    item.signed += r.signed || 0
+
+    if (r.rep_username_clean && keyUser !== keyName) {
+      ssdMap.set(keyUser, item)
+    }
+  }
+
+  // 3. SSD Converted Cases attributed to ACTUAL converted date (converted_at)
+  const ssdConvertedRows = db.prepare(`
+    SELECT 
+      COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as conv_date,
+      rep_name,
+      LOWER(TRIM(rep_name)) as rep_name_clean,
+      LOWER(TRIM(rep_username)) as rep_username_clean,
+      COUNT(*) as converted
+    FROM ssd_lead_records
+    WHERE is_converted = 1
+      AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
+      AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
+    GROUP BY conv_date, rep_name_clean, rep_username_clean
+  `).all(from, to) as any[]
+
+  for (const r of ssdConvertedRows) {
+    const keyName = `${r.conv_date}___${r.rep_name_clean}`
+    const keyUser = `${r.conv_date}___${r.rep_username_clean}`
+
+    let item = ssdMap.get(keyName)
+    if (!item) {
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
+      ssdMap.set(keyName, item)
+    }
+    item.converted += r.converted || 0
+
+    if (r.rep_username_clean && keyUser !== keyName) {
+      ssdMap.set(keyUser, item)
+    }
   }
 
   // Dynamically enhance VA and SSD specialist performance with batch tracker records
@@ -131,60 +255,58 @@ export async function GET(req: NextRequest) {
   // Check for any VA or SSD leads logged on dates without a daily_performance row yet
   const existingKeys = new Set(enhancedRows.map((r) => `${r.date}___${r.agent_name.toLowerCase()}`))
 
-  // VA unmapped synthetic rows
+  // Active users map for canonical display names and LOB filtering
+  const userRows = db.prepare(`
+    SELECT display_name, username, lob 
+    FROM users 
+    WHERE role = 'regular' AND active = 1
+  `).all() as { display_name: string; username: string; lob: string }[]
+
+  const userMap = new Map<string, { display_name: string; username: string; lob: string }>()
+  for (const u of userRows) {
+    if (u.display_name) userMap.set(u.display_name.toLowerCase().trim(), u)
+    if (u.username) userMap.set(u.username.toLowerCase().trim(), u)
+  }
+
+  // VA unmapped synthetic rows (derived from all active entries in vaMap)
   if ((!lob || lob === 'VA' || lob === 'All') && (userRole !== 'regular' || userLob === 'VA')) {
-    let leadsQuery = `
-      SELECT vlr.date, vlr.rep_name as agent_name, vlr.status, u.lob
-      FROM va_lead_records vlr
-      INNER JOIN users u ON (LOWER(TRIM(vlr.rep_name)) = LOWER(TRIM(u.display_name)) OR LOWER(TRIM(vlr.rep_username)) = LOWER(TRIM(u.username)))
-      WHERE vlr.date >= ? AND vlr.date <= ? AND u.role = 'regular' AND u.active = 1 AND u.lob = 'VA'
-    `
-    const leadsParams: any[] = [from, to]
-    if (agent) {
-      leadsQuery += ` AND (vlr.rep_name = ? OR vlr.rep_username = ? OR u.display_name = ?)`
-      leadsParams.push(agent, agent, agent)
-    }
+    const processedVaKeys = new Set<string>()
 
-    const unmappedLeads = db.prepare(leadsQuery).all(...leadsParams) as any[]
-    const unmappedGroups: Record<string, { date: string; agent_name: string; lob: string; leads: string[] }> = {}
+    for (const [key, vaData] of vaMap.entries()) {
+      const parts = key.split('___')
+      if (parts.length < 2) continue
+      const date = parts[0]
+      const cleanName = parts[1]
 
-    for (const item of unmappedLeads) {
-      const key = `${item.date}___${item.agent_name.toLowerCase()}`
-      if (!existingKeys.has(key)) {
-        if (!unmappedGroups[key]) {
-          unmappedGroups[key] = {
-            date: item.date,
-            agent_name: item.agent_name,
-            lob: 'VA',
-            leads: [],
-          }
-        }
-        unmappedGroups[key].leads.push(item.status)
+      const dedupeKey = `${date}___${cleanName}`
+      if (processedVaKeys.has(dedupeKey) || existingKeys.has(dedupeKey)) continue
+      processedVaKeys.add(dedupeKey)
+
+      const userInfo = userMap.get(cleanName)
+      if (userInfo && userInfo.lob !== 'VA') continue // Not a VA specialist
+
+      if (agent && agent.toLowerCase().trim() !== cleanName && agent.toLowerCase().trim() !== userInfo?.display_name.toLowerCase().trim() && agent.toLowerCase().trim() !== userInfo?.username.toLowerCase().trim()) {
+        continue
       }
-    }
 
-    for (const group of Object.values(unmappedGroups)) {
-      const signed = group.leads.filter((st) => st === 'Signed E-Sign').length
-      const unsigned = group.leads.filter((st) => st === 'Sent E-Sign' || st === 'Sign Follow Up').length
-      const crh = group.leads.filter((st) => st === 'Client Refused Help').length
-      const rejected = group.leads.filter((st) => st === 'Case Rejected').length
-      const total = signed + unsigned
+      const agentName = userInfo?.display_name || vaData.rep_name || cleanName
+      const total = (vaData.signed || 0) + (vaData.unsigned || 0)
 
       enhancedRows.push({
-        id: `synth-va-${group.date}-${group.agent_name}`,
-        date: group.date,
-        agent_name: group.agent_name,
+        id: `synth-va-${date}-${agentName}`,
+        date: date,
+        agent_name: agentName,
         lob: 'VA',
         capd: 0,
         inbound_calls: 0,
-        case_rejected: rejected,
-        crh: crh,
-        signed_retainers: signed,
-        unsigned_retainers: unsigned,
+        case_rejected: vaData.rejected || 0,
+        crh: vaData.crh || 0,
+        signed_retainers: vaData.signed || 0,
+        unsigned_retainers: vaData.unsigned || 0,
         converted_cases: 0,
         rfc_sent: 0,
         total_case_wanted: total,
-        signed_success_rate: total > 0 ? signed / total : 0,
+        signed_success_rate: total > 0 ? (vaData.signed || 0) / total : 0,
         week_label: '',
         present: 'SI',
         ura: 0,
@@ -193,62 +315,45 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // SSD unmapped synthetic rows
+  // SSD unmapped synthetic rows (derived from all active entries in ssdMap)
   if ((!lob || lob === 'SSD' || lob === 'All') && (userRole !== 'regular' || userLob === 'SSD')) {
-    let ssdLeadsQuery = `
-      SELECT slr.date, slr.rep_name as agent_name, slr.status, slr.is_converted, u.lob
-      FROM ssd_lead_records slr
-      INNER JOIN users u ON (LOWER(TRIM(slr.rep_name)) = LOWER(TRIM(u.display_name)) OR LOWER(TRIM(slr.rep_username)) = LOWER(TRIM(u.username)))
-      WHERE slr.date >= ? AND slr.date <= ? AND u.role = 'regular' AND u.active = 1 AND u.lob = 'SSD'
-    `
-    const ssdLeadsParams: any[] = [from, to]
-    if (agent) {
-      ssdLeadsQuery += ` AND (slr.rep_name = ? OR slr.rep_username = ? OR u.display_name = ?)`
-      ssdLeadsParams.push(agent, agent, agent)
-    }
+    const processedSsdKeys = new Set<string>()
 
-    const unmappedSsdLeads = db.prepare(ssdLeadsQuery).all(...ssdLeadsParams) as any[]
-    const unmappedSsdGroups: Record<string, { date: string; agent_name: string; lob: string; items: { status: string; is_converted: number }[] }> = {}
+    for (const [key, ssdData] of ssdMap.entries()) {
+      const parts = key.split('___')
+      if (parts.length < 2) continue
+      const date = parts[0]
+      const cleanName = parts[1]
 
-    for (const item of unmappedSsdLeads) {
-      const key = `${item.date}___${item.agent_name.toLowerCase()}`
-      if (!existingKeys.has(key)) {
-        if (!unmappedSsdGroups[key]) {
-          unmappedSsdGroups[key] = {
-            date: item.date,
-            agent_name: item.agent_name,
-            lob: 'SSD',
-            items: [],
-          }
-        }
-        unmappedSsdGroups[key].items.push({ status: item.status, is_converted: item.is_converted })
+      const dedupeKey = `${date}___${cleanName}`
+      if (processedSsdKeys.has(dedupeKey) || existingKeys.has(dedupeKey)) continue
+      processedSsdKeys.add(dedupeKey)
+
+      const userInfo = userMap.get(cleanName)
+      if (userInfo && userInfo.lob !== 'SSD') continue // Not an SSD specialist
+
+      if (agent && agent.toLowerCase().trim() !== cleanName && agent.toLowerCase().trim() !== userInfo?.display_name.toLowerCase().trim() && agent.toLowerCase().trim() !== userInfo?.username.toLowerCase().trim()) {
+        continue
       }
-    }
 
-    for (const group of Object.values(unmappedSsdGroups)) {
-      const signed = group.items.filter((it) => it.status === 'Signed E-Sign').length
-      const unsigned = group.items.filter((it) => it.status === 'Sent E-Sign' || it.status === 'Paper Retainer Sent').length
-      const rfc = group.items.filter((it) => it.status === 'Sent RFC').length
-      const crh = group.items.filter((it) => it.status === 'Client Refused Help').length
-      const rejected = group.items.filter((it) => it.status === 'Case Rejected').length
-      const converted = group.items.filter((it) => it.is_converted === 1).length
-      const total = signed + unsigned
+      const agentName = userInfo?.display_name || ssdData.rep_name || cleanName
+      const total = (ssdData.signed || 0) + (ssdData.unsigned || 0)
 
       enhancedRows.push({
-        id: `synth-ssd-${group.date}-${group.agent_name}`,
-        date: group.date,
-        agent_name: group.agent_name,
+        id: `synth-ssd-${date}-${agentName}`,
+        date: date,
+        agent_name: agentName,
         lob: 'SSD',
         capd: 0,
         inbound_calls: 0,
-        case_rejected: rejected,
-        crh: crh,
-        signed_retainers: signed,
-        unsigned_retainers: unsigned,
-        converted_cases: converted,
-        rfc_sent: rfc,
+        case_rejected: ssdData.rejected || 0,
+        crh: ssdData.crh || 0,
+        signed_retainers: ssdData.signed || 0,
+        unsigned_retainers: ssdData.unsigned || 0,
+        converted_cases: ssdData.converted || 0,
+        rfc_sent: ssdData.rfc || 0,
         total_case_wanted: total,
-        signed_success_rate: signed > 0 ? converted / signed : 0,
+        signed_success_rate: total > 0 ? (ssdData.signed || 0) / total : 0,
         week_label: '',
         present: 'SI',
         ura: 0,

@@ -93,13 +93,18 @@ export async function GET(req: NextRequest) {
     params.push(rep, rep)
   }
 
-  if (from) {
-    query += ` AND date >= ?`
-    params.push(from)
-  }
-  if (to) {
-    query += ` AND date <= ?`
-    params.push(to)
+  if (from && to) {
+    query += ` AND (
+      (date >= ? AND date <= ?)
+      OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+    )`
+    params.push(from, to, from, to)
+  } else if (from) {
+    query += ` AND (date >= ? OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?))`
+    params.push(from, from)
+  } else if (to) {
+    query += ` AND (date <= ? OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?))`
+    params.push(to, to)
   }
 
   if (statusFilter && statusFilter !== 'All') {
@@ -140,26 +145,33 @@ export async function GET(req: NextRequest) {
     metricsParams.push(rep, rep)
   }
 
-  if (from) {
-    whereClause += ` AND date >= ?`
-    metricsParams.push(from)
-  }
-  if (to) {
-    whereClause += ` AND date <= ?`
-    metricsParams.push(to)
-  }
+  const effectiveFrom = from || '1970-01-01'
+  const effectiveTo = to || '2099-12-31'
 
   const aggStats = db.prepare(`
     SELECT 
       COUNT(*) as total_leads,
-      SUM(CASE WHEN status = 'Sent E-Sign' THEN 1 ELSE 0 END) as sent_esigns,
-      SUM(CASE WHEN status = 'Sign Follow Up' THEN 1 ELSE 0 END) as follow_ups,
-      SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed_esigns,
-      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh_count,
-      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected_count
+      SUM(CASE WHEN status = 'Sent E-Sign' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_esigns,
+      SUM(CASE WHEN status = 'Sign Follow Up' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as follow_ups,
+      SUM(CASE WHEN status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ? THEN 1 ELSE 0 END) as signed_esigns,
+      SUM(CASE WHEN status = 'Client Refused Help' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as crh_count,
+      SUM(CASE WHEN status = 'Case Rejected' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rejected_count
     FROM va_lead_records
     ${whereClause}
-  `).get(...metricsParams) as any || {}
+      AND (
+        (date >= ? AND date <= ?)
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+      )
+  `).get(
+    effectiveFrom, effectiveTo,
+    effectiveFrom, effectiveTo,
+    effectiveFrom, effectiveTo,
+    effectiveFrom, effectiveTo,
+    effectiveFrom, effectiveTo,
+    ...metricsParams,
+    effectiveFrom, effectiveTo,
+    effectiveFrom, effectiveTo
+  ) as any || {}
 
   const totalLeads = aggStats.total_leads || 0
   const sentEsigns = aggStats.sent_esigns || 0

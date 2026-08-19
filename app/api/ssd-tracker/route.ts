@@ -78,13 +78,27 @@ export async function GET(req: NextRequest) {
       params.push(rep, rep)
     }
 
-    if (from) {
-      query += ` AND date >= ?`
-      params.push(from)
-    }
-    if (to) {
-      query += ` AND date <= ?`
-      params.push(to)
+    if (from && to) {
+      query += ` AND (
+        (date >= ? AND date <= ?)
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+      )`
+      params.push(from, to, from, to, from, to)
+    } else if (from) {
+      query += ` AND (
+        date >= ?
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?)
+        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?)
+      )`
+      params.push(from, from, from)
+    } else if (to) {
+      query += ` AND (
+        date <= ?
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+      )`
+      params.push(to, to, to)
     }
 
     if (statusFilter && statusFilter !== 'All') {
@@ -136,29 +150,41 @@ export async function GET(req: NextRequest) {
       metricsParams.push(rep, rep)
     }
 
-    if (from) {
-      whereClause += ` AND date >= ?`
-      metricsParams.push(from)
-    }
-    if (to) {
-      whereClause += ` AND date <= ?`
-      metricsParams.push(to)
-    }
+    const effectiveFrom = from || '1970-01-01'
+    const effectiveTo = to || '2099-12-31'
 
     const aggStats = db.prepare(`
       SELECT 
         COUNT(*) as total_leads,
-        SUM(CASE WHEN status = 'Sent E-Sign' THEN 1 ELSE 0 END) as sent_esigns,
-        SUM(CASE WHEN status = 'Paper Retainer Sent' THEN 1 ELSE 0 END) as paper_sent,
-        SUM(CASE WHEN status = 'Signed E-Sign' THEN 1 ELSE 0 END) as signed_esigns,
-        SUM(CASE WHEN status = 'Sent RFC' THEN 1 ELSE 0 END) as sent_rfc,
-        SUM(CASE WHEN status = 'Appointment Rescheduled' THEN 1 ELSE 0 END) as rescheduled,
-        SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh_count,
-        SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected_count,
-        SUM(CASE WHEN is_converted = 1 THEN 1 ELSE 0 END) as converted_count
+        SUM(CASE WHEN status = 'Sent E-Sign' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_esigns,
+        SUM(CASE WHEN status = 'Paper Retainer Sent' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as paper_sent,
+        SUM(CASE WHEN status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ? THEN 1 ELSE 0 END) as signed_esigns,
+        SUM(CASE WHEN status = 'Sent RFC' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_rfc,
+        SUM(CASE WHEN status = 'Appointment Rescheduled' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rescheduled,
+        SUM(CASE WHEN status = 'Client Refused Help' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as crh_count,
+        SUM(CASE WHEN status = 'Case Rejected' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rejected_count,
+        SUM(CASE WHEN is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ? THEN 1 ELSE 0 END) as converted_count
       FROM ssd_lead_records
       ${whereClause}
-    `).get(...metricsParams) as any || {}
+        AND (
+          (date >= ? AND date <= ?)
+          OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+          OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+        )
+    `).get(
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      ...metricsParams,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo,
+      effectiveFrom, effectiveTo
+    ) as any || {}
 
     const totalLeads = aggStats.total_leads || 0
     const sentEsigns = aggStats.sent_esigns || 0
