@@ -47,182 +47,190 @@ export async function GET(req: NextRequest) {
 
   const rows = db.prepare(query).all(...params) as any[]
 
-  // Single Batch SQL Aggregations for VA and SSD to attribute signed retainers & conversions by their actual effective dates
-  const vaMap = new Map<string, { signed: number; unsigned: number; crh: number; rejected: number; rep_name: string }>()
+  // Active users map for canonical display names and LOB filtering
+  const userRows = db.prepare(`
+    SELECT display_name, username, lob 
+    FROM users 
+    WHERE active = 1
+  `).all() as { display_name: string; username: string; lob: string }[]
 
-  // 1. VA Logged activity on entered date (unsigned retainers, CRH, rejected)
-  const vaLoggedRows = db.prepare(`
-    SELECT 
-      date,
-      rep_name,
-      LOWER(TRIM(rep_name)) as rep_name_clean,
-      LOWER(TRIM(rep_username)) as rep_username_clean,
-      SUM(CASE WHEN status IN ('Sent E-Sign', 'Sign Follow Up') THEN 1 ELSE 0 END) as unsigned,
-      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
-      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected
+  const agentLookup = new Map<string, { display_name: string; username: string; lob: string }>()
+  for (const u of userRows) {
+    if (u.display_name) {
+      agentLookup.set(u.display_name.toLowerCase().trim(), u)
+      agentLookup.set(u.display_name.toLowerCase().replace(/[^a-z0-9]/g, ''), u)
+    }
+    if (u.username) {
+      agentLookup.set(u.username.toLowerCase().trim(), u)
+      agentLookup.set(u.username.toLowerCase().replace(/[^a-z0-9]/g, ''), u)
+    }
+  }
+
+  function getCanonicalAgent(name?: string | null, username?: string | null) {
+    if (name) {
+      const clean = name.toLowerCase().trim()
+      if (agentLookup.has(clean)) return agentLookup.get(clean)!
+      const stripped = clean.replace(/[^a-z0-9]/g, '')
+      if (agentLookup.has(stripped)) return agentLookup.get(stripped)!
+    }
+    if (username) {
+      const clean = username.toLowerCase().trim()
+      if (agentLookup.has(clean)) return agentLookup.get(clean)!
+      const stripped = clean.replace(/[^a-z0-9]/g, '')
+      if (agentLookup.has(stripped)) return agentLookup.get(stripped)!
+    }
+    return null
+  }
+
+  // 1. Aggregate VA leads
+  const vaMap = new Map<string, { signed: number; unsigned: number; crh: number; rejected: number; canonicalName: string }>()
+
+  // 1a. VA Logged leads (for unsigned, CRH, rejected on entry date)
+  const vaLoggedLeads = db.prepare(`
+    SELECT rep_name, rep_username, date, status
     FROM va_lead_records
     WHERE date >= ? AND date <= ?
-    GROUP BY date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  for (const r of vaLoggedRows) {
-    const keyName = `${r.date}___${r.rep_name_clean}`
-    const keyUser = `${r.date}___${r.rep_username_clean}`
+  for (const lead of vaLoggedLeads) {
+    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
+    const canonicalName = user ? user.display_name : lead.rep_name
+    if (!canonicalName) continue
+    const key = `${lead.date}___${canonicalName.toLowerCase().trim()}`
     
-    let item = vaMap.get(keyName)
+    let item = vaMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, rep_name: r.rep_name }
-      vaMap.set(keyName, item)
+      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, canonicalName }
+      vaMap.set(key, item)
     }
-    item.unsigned += r.unsigned || 0
-    item.crh += r.crh || 0
-    item.rejected += r.rejected || 0
 
-    if (r.rep_username_clean && keyUser !== keyName) {
-      vaMap.set(keyUser, item)
+    if (lead.status === 'Sent E-Sign' || lead.status === 'Sign Follow Up') {
+      item.unsigned++
+    } else if (lead.status === 'Client Refused Help') {
+      item.crh++
+    } else if (lead.status === 'Case Rejected') {
+      item.rejected++
     }
   }
 
-  // 2. VA Signed retainers attributed to ACTUAL signed date (signed_at)
-  const vaSignedRows = db.prepare(`
-    SELECT 
-      COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as signed_date,
-      rep_name,
-      LOWER(TRIM(rep_name)) as rep_name_clean,
-      LOWER(TRIM(rep_username)) as rep_username_clean,
-      COUNT(*) as signed
+  // 1b. VA Signed leads (for signed retainers on actual signed_at date)
+  const vaSignedLeads = db.prepare(`
+    SELECT rep_name, rep_username, date, status, signed_at
     FROM va_lead_records
     WHERE status = 'Signed E-Sign'
       AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
       AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
-    GROUP BY signed_date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  for (const r of vaSignedRows) {
-    const keyName = `${r.signed_date}___${r.rep_name_clean}`
-    const keyUser = `${r.signed_date}___${r.rep_username_clean}`
+  for (const lead of vaSignedLeads) {
+    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
+    const canonicalName = user ? user.display_name : lead.rep_name
+    if (!canonicalName) continue
+    const signedDate = (lead.signed_at && lead.signed_at.slice(0, 10)) || lead.date
+    const key = `${signedDate}___${canonicalName.toLowerCase().trim()}`
 
-    let item = vaMap.get(keyName)
+    let item = vaMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, rep_name: r.rep_name }
-      vaMap.set(keyName, item)
+      item = { signed: 0, unsigned: 0, crh: 0, rejected: 0, canonicalName }
+      vaMap.set(key, item)
     }
-    item.signed += r.signed || 0
-
-    if (r.rep_username_clean && keyUser !== keyName) {
-      vaMap.set(keyUser, item)
-    }
+    item.signed++
   }
 
-  // SSD Map
-  const ssdMap = new Map<string, { signed: number; unsigned: number; rfc: number; crh: number; rejected: number; converted: number; rep_name: string }>()
+  // 2. Aggregate SSD leads
+  const ssdMap = new Map<string, { signed: number; unsigned: number; rfc: number; crh: number; rejected: number; converted: number; canonicalName: string }>()
 
-  // 1. SSD Logged activity on entered date (unsigned, RFC, CRH, rejected)
-  const ssdLoggedRows = db.prepare(`
-    SELECT 
-      date,
-      rep_name,
-      LOWER(TRIM(rep_name)) as rep_name_clean,
-      LOWER(TRIM(rep_username)) as rep_username_clean,
-      SUM(CASE WHEN status IN ('Sent E-Sign', 'Paper Retainer Sent') THEN 1 ELSE 0 END) as unsigned,
-      SUM(CASE WHEN status = 'Sent RFC' THEN 1 ELSE 0 END) as rfc,
-      SUM(CASE WHEN status = 'Client Refused Help' THEN 1 ELSE 0 END) as crh,
-      SUM(CASE WHEN status = 'Case Rejected' THEN 1 ELSE 0 END) as rejected
+  // 2a. SSD Logged leads (unsigned, RFC, CRH, rejected on entry date)
+  const ssdLoggedLeads = db.prepare(`
+    SELECT rep_name, rep_username, date, status
     FROM ssd_lead_records
     WHERE date >= ? AND date <= ?
-    GROUP BY date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  for (const r of ssdLoggedRows) {
-    const keyName = `${r.date}___${r.rep_name_clean}`
-    const keyUser = `${r.date}___${r.rep_username_clean}`
+  for (const lead of ssdLoggedLeads) {
+    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
+    const canonicalName = user ? user.display_name : lead.rep_name
+    if (!canonicalName) continue
+    const key = `${lead.date}___${canonicalName.toLowerCase().trim()}`
 
-    let item = ssdMap.get(keyName)
+    let item = ssdMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
-      ssdMap.set(keyName, item)
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
+      ssdMap.set(key, item)
     }
-    item.unsigned += r.unsigned || 0
-    item.rfc += r.rfc || 0
-    item.crh += r.crh || 0
-    item.rejected += r.rejected || 0
 
-    if (r.rep_username_clean && keyUser !== keyName) {
-      ssdMap.set(keyUser, item)
+    if (lead.status === 'Sent E-Sign' || lead.status === 'Paper Retainer Sent') {
+      item.unsigned++
+    } else if (lead.status === 'Sent RFC') {
+      item.rfc++
+    } else if (lead.status === 'Client Refused Help') {
+      item.crh++
+    } else if (lead.status === 'Case Rejected') {
+      item.rejected++
     }
   }
 
-  // 2. SSD Signed retainers attributed to ACTUAL signed date (signed_at)
-  const ssdSignedRows = db.prepare(`
-    SELECT 
-      COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as signed_date,
-      rep_name,
-      LOWER(TRIM(rep_name)) as rep_name_clean,
-      LOWER(TRIM(rep_username)) as rep_username_clean,
-      COUNT(*) as signed
+  // 2b. SSD Signed leads (on actual signed_at date)
+  const ssdSignedLeads = db.prepare(`
+    SELECT rep_name, rep_username, date, status, signed_at
     FROM ssd_lead_records
     WHERE status = 'Signed E-Sign'
       AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
       AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
-    GROUP BY signed_date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  for (const r of ssdSignedRows) {
-    const keyName = `${r.signed_date}___${r.rep_name_clean}`
-    const keyUser = `${r.signed_date}___${r.rep_username_clean}`
+  for (const lead of ssdSignedLeads) {
+    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
+    const canonicalName = user ? user.display_name : lead.rep_name
+    if (!canonicalName) continue
+    const signedDate = (lead.signed_at && lead.signed_at.slice(0, 10)) || lead.date
+    const key = `${signedDate}___${canonicalName.toLowerCase().trim()}`
 
-    let item = ssdMap.get(keyName)
+    let item = ssdMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
-      ssdMap.set(keyName, item)
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
+      ssdMap.set(key, item)
     }
-    item.signed += r.signed || 0
-
-    if (r.rep_username_clean && keyUser !== keyName) {
-      ssdMap.set(keyUser, item)
-    }
+    item.signed++
   }
 
-  // 3. SSD Converted Cases attributed to ACTUAL converted date (converted_at)
-  const ssdConvertedRows = db.prepare(`
-    SELECT 
-      COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) as conv_date,
-      rep_name,
-      LOWER(TRIM(rep_name)) as rep_name_clean,
-      LOWER(TRIM(rep_username)) as rep_username_clean,
-      COUNT(*) as converted
+  // 2c. SSD Converted leads (on actual converted_at date)
+  const ssdConvertedLeads = db.prepare(`
+    SELECT rep_name, rep_username, date, status, signed_at, converted_at
     FROM ssd_lead_records
     WHERE is_converted = 1
       AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
       AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
-    GROUP BY conv_date, rep_name_clean, rep_username_clean
   `).all(from, to) as any[]
 
-  for (const r of ssdConvertedRows) {
-    const keyName = `${r.conv_date}___${r.rep_name_clean}`
-    const keyUser = `${r.conv_date}___${r.rep_username_clean}`
+  for (const lead of ssdConvertedLeads) {
+    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
+    const canonicalName = user ? user.display_name : lead.rep_name
+    if (!canonicalName) continue
+    const convDate = (lead.converted_at && lead.converted_at.slice(0, 10)) || (lead.signed_at && lead.signed_at.slice(0, 10)) || lead.date
+    const key = `${convDate}___${canonicalName.toLowerCase().trim()}`
 
-    let item = ssdMap.get(keyName)
+    let item = ssdMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, rep_name: r.rep_name }
-      ssdMap.set(keyName, item)
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
+      ssdMap.set(key, item)
     }
-    item.converted += r.converted || 0
-
-    if (r.rep_username_clean && keyUser !== keyName) {
-      ssdMap.set(keyUser, item)
-    }
+    item.converted++
   }
 
   // Dynamically enhance VA and SSD specialist performance with batch tracker records
   const enhancedRows = rows.map((row) => {
-    const key = `${row.date}___${row.agent_name.toLowerCase().trim()}`
+    const user = getCanonicalAgent(row.agent_name)
+    const canonicalName = user ? user.display_name : row.agent_name
+    const key = `${row.date}___${canonicalName.toLowerCase().trim()}`
+
     if (row.lob === 'VA') {
       const vaData = vaMap.get(key)
       if (vaData) {
         const total = (vaData.signed || 0) + (vaData.unsigned || 0)
         return {
           ...row,
+          agent_name: canonicalName,
           signed_retainers: vaData.signed || 0,
           unsigned_retainers: vaData.unsigned || 0,
           crh: vaData.crh || 0,
@@ -238,6 +246,7 @@ export async function GET(req: NextRequest) {
         const maxConverted = Math.max(row.converted_cases || 0, ssdData.converted || 0)
         return {
           ...row,
+          agent_name: canonicalName,
           signed_retainers: ssdData.signed || 0,
           unsigned_retainers: ssdData.unsigned || 0,
           rfc_sent: ssdData.rfc || 0,
@@ -249,47 +258,37 @@ export async function GET(req: NextRequest) {
         }
       }
     }
-    return row
+    return {
+      ...row,
+      agent_name: canonicalName,
+    }
   })
 
   // Check for any VA or SSD leads logged on dates without a daily_performance row yet
-  const existingKeys = new Set(enhancedRows.map((r) => `${r.date}___${r.agent_name.toLowerCase()}`))
+  const existingKeys = new Set(enhancedRows.map((r) => `${r.date}___${r.agent_name.toLowerCase().trim()}`))
 
-  // Active users map for canonical display names and LOB filtering
-  const userRows = db.prepare(`
-    SELECT display_name, username, lob 
-    FROM users 
-    WHERE role = 'regular' AND active = 1
-  `).all() as { display_name: string; username: string; lob: string }[]
-
-  const userMap = new Map<string, { display_name: string; username: string; lob: string }>()
-  for (const u of userRows) {
-    if (u.display_name) userMap.set(u.display_name.toLowerCase().trim(), u)
-    if (u.username) userMap.set(u.username.toLowerCase().trim(), u)
-  }
-
-  // VA unmapped synthetic rows (derived from all active entries in vaMap)
+  // VA unmapped synthetic rows (ONLY for entries in vaMap that do not exist in daily_performance!)
   if ((!lob || lob === 'VA' || lob === 'All') && (userRole !== 'regular' || userLob === 'VA')) {
-    const processedVaKeys = new Set<string>()
-
     for (const [key, vaData] of vaMap.entries()) {
+      if (existingKeys.has(key)) continue
+      existingKeys.add(key) // prevent duplicate
+
       const parts = key.split('___')
       if (parts.length < 2) continue
       const date = parts[0]
-      const cleanName = parts[1]
+      const agentName = vaData.canonicalName
 
-      const dedupeKey = `${date}___${cleanName}`
-      if (processedVaKeys.has(dedupeKey) || existingKeys.has(dedupeKey)) continue
-      processedVaKeys.add(dedupeKey)
+      const userInfo = getCanonicalAgent(agentName)
+      if (userInfo && userInfo.lob !== 'VA') continue // Skip if belongs to another LOB
 
-      const userInfo = userMap.get(cleanName)
-      if (userInfo && userInfo.lob !== 'VA') continue // Not a VA specialist
-
-      if (agent && agent.toLowerCase().trim() !== cleanName && agent.toLowerCase().trim() !== userInfo?.display_name.toLowerCase().trim() && agent.toLowerCase().trim() !== userInfo?.username.toLowerCase().trim()) {
-        continue
+      if (agent) {
+        const targetClean = agent.toLowerCase().trim()
+        const agentClean = agentName.toLowerCase().trim()
+        if (targetClean !== agentClean && targetClean !== userInfo?.username.toLowerCase().trim()) {
+          continue
+        }
       }
 
-      const agentName = userInfo?.display_name || vaData.rep_name || cleanName
       const total = (vaData.signed || 0) + (vaData.unsigned || 0)
 
       enhancedRows.push({
@@ -315,28 +314,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // SSD unmapped synthetic rows (derived from all active entries in ssdMap)
+  // SSD unmapped synthetic rows (ONLY for entries in ssdMap that do not exist in daily_performance!)
   if ((!lob || lob === 'SSD' || lob === 'All') && (userRole !== 'regular' || userLob === 'SSD')) {
-    const processedSsdKeys = new Set<string>()
-
     for (const [key, ssdData] of ssdMap.entries()) {
+      if (existingKeys.has(key)) continue
+      existingKeys.add(key) // prevent duplicate
+
       const parts = key.split('___')
       if (parts.length < 2) continue
       const date = parts[0]
-      const cleanName = parts[1]
+      const agentName = ssdData.canonicalName
 
-      const dedupeKey = `${date}___${cleanName}`
-      if (processedSsdKeys.has(dedupeKey) || existingKeys.has(dedupeKey)) continue
-      processedSsdKeys.add(dedupeKey)
+      const userInfo = getCanonicalAgent(agentName)
+      if (userInfo && userInfo.lob !== 'SSD') continue // Skip if belongs to another LOB
 
-      const userInfo = userMap.get(cleanName)
-      if (userInfo && userInfo.lob !== 'SSD') continue // Not an SSD specialist
-
-      if (agent && agent.toLowerCase().trim() !== cleanName && agent.toLowerCase().trim() !== userInfo?.display_name.toLowerCase().trim() && agent.toLowerCase().trim() !== userInfo?.username.toLowerCase().trim()) {
-        continue
+      if (agent) {
+        const targetClean = agent.toLowerCase().trim()
+        const agentClean = agentName.toLowerCase().trim()
+        if (targetClean !== agentClean && targetClean !== userInfo?.username.toLowerCase().trim()) {
+          continue
+        }
       }
 
-      const agentName = userInfo?.display_name || ssdData.rep_name || cleanName
       const total = (ssdData.signed || 0) + (ssdData.unsigned || 0)
 
       enhancedRows.push({
