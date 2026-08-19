@@ -80,20 +80,20 @@ export async function GET(req: NextRequest) {
 
     if (from && to) {
       query += ` AND (
-        (date >= ? AND date <= ?)
-        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+        (SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ?)
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) <= ?)
       )`
       params.push(from, to, from, to)
     } else if (from) {
       query += ` AND (
-        date >= ?
-        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?)
+        SUBSTR(date, 1, 10) >= ?
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) >= ?)
       )`
       params.push(from, from)
     } else if (to) {
       query += ` AND (
-        date <= ?
-        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+        SUBSTR(date, 1, 10) <= ?
+        OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) <= ?)
       )`
       params.push(to, to)
     }
@@ -153,18 +153,18 @@ export async function GET(req: NextRequest) {
     const aggStats = db.prepare(`
       SELECT 
         COUNT(*) as total_leads,
-        SUM(CASE WHEN status = 'Sent E-Sign' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_esigns,
-        SUM(CASE WHEN status = 'Paper Retainer Sent' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as paper_sent,
-        SUM(CASE WHEN status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ? THEN 1 ELSE 0 END) as signed_esigns,
-        SUM(CASE WHEN status = 'Sent RFC' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_rfc,
-        SUM(CASE WHEN status = 'Appointment Rescheduled' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rescheduled,
-        SUM(CASE WHEN status = 'Client Refused Help' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as crh_count,
-        SUM(CASE WHEN status = 'Case Rejected' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rejected_count
+        SUM(CASE WHEN status = 'Sent E-Sign' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as sent_esigns,
+        SUM(CASE WHEN status = 'Paper Retainer Sent' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as paper_sent,
+        SUM(CASE WHEN status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) <= ? THEN 1 ELSE 0 END) as signed_esigns,
+        SUM(CASE WHEN status = 'Sent RFC' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as sent_rfc,
+        SUM(CASE WHEN status = 'Appointment Rescheduled' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as rescheduled,
+        SUM(CASE WHEN status = 'Client Refused Help' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as crh_count,
+        SUM(CASE WHEN status = 'Case Rejected' AND SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ? THEN 1 ELSE 0 END) as rejected_count
       FROM ssd_lead_records
       ${whereClause}
         AND (
-          (date >= ? AND date <= ?)
-          OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
+          (SUBSTR(date, 1, 10) >= ? AND SUBSTR(date, 1, 10) <= ?)
+          OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), SUBSTR(date, 1, 10)) <= ?)
         )
     `).get(
       effectiveFrom, effectiveTo,
@@ -354,10 +354,10 @@ export async function POST(req: NextRequest) {
       : sessionUsername
 
     const signedAt = status === 'Signed E-Sign' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
-
     const sanitizedClientName = sanitizeCellText(client_name.trim())
     const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
     const sanitizedNotes = other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null
+    const cleanDate = date.trim().slice(0, 10)
 
     const db = getDb()
     const insert = db.prepare(`
@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
       repUsername,
       sanitizedClientName,
       sanitizedLeadId,
-      date,
+      cleanDate,
       status,
       claim_type || null,
       outcome_reason || null,
@@ -447,6 +447,7 @@ export async function PUT(req: NextRequest) {
     const sanitizedClientName = client_name ? sanitizeCellText(client_name.trim()) : existing.client_name
     const sanitizedLeadId = lead_id !== undefined ? (lead_id ? sanitizeCellText(lead_id.trim()) : null) : existing.lead_id
     const sanitizedNotes = other_reason_notes !== undefined ? (other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null) : existing.other_reason_notes
+    const cleanDate = date ? date.trim().slice(0, 10) : existing.date
     const newConverted = is_converted !== undefined ? (is_converted ? 1 : 0) : existing.is_converted
 
     let convertedAt = existing.converted_at
@@ -480,7 +481,7 @@ export async function PUT(req: NextRequest) {
       repUsername,
       sanitizedClientName,
       sanitizedLeadId,
-      date || existing.date,
+      cleanDate,
       newStatus,
       claim_type !== undefined ? (claim_type || null) : existing.claim_type,
       outcome_reason !== undefined ? (outcome_reason || null) : existing.outcome_reason,
