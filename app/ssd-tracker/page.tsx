@@ -32,6 +32,7 @@ interface SsdSummary {
   paper_sent: number
   pending_signatures: number
   signed_esigns: number
+  in_application_count?: number
   sent_rfc: number
   rescheduled: number
   crh_count: number
@@ -78,7 +79,7 @@ export default function SSDTrackerPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'signed' | 'rfc' | 'converted' | 'refused'>('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'signed' | 'in_application' | 'converted' | 'rfc' | 'refused'>('all')
 
   const [entries, setEntries] = useState<SSDLeadRecord[]>([])
   const [summary, setSummary] = useState<SsdSummary | null>(null)
@@ -148,11 +149,13 @@ export default function SSDTrackerPage() {
       if (activeTab === 'pending') {
         params.set('status', 'Pending')
       } else if (activeTab === 'signed') {
-        params.set('status', 'Signed E-Sign')
-      } else if (activeTab === 'rfc') {
-        params.set('status', 'Sent RFC')
+        params.set('status', 'Signed')
+      } else if (activeTab === 'in_application') {
+        params.set('status', 'InApplication')
       } else if (activeTab === 'converted') {
         params.set('status', 'Converted')
+      } else if (activeTab === 'rfc') {
+        params.set('status', 'Sent RFC')
       } else if (activeTab === 'refused') {
         params.set('status', 'Refused/Rejected')
       } else if (statusFilter !== 'All') {
@@ -292,6 +295,26 @@ export default function SSDTrackerPage() {
     }
   }
 
+  // 1-Click Convert / Unconvert
+  async function handleQuickConvert(record: SSDLeadRecord, isConverted: boolean) {
+    try {
+      await safeFetchJson('/api/ssd-tracker', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: record.id,
+          status: isConverted ? 'Signed E-Sign' : record.status,
+          is_converted: isConverted,
+        }),
+      })
+      setSuccess(`Lead "${record.client_name}" ${isConverted ? 'marked as Converted Case! 🎉' : 'reverted to In Application.'}`)
+      fetchData()
+      setTimeout(() => setSuccess(''), 3500)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
   // Delete Lead
   async function handleDelete(record: SSDLeadRecord) {
     if (!window.confirm(`Are you sure you want to delete lead record for "${record.client_name}"?`)) return
@@ -384,11 +407,11 @@ export default function SSDTrackerPage() {
   // Status Badge Helper
   const getStatusBadge = (status: string, isConverted?: number) => {
     if (isConverted) {
-      return <span style={{ background: 'rgba(16,185,129,0.25)', color: '#34d399', border: '1px solid rgba(16,185,129,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>🎉 Converted to Case</span>
+      return <span style={{ background: 'rgba(6,182,212,0.22)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>🎉 Converted Case</span>
     }
     switch (status) {
       case 'Signed E-Sign':
-        return <span style={{ background: 'rgba(16,185,129,0.18)', color: '#34d399', border: '1px solid rgba(16,185,129,0.4)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✅ Signed E-Sign</span>
+        return <span style={{ background: 'rgba(16,185,129,0.18)', color: '#34d399', border: '1px solid rgba(16,185,129,0.4)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>✍️ Signed (In App)</span>
       case 'Sent E-Sign':
         return <span style={{ background: 'rgba(59,130,246,0.18)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.4)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>⏳ Sent E-Sign</span>
       case 'Paper Retainer Sent':
@@ -500,11 +523,11 @@ export default function SSDTrackerPage() {
 
         {/* KPI Summary Cards */}
         {summary && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 24 }}>
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-primary)' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Leads Logged</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Leads</div>
               <div style={{ fontSize: 26, fontWeight: 800, color: '#fff' }}>{summary.total_leads}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Period total volume</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Total volume</div>
             </div>
 
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #f59e0b' }}>
@@ -514,21 +537,27 @@ export default function SSDTrackerPage() {
             </div>
 
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #10b981' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Signed E-Signs</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Signed Retainers</div>
               <div style={{ fontSize: 26, fontWeight: 800, color: '#34d399' }}>{summary.signed_esigns}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Signed conversion: {summary.signed_success_rate}%</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Signed Rate: <strong>{summary.signed_success_rate}%</strong></div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>In Application</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#60a5fa' }}>{summary.in_application_count ?? Math.max(0, summary.signed_esigns - summary.converted_count)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Awaiting App completion</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #06b6d4' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Converted Cases</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#22d3ee' }}>{summary.converted_count}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Conv. Rate: <strong>{summary.case_conversion_rate}%</strong> of Signed</div>
             </div>
 
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #8b5cf6' }}>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Sent RFC</div>
               <div style={{ fontSize: 26, fontWeight: 800, color: '#c084fc' }}>{summary.sent_rfc}</div>
               <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Residual Functional Capacity</div>
-            </div>
-
-            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #06b6d4' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Converted Cases</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#22d3ee' }}>{summary.converted_count}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Case Conversion: {summary.case_conversion_rate}%</div>
             </div>
           </div>
         )}
@@ -608,14 +637,14 @@ export default function SSDTrackerPage() {
               style={{ background: activeTab === 'signed' ? '#10b981' : 'transparent', border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 600, color: activeTab === 'signed' ? '#fff' : 'var(--text-secondary)' }}
               onClick={() => setActiveTab('signed')}
             >
-              ✅ Signed E-Signs ({summary?.signed_esigns || 0})
+              ✍️ Signed Retainers ({summary?.signed_esigns || 0})
             </button>
             <button
-              className={`btn-secondary ${activeTab === 'rfc' ? 'btn-primary' : ''}`}
-              style={{ background: activeTab === 'rfc' ? '#8b5cf6' : 'transparent', border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 600, color: activeTab === 'rfc' ? '#fff' : 'var(--text-secondary)' }}
-              onClick={() => setActiveTab('rfc')}
+              className={`btn-secondary ${activeTab === 'in_application' ? 'btn-primary' : ''}`}
+              style={{ background: activeTab === 'in_application' ? '#3b82f6' : 'transparent', border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 600, color: activeTab === 'in_application' ? '#fff' : 'var(--text-secondary)' }}
+              onClick={() => setActiveTab('in_application')}
             >
-              📑 Sent RFC ({summary?.sent_rfc || 0})
+              📝 In Application ({summary?.in_application_count ?? Math.max(0, (summary?.signed_esigns || 0) - (summary?.converted_count || 0))})
             </button>
             <button
               className={`btn-secondary ${activeTab === 'converted' ? 'btn-primary' : ''}`}
@@ -623,6 +652,13 @@ export default function SSDTrackerPage() {
               onClick={() => setActiveTab('converted')}
             >
               🎉 Converted Cases ({summary?.converted_count || 0})
+            </button>
+            <button
+              className={`btn-secondary ${activeTab === 'rfc' ? 'btn-primary' : ''}`}
+              style={{ background: activeTab === 'rfc' ? '#8b5cf6' : 'transparent', border: 'none', padding: '7px 14px', fontSize: 13, fontWeight: 600, color: activeTab === 'rfc' ? '#fff' : 'var(--text-secondary)' }}
+              onClick={() => setActiveTab('rfc')}
+            >
+              📑 Sent RFC ({summary?.sent_rfc || 0})
             </button>
             <button
               className={`btn-secondary ${activeTab === 'refused' ? 'btn-primary' : ''}`}
@@ -772,9 +808,11 @@ export default function SSDTrackerPage() {
                             {daysOld}d pending
                           </span>
                         ) : record.is_converted ? (
-                          <span style={{ color: '#34d399', fontSize: 11, fontWeight: 700 }}>Converted 🎉</span>
+                          <span style={{ color: '#22d3ee', fontSize: 11, fontWeight: 700 }}>
+                            🎉 Converted {record.converted_at ? `(${record.converted_at.slice(0, 10)})` : ''}
+                          </span>
                         ) : record.status === 'Signed E-Sign' ? (
-                          <span style={{ color: '#34d399', fontSize: 11, fontWeight: 600 }}>Signed</span>
+                          <span style={{ color: '#34d399', fontSize: 11, fontWeight: 600 }}>📝 In Application</span>
                         ) : (
                           <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>Completed</span>
                         )}
@@ -784,7 +822,7 @@ export default function SSDTrackerPage() {
                           <>
                             <button
                               onClick={() => handleQuickStatus(record, 'Signed E-Sign')}
-                              title="Mark as Signed E-Sign"
+                              title="Mark agreement as Signed (Enters Application stage)"
                               style={{ background: 'rgba(16,185,129,0.2)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399', padding: '4px 8px', borderRadius: 6, fontSize: 12, marginRight: 6, cursor: 'pointer', fontWeight: 600 }}
                             >
                               ✅ Sign
@@ -797,6 +835,24 @@ export default function SSDTrackerPage() {
                               📑 RFC
                             </button>
                           </>
+                        )}
+                        {record.status === 'Signed E-Sign' && !record.is_converted && (
+                          <button
+                            onClick={() => handleQuickConvert(record, true)}
+                            title="Application Complete — Mark as Converted Case"
+                            style={{ background: 'rgba(6,182,212,0.2)', border: '1px solid rgba(6,182,212,0.4)', color: '#22d3ee', padding: '4px 8px', borderRadius: 6, fontSize: 12, marginRight: 6, cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            🎉 Convert
+                          </button>
+                        )}
+                        {Boolean(record.is_converted) && (
+                          <button
+                            onClick={() => handleQuickConvert(record, false)}
+                            title="Revert back to In Application (Not Converted)"
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#94a3b8', padding: '4px 8px', borderRadius: 6, fontSize: 11, marginRight: 6, cursor: 'pointer' }}
+                          >
+                            ↩️ Unconvert
+                          </button>
                         )}
                         <button
                           onClick={() => handleOpenEdit(record)}

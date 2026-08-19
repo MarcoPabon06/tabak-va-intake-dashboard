@@ -92,8 +92,12 @@ export async function GET(req: NextRequest) {
         query += ` AND status IN ('Sent E-Sign', 'Paper Retainer Sent')`
       } else if (statusFilter === 'Refused/Rejected') {
         query += ` AND status IN ('Client Refused Help', 'Case Rejected')`
+      } else if (statusFilter === 'Signed') {
+        query += ` AND status = 'Signed E-Sign'`
+      } else if (statusFilter === 'InApplication') {
+        query += ` AND status = 'Signed E-Sign' AND (is_converted = 0 OR is_converted IS NULL)`
       } else if (statusFilter === 'Converted') {
-        query += ` AND (is_converted = 1 OR status = 'Signed E-Sign')`
+        query += ` AND is_converted = 1`
       } else {
         query += ` AND status = ?`
         params.push(statusFilter)
@@ -166,6 +170,7 @@ export async function GET(req: NextRequest) {
     const crhCount = aggStats.crh_count || 0
     const rejectedCount = aggStats.rejected_count || 0
     const convertedCount = aggStats.converted_count || 0
+    const inAppCount = Math.max(0, signedEsigns - convertedCount)
 
     const totalEsignPool = pendingSignatures + signedEsigns
     const signedSuccessRate = totalEsignPool > 0 ? ((signedEsigns / totalEsignPool) * 100).toFixed(1) : '0.0'
@@ -268,6 +273,7 @@ export async function GET(req: NextRequest) {
         paper_sent: paperSent,
         pending_signatures: pendingSignatures,
         signed_esigns: signedEsigns,
+        in_application_count: inAppCount,
         sent_rfc: sentRfc,
         rescheduled: rescheduled,
         crh_count: crhCount,
@@ -430,6 +436,13 @@ export async function PUT(req: NextRequest) {
     const sanitizedNotes = other_reason_notes !== undefined ? (other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null) : existing.other_reason_notes
     const newConverted = is_converted !== undefined ? (is_converted ? 1 : 0) : existing.is_converted
 
+    let convertedAt = existing.converted_at
+    if (newConverted === 1 && existing.is_converted !== 1) {
+      convertedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    } else if (newConverted === 0 && existing.is_converted === 1) {
+      convertedAt = null
+    }
+
     const update = db.prepare(`
       UPDATE ssd_lead_records SET
         rep_name = ?,
@@ -443,6 +456,7 @@ export async function PUT(req: NextRequest) {
         other_reason_notes = ?,
         signed_at = ?,
         is_converted = ?,
+        converted_at = ?,
         updated_at = (datetime('now')),
         last_edited_by = ?
       WHERE id = ?
@@ -460,6 +474,7 @@ export async function PUT(req: NextRequest) {
       sanitizedNotes,
       signedAt,
       newConverted,
+      convertedAt,
       sessionDisplayName,
       id
     )

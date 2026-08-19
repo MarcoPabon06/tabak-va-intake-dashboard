@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
           case_rejected: ssdData.rejected || 0,
           converted_cases: maxConverted,
           total_case_wanted: total,
-          signed_success_rate: (ssdData.signed || 0) > 0 ? maxConverted / ssdData.signed : (total > 0 ? ssdData.signed / total : 0),
+          signed_success_rate: total > 0 ? (ssdData.signed || 0) / total : 0,
         }
       }
     }
