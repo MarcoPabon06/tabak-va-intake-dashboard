@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
+import ImportHistoryModal from '@/components/ImportHistoryModal'
 import { format, subDays, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import * as XLSX from 'xlsx'
 import { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '@/lib/ssdTrackerConstants'
@@ -21,8 +22,9 @@ interface SSDLeadRecord {
   signed_at?: string
   converted_at?: string
   is_converted?: number
-  created_at: string
-  updated_at: string
+  import_batch_id?: string
+  created_at?: string
+  updated_at?: string
   last_edited_by?: string
 }
 
@@ -93,11 +95,17 @@ export default function SSDTrackerPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number | 'all'>(50)
 
+  // Multi-Select State
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   // Modals
   const [showLogModal, setShowLogModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showConvertedModal, setShowConvertedModal] = useState(false)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [editingRecord, setEditingRecord] = useState<SSDLeadRecord | null>(null)
 
   // Form State
@@ -315,12 +323,62 @@ export default function SSDTrackerPage() {
     }
   }
 
-  // Delete Lead
+  // Multi-Select Helpers
+  const toggleSelectRow = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    const visibleIds = paginatedEntries.map(e => e.id)
+    const allSelected = visibleIds.every(id => selectedIds.includes(id))
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)))
+    } else {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])))
+    }
+  }
+
+  const selectAllFiltered = () => {
+    const allFilteredIds = entries.map(e => e.id)
+    setSelectedIds(allFilteredIds)
+  }
+
+  const clearSelection = () => {
+    setSelectedIds([])
+  }
+
+  // Bulk Delete
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return
+    setBulkDeleting(true)
+    setError('')
+    try {
+      const res = await safeFetchJson('/api/ssd-tracker', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      setSuccess(res.message || `Successfully deleted ${selectedIds.length} lead records.`)
+      setSelectedIds([])
+      setShowBulkDeleteModal(false)
+      fetchData()
+      setTimeout(() => setSuccess(''), 4000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  // Delete Single Lead
   async function handleDelete(record: SSDLeadRecord) {
     if (!window.confirm(`Are you sure you want to delete lead record for "${record.client_name}"?`)) return
     try {
       await safeFetchJson(`/api/ssd-tracker?id=${record.id}`, { method: 'DELETE' })
       setSuccess(`Lead "${record.client_name}" deleted.`)
+      setSelectedIds(prev => prev.filter(id => id !== record.id))
       fetchData()
       setTimeout(() => setSuccess(''), 3000)
     } catch (err: any) {
@@ -487,6 +545,14 @@ export default function SSDTrackerPage() {
                   onClick={() => setShowImportModal(true)}
                 >
                   📥 Import Spreadsheet
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}
+                  onClick={() => setShowHistoryModal(true)}
+                  title="View past spreadsheet imports and undo/revert if needed"
+                >
+                  ⏪ History & Rollback
                 </button>
                 <button
                   className="btn-secondary"
@@ -727,6 +793,77 @@ export default function SSDTrackerPage() {
           </div>
         </div>
 
+        {/* Floating / Sticky Bulk Actions Toolbar */}
+        {selectedIds.length > 0 && (
+          <div
+            className="glass-card"
+            style={{
+              padding: '12px 20px',
+              marginBottom: 16,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+              animation: 'fadeIn 0.2s ease-in-out',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#f87171' }}>
+                ☑️ {selectedIds.length} lead record{selectedIds.length === 1 ? '' : 's'} selected
+              </span>
+              {entries.length > selectedIds.length && (
+                <button
+                  onClick={selectAllFiltered}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#60a5fa',
+                    fontSize: 12,
+                    textDecoration: 'underline',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  Select all {entries.length} matching leads
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button
+                className="btn-secondary"
+                onClick={clearSelection}
+                style={{ padding: '6px 14px', fontSize: 12 }}
+              >
+                ✕ Deselect All
+              </button>
+              {canManageTeam && (
+                <button
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  style={{
+                    background: '#ef4444',
+                    border: '1px solid #dc2626',
+                    color: '#fff',
+                    padding: '6px 16px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  🗑️ Delete Selected ({selectedIds.length})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Leads Table */}
         <div className="glass-card" style={{ padding: 20, overflowX: 'auto' }}>
           {loading ? (
@@ -741,6 +878,17 @@ export default function SSDTrackerPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                  {canManageTeam && (
+                    <th style={{ width: 36, padding: '10px 12px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={paginatedEntries.length > 0 && paginatedEntries.every(e => selectedIds.includes(e.id))}
+                        onChange={toggleSelectAll}
+                        style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                        title="Select/Deselect All on this page"
+                      />
+                    </th>
+                  )}
                   <th style={{ padding: '10px 12px' }}>Date</th>
                   <th style={{ padding: '10px 12px' }}>Specialist</th>
                   <th style={{ padding: '10px 12px' }}>Lead / Client Name</th>
@@ -756,14 +904,33 @@ export default function SSDTrackerPage() {
                 {paginatedEntries.map((record) => {
                   const daysOld = differenceInDays(new Date(), new Date(record.date))
                   const isPending = record.status === 'Sent E-Sign' || record.status === 'Paper Retainer Sent'
+                  const isSelected = selectedIds.includes(record.id)
 
                   return (
                     <tr
                       key={record.id}
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                        transition: 'background 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.background = 'transparent'
+                      }}
                     >
+                      {canManageTeam && (
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectRow(record.id)}
+                            style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                          />
+                        </td>
+                      )}
                       <td style={{ padding: '12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                         {record.date}
                       </td>
@@ -1315,6 +1482,65 @@ export default function SSDTrackerPage() {
             </div>
           </div>
         )}
+
+        {/* BULK DELETE CONFIRMATION MODAL */}
+        {showBulkDeleteModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: 480, padding: 28, background: '#0a1628', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 28 }}>⚠️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#f87171' }}>Confirm Bulk Deletion</h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Permanent action</div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 20 }}>
+                Are you sure you want to permanently delete <strong>{selectedIds.length}</strong> selected SSD lead record{selectedIds.length === 1 ? '' : 's'}?
+                <br />
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginTop: 8 }}>
+                  This will remove them from all SSD tracker logs and recalculate conversion metrics immediately.
+                </span>
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  style={{
+                    background: '#ef4444',
+                    border: '1px solid #dc2626',
+                    color: '#fff',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {bulkDeleting ? 'Deleting...' : `Yes, Delete ${selectedIds.length} Records`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* IMPORT HISTORY & ROLLBACK MODAL */}
+        <ImportHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          lob="SSD"
+          onRollbackSuccess={fetchData}
+        />
 
       </main>
     </div>

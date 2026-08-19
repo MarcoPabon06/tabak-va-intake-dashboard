@@ -101,6 +101,8 @@ export async function POST(req: NextRequest) {
   const dataRows = rawRows.slice(1)
   const db = getDb()
 
+  const batchId = `batch_ssd_converted_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+  const snapshotList: any[] = []
   let convertedSynced = 0
   let leadsPromoted = 0
   let newLeadsCreated = 0
@@ -135,17 +137,26 @@ export async function POST(req: NextRequest) {
       // Check if lead already exists in ssd_lead_records
       let existing: any
       if (leadId) {
-        existing = db.prepare(`SELECT id, status, is_converted, signed_at FROM ssd_lead_records WHERE lead_id = ?`).get(leadId)
+        existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE lead_id = ?`).get(leadId)
       }
       if (!existing) {
         existing = db.prepare(`
-          SELECT id, status, is_converted, signed_at 
+          SELECT * 
           FROM ssd_lead_records 
           WHERE LOWER(client_name) = LOWER(?) AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))
         `).get(clientName, repUsername, repName)
       }
 
       if (existing) {
+        snapshotList.push({
+          id: existing.id,
+          status: existing.status,
+          is_converted: existing.is_converted,
+          converted_at: existing.converted_at,
+          signed_at: existing.signed_at,
+          claim_type: existing.claim_type,
+        })
+
         // Promote status to 'Signed E-Sign' and mark is_converted = 1
         db.prepare(`
           UPDATE ssd_lead_records SET
@@ -166,11 +177,11 @@ export async function POST(req: NextRequest) {
         // Create new converted lead record in ssd_lead_records
         db.prepare(`
           INSERT INTO ssd_lead_records (
-            rep_name, rep_username, client_name, lead_id, date, status, claim_type, is_converted, converted_at, signed_at, last_edited_by
+            rep_name, rep_username, client_name, lead_id, date, status, claim_type, is_converted, converted_at, signed_at, import_batch_id, last_edited_by
           ) VALUES (
-            ?, ?, ?, ?, ?, 'Signed E-Sign', ?, 1, ?, ?, 'CRM Converted Import'
+            ?, ?, ?, ?, ?, 'Signed E-Sign', ?, 1, ?, ?, ?, 'CRM Converted Import'
           )
-        `).run(repName, repUsername, clientName, leadId || null, convertDate, claimType, convertedTimestamp, convertedTimestamp)
+        `).run(repName, repUsername, clientName, leadId || null, convertDate, claimType, convertedTimestamp, convertedTimestamp, batchId)
         newLeadsCreated++
       }
 
@@ -205,6 +216,23 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+
+    // Save batch record in import_batches
+    db.prepare(`
+      INSERT INTO import_batches (
+        batch_id, lob, upload_type, filename, user_id, username, user_name,
+        records_created, records_updated, snapshot_data, status
+      ) VALUES (?, 'SSD', 'ssd_converted_sync', ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    `).run(
+      batchId,
+      file.name,
+      userId,
+      sessionUsername,
+      sessionDisplayName,
+      newLeadsCreated,
+      snapshotList.length,
+      snapshotList.length > 0 ? JSON.stringify(snapshotList) : null
+    )
   })
 
   try {
@@ -219,18 +247,19 @@ export async function POST(req: NextRequest) {
       buffer,
       rowsProcessed: convertedSynced,
       status: 'SUCCESS',
-      details: `Processed ${convertedSynced} converted cases (${leadsPromoted} leads promoted to Signed E-Sign, ${newLeadsCreated} new converted records logged).`,
+      details: `Batch ${batchId}: Synced ${convertedSynced} converted cases (${leadsPromoted} promoted, ${newLeadsCreated} created).`,
     })
 
     return NextResponse.json({
       success: true,
-      convertedSynced,
-      leadsPromoted,
-      newLeadsCreated,
-      message: `🎉 Successfully synchronized ${convertedSynced} Converted Cases! (${leadsPromoted} pending retainers automatically promoted to Signed E-Sign, ${newLeadsCreated} converted lead records created).`,
+      batch_id: batchId,
+      converted_synced: convertedSynced,
+      leads_promoted: leadsPromoted,
+      new_leads_created: newLeadsCreated,
+      message: `Successfully synchronized ${convertedSynced} converted cases (${leadsPromoted} existing leads promoted to Converted Case, ${newLeadsCreated} new converted records logged).`,
     })
   } catch (err: any) {
-    console.error('[ssd-tracker converted import error]:', err)
-    return NextResponse.json({ error: err.message || 'Failed to process Converted Cases report' }, { status: 500 })
+    console.error('[ssd-tracker import-converted error]:', err)
+    return NextResponse.json({ error: err.message || 'Failed to sync converted cases' }, { status: 500 })
   }
 }

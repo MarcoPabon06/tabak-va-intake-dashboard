@@ -486,7 +486,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE /api/ssd-tracker?id=X — Delete SSD lead record
+// DELETE /api/ssd-tracker — Delete single or bulk SSD lead records
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -498,30 +498,63 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-    if (!id) {
-      return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
+    const singleId = searchParams.get('id')
+    const queryIds = searchParams.get('ids')
+
+    let targetIds: number[] = []
+    if (singleId) {
+      targetIds = [parseInt(singleId)].filter(n => !isNaN(n))
+    } else if (queryIds) {
+      targetIds = queryIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+    } else {
+      try {
+        const body = await req.json()
+        if (Array.isArray(body?.ids)) {
+          targetIds = body.ids.map((n: any) => parseInt(n)).filter((n: any) => !isNaN(n))
+        }
+      } catch {
+        // No JSON body
+      }
+    }
+
+    if (targetIds.length === 0) {
+      return NextResponse.json({ error: 'Missing lead record ID(s) to delete' }, { status: 400 })
     }
 
     const db = getDb()
-    const existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE id = ?`).get(id) as any
-    if (!existing) {
-      return NextResponse.json({ error: 'Record not found' }, { status: 404 })
-    }
-
     const userRole = (session.user as any)?.role || 'regular'
     const userLob = (session.user as any)?.lob || 'SSD'
     const sessionUsername = (session.user as any)?.email || (session.user as any)?.username || ''
     const sessionDisplayName = session.user?.name || ''
+    const canManageAll = userRole === 'master' || userRole === 'superadmin' || userRole === 'admin'
 
-    if (userRole === 'regular' && userLob === 'SSD' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
-      return NextResponse.json({ error: 'Forbidden: You can only delete your own lead records' }, { status: 403 })
-    }
+    let deletedCount = 0
 
-    db.prepare(`DELETE FROM ssd_lead_records WHERE id = ?`).run(id)
-    return NextResponse.json({ success: true, deletedId: id })
+    const deleteTx = db.transaction(() => {
+      for (const id of targetIds) {
+        const existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE id = ?`).get(id) as any
+        if (!existing) continue
+
+        if (!canManageAll && userRole === 'regular' && userLob === 'SSD') {
+          if (existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
+            continue // Skip records regular user doesn't own
+          }
+        }
+
+        db.prepare(`DELETE FROM ssd_lead_records WHERE id = ?`).run(id)
+        deletedCount++
+      }
+    })
+
+    deleteTx()
+
+    return NextResponse.json({
+      success: true,
+      deletedCount,
+      message: `Successfully deleted ${deletedCount} SSD lead record${deletedCount === 1 ? '' : 's'}.`,
+    })
   } catch (err: any) {
     console.error('[ssd-tracker DELETE error]:', err)
-    return NextResponse.json({ error: err.message || 'Failed to delete SSD lead record' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Failed to delete SSD lead record(s)' }, { status: 500 })
   }
 }

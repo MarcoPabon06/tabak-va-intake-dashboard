@@ -184,15 +184,17 @@ export async function POST(req: NextRequest) {
   const dataRows = rawRows.slice(headerIdx + 1)
   const db = getDb()
 
+  const batchId = `batch_ssd_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+  const snapshotList: any[] = []
   let imported = 0
   let skipped = 0
   let updated = 0
 
   const insertStmt = db.prepare(`
     INSERT INTO ssd_lead_records (
-      rep_name, rep_username, client_name, lead_id, date, status, claim_type, outcome_reason, other_reason_notes, signed_at, last_edited_by
+      rep_name, rep_username, client_name, lead_id, date, status, claim_type, outcome_reason, other_reason_notes, signed_at, import_batch_id, last_edited_by
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
   `)
 
@@ -252,13 +254,29 @@ export async function POST(req: NextRequest) {
       // Check if duplicate exists with same lead_id or client_name + date + rep
       let existing: any
       if (leadId) {
-        existing = db.prepare(`SELECT id FROM ssd_lead_records WHERE lead_id = ?`).get(leadId)
+        existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE lead_id = ?`).get(leadId)
       }
       if (!existing) {
-        existing = db.prepare(`SELECT id FROM ssd_lead_records WHERE LOWER(client_name) = LOWER(?) AND date = ? AND rep_username = ?`).get(clientName, dateStr, repUsername)
+        existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE LOWER(client_name) = LOWER(?) AND date = ? AND rep_username = ?`).get(clientName, dateStr, repUsername)
       }
 
       if (existing) {
+        snapshotList.push({
+          id: existing.id,
+          rep_name: existing.rep_name,
+          rep_username: existing.rep_username,
+          client_name: existing.client_name,
+          lead_id: existing.lead_id,
+          date: existing.date,
+          status: existing.status,
+          claim_type: existing.claim_type,
+          outcome_reason: existing.outcome_reason,
+          other_reason_notes: existing.other_reason_notes,
+          signed_at: existing.signed_at,
+          converted_at: existing.converted_at,
+          is_converted: existing.is_converted,
+        })
+
         updateStmt.run(
           finalRepName,
           repUsername,
@@ -285,11 +303,29 @@ export async function POST(req: NextRequest) {
           outcomeReason,
           otherNotes,
           signedAt,
+          batchId,
           sessionDisplayName
         )
         imported++
       }
     }
+
+    // Save batch record in import_batches
+    db.prepare(`
+      INSERT INTO import_batches (
+        batch_id, lob, upload_type, filename, user_id, username, user_name,
+        records_created, records_updated, snapshot_data, status
+      ) VALUES (?, 'SSD', 'ssd_leads_import', ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    `).run(
+      batchId,
+      file.name,
+      userId,
+      sessionUsername,
+      sessionDisplayName,
+      imported,
+      updated,
+      snapshotList.length > 0 ? JSON.stringify(snapshotList) : null
+    )
   })
 
   try {
@@ -304,11 +340,12 @@ export async function POST(req: NextRequest) {
       buffer,
       rowsProcessed: imported + updated,
       status: 'SUCCESS',
-      details: `Imported ${imported} new leads, updated ${updated} existing records.`,
+      details: `Batch ${batchId}: Imported ${imported} new leads, updated ${updated} existing records.`,
     })
 
     return NextResponse.json({
       success: true,
+      batch_id: batchId,
       imported,
       updated,
       skipped,

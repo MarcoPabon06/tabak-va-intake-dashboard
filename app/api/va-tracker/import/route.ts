@@ -170,14 +170,20 @@ export async function POST(req: NextRequest) {
 
   const db = getDb()
   const sessionDisplayName = session.user?.name || 'VA Specialist'
+  const sessionUsername = (session.user as any)?.email || session.user?.name || 'unknown'
+  const userId = (session.user as any)?.id || null
+
+  const batchId = `batch_va_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+  const snapshotList: any[] = []
   let imported = 0
   let skipped = 0
+  let updated = 0
 
   const insert = db.prepare(`
     INSERT INTO va_lead_records (
-      rep_name, rep_username, veteran_name, lead_id, date, status, outcome_reason, other_reason_notes, signed_at, last_edited_by
+      rep_name, rep_username, veteran_name, lead_id, date, status, outcome_reason, other_reason_notes, signed_at, import_batch_id, last_edited_by
     ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     )
   `)
 
@@ -223,13 +229,21 @@ export async function POST(req: NextRequest) {
       // Check if duplicate exists with same lead_id or veteran_name + date + rep
       let existing: any
       if (leadId) {
-        existing = db.prepare(`SELECT id FROM va_lead_records WHERE lead_id = ?`).get(leadId)
+        existing = db.prepare(`SELECT * FROM va_lead_records WHERE lead_id = ?`).get(leadId)
       }
       if (!existing) {
-        existing = db.prepare(`SELECT id FROM va_lead_records WHERE LOWER(veteran_name) = LOWER(?) AND date = ? AND rep_username = ?`).get(veteranName, dateStr, repUsername)
+        existing = db.prepare(`SELECT * FROM va_lead_records WHERE LOWER(veteran_name) = LOWER(?) AND date = ? AND rep_username = ?`).get(veteranName, dateStr, repUsername)
       }
 
       if (existing) {
+        snapshotList.push({
+          id: existing.id,
+          status: existing.status,
+          outcome_reason: existing.outcome_reason,
+          other_reason_notes: existing.other_reason_notes,
+          signed_at: existing.signed_at,
+        })
+
         // Update existing record
         db.prepare(`
           UPDATE va_lead_records SET
@@ -241,6 +255,7 @@ export async function POST(req: NextRequest) {
             last_edited_by = ?
           WHERE id = ?
         `).run(status, outcomeReason, otherNotes, signedAt, sessionDisplayName, existing.id)
+        updated++
       } else {
         insert.run(
           repName,
@@ -252,27 +267,57 @@ export async function POST(req: NextRequest) {
           outcomeReason,
           otherNotes,
           signedAt,
+          batchId,
           sessionDisplayName
         )
+        imported++
       }
-
-      imported++
     }
+
+    // Save batch record in import_batches
+    db.prepare(`
+      INSERT INTO import_batches (
+        batch_id, lob, upload_type, filename, user_id, username, user_name,
+        records_created, records_updated, snapshot_data, status
+      ) VALUES (?, 'VA', 'va_leads_import', ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    `).run(
+      batchId,
+      file.name,
+      userId,
+      sessionUsername,
+      sessionDisplayName,
+      imported,
+      updated,
+      snapshotList.length > 0 ? JSON.stringify(snapshotList) : null
+    )
   })
 
-  importAll()
+  try {
+    importAll()
 
-  // Security: Record Upload Audit Log
-  recordUploadAudit({
-    username: (session.user as any)?.email || session.user?.name || 'unknown',
-    userName: session.user?.name || undefined,
-    uploadType: 'va_leads',
-    filename: file.name,
-    buffer,
-    rowsProcessed: imported,
-    status: 'SUCCESS',
-    details: `Imported ${imported} VA lead records from spreadsheet (skipped ${skipped} rows).`,
-  })
+    // Security: Record Upload Audit Log
+    recordUploadAudit({
+      userId,
+      username: sessionUsername,
+      userName: sessionDisplayName,
+      uploadType: 'va_leads',
+      filename: file.name,
+      buffer,
+      rowsProcessed: imported + updated,
+      status: 'SUCCESS',
+      details: `Batch ${batchId}: Imported ${imported} new VA leads, updated ${updated} existing records (skipped ${skipped} rows).`,
+    })
 
-  return NextResponse.json({ success: true, imported, skipped })
+    return NextResponse.json({
+      success: true,
+      batch_id: batchId,
+      imported,
+      updated,
+      skipped,
+      message: `Successfully processed ${imported + updated} VA lead records (${imported} new, ${updated} updated, ${skipped} skipped).`,
+    })
+  } catch (err: any) {
+    console.error('[va-tracker import error]:', err)
+    return NextResponse.json({ error: err.message || 'Failed to import VA lead records' }, { status: 500 })
+  }
 }

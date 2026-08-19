@@ -11,7 +11,56 @@ export default function ImportPage() {
   const userRole = (session?.user as any)?.role || 'regular'
   const userPerms = (session?.user as any)?.permissions
 
-  const [activeTab, setActiveTab] = useState<'call-report' | 'converted-ssd' | 'ssd-leads' | 'va-leads' | 'eod-report'>('call-report')
+  const [activeTab, setActiveTab] = useState<'call-report' | 'converted-ssd' | 'ssd-leads' | 'va-leads' | 'eod-report' | 'history'>('call-report')
+
+  // Import History & Rollback State
+  const [historyBatches, setHistoryBatches] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [historySuccess, setHistorySuccess] = useState('')
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null)
+
+  const fetchHistoryBatches = async () => {
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const res = await fetch('/api/import/history?lob=ALL')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch history')
+      setHistoryBatches(data.batches || [])
+    } catch (err: any) {
+      setHistoryError(err.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistoryBatches()
+    }
+  }, [activeTab])
+
+  const handleRollbackBatch = async (batch: any) => {
+    if (!window.confirm(`Are you sure you want to undo and revert import "${batch.filename}"?\n\nThis will remove ${batch.records_created} created records and restore ${batch.records_updated} modified records.`)) return
+    setRollingBackId(batch.batch_id)
+    setHistoryError('')
+    try {
+      const res = await fetch('/api/import/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch_id: batch.batch_id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to rollback import')
+      setHistorySuccess(data.message)
+      fetchHistoryBatches()
+    } catch (err: any) {
+      setHistoryError(err.message)
+    } finally {
+      setRollingBackId(null)
+    }
+  }
 
   // CRM Call Report State
   const [callFile, setCallFile] = useState<File | null>(null)
@@ -257,6 +306,22 @@ export default function ImportPage() {
               }}
             >
               📊 Full EOD Performance
+            </button>
+
+            <button
+              onClick={() => setActiveTab('history')}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: activeTab === 'history' ? '#f59e0b' : 'rgba(255,255,255,0.05)',
+                color: activeTab === 'history' ? '#000' : '#fbbf24',
+                border: activeTab === 'history' ? '1px solid #f59e0b' : '1px solid rgba(245,158,11,0.25)',
+              }}
+            >
+              ⏪ Import History & Rollback
             </button>
           </div>
 
@@ -700,6 +765,136 @@ export default function ImportPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 6: IMPORT HISTORY & ROLLBACK */}
+          {activeTab === 'history' && (
+            <div className="fade-in">
+              <div className="glass-card" style={{ padding: '18px 22px', marginBottom: 20, borderColor: 'rgba(245, 158, 11, 0.3)' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  ⏪ Unified Import History & Safe Rollback Engine
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
+                  Did you accidentally upload the wrong spreadsheet or report? You can revert any import batch below.
+                  The rollback engine safely deletes all created records and restores any modified records to their exact previous state.
+                </p>
+              </div>
+
+              {historyError && (
+                <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171', padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                  ⚠️ {historyError}
+                </div>
+              )}
+              {historySuccess && (
+                <div style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399', padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                  ✅ {historySuccess}
+                </div>
+              )}
+
+              <div className="glass-card" style={{ padding: 20, overflowX: 'auto' }}>
+                {historyLoading ? (
+                  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    ⏳ Loading global import batches...
+                  </div>
+                ) : historyBatches.length === 0 ? (
+                  <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    📄 No import batches recorded yet. Uploaded spreadsheets and CRM reports will be listed here.
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 12px' }}>File & Target</th>
+                        <th style={{ padding: '10px 12px' }}>Uploader</th>
+                        <th style={{ padding: '10px 12px' }}>Date & Time</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Impact</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Status</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyBatches.map((b: any) => {
+                        const isRollingBack = rollingBackId === b.batch_id
+                        const isRolledBack = b.status === 'ROLLED_BACK'
+
+                        return (
+                          <tr
+                            key={b.id}
+                            style={{
+                              borderBottom: '1px solid rgba(255,255,255,0.05)',
+                              opacity: isRolledBack ? 0.6 : 1,
+                              backgroundColor: isRolledBack ? 'rgba(0,0,0,0.15)' : 'transparent',
+                            }}
+                          >
+                            <td style={{ padding: '12px' }}>
+                              <div style={{ fontWeight: 600, color: '#fff', marginBottom: 4 }}>{b.filename}</div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <span style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                  {b.lob}
+                                </span>
+                                <span style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', padding: '2px 8px', borderRadius: 4, fontSize: 11 }}>
+                                  {b.upload_type}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px', color: 'var(--text-primary)' }}>
+                              <div style={{ fontWeight: 600 }}>{b.user_name || b.username}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>@{b.username}</div>
+                            </td>
+                            <td style={{ padding: '12px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                              {b.created_at}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: '#34d399', fontWeight: 700 }}>+{b.records_created}</span> created
+                              {b.records_updated > 0 && (
+                                <span style={{ color: '#60a5fa', marginLeft: 6, fontSize: 12 }}>
+                                  · {b.records_updated} updated
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              {isRolledBack ? (
+                                <span style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                                  ↩️ Rolled Back
+                                </span>
+                              ) : (
+                                <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
+                                  Active
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              {isRolledBack ? (
+                                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                                  Reverted {b.rolled_back_at?.slice(0, 10)}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleRollbackBatch(b)}
+                                  disabled={isRollingBack}
+                                  style={{
+                                    background: 'rgba(239,68,68,0.15)',
+                                    border: '1px solid rgba(239,68,68,0.35)',
+                                    color: '#f87171',
+                                    padding: '5px 12px',
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: isRollingBack ? 'not-allowed' : 'pointer',
+                                  }}
+                                >
+                                  {isRollingBack ? '⏳ Reverting...' : '⏪ Revert Import'}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
         </div>

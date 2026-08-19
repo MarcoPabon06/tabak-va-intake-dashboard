@@ -230,6 +230,7 @@ function initSchema(db: Database.Database) {
       outcome_reason TEXT,
       other_reason_notes TEXT,
       signed_at TEXT,
+      import_batch_id TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       last_edited_by TEXT
@@ -264,6 +265,7 @@ function initSchema(db: Database.Database) {
       signed_at TEXT,
       converted_at TEXT,
       is_converted INTEGER DEFAULT 0,
+      import_batch_id TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       last_edited_by TEXT
@@ -296,6 +298,28 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_upload_audit_user ON upload_audit_logs(username);
     CREATE INDEX IF NOT EXISTS idx_upload_audit_type ON upload_audit_logs(upload_type);
     CREATE INDEX IF NOT EXISTS idx_upload_audit_date ON upload_audit_logs(created_at);
+
+    CREATE TABLE IF NOT EXISTS import_batches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      batch_id TEXT UNIQUE NOT NULL,
+      lob TEXT NOT NULL CHECK(lob IN ('VA', 'SSD', 'APPS', 'ALL')),
+      upload_type TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      user_id INTEGER,
+      username TEXT NOT NULL,
+      user_name TEXT,
+      records_created INTEGER DEFAULT 0,
+      records_updated INTEGER DEFAULT 0,
+      snapshot_data TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'ROLLED_BACK')),
+      created_at TEXT DEFAULT (datetime('now')),
+      rolled_back_at TEXT,
+      rolled_back_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_import_batches_lob ON import_batches(lob, created_at);
+    CREATE INDEX IF NOT EXISTS idx_import_batches_batch_id ON import_batches(batch_id);
+    CREATE INDEX IF NOT EXISTS idx_ssd_leads_batch_id ON ssd_lead_records(import_batch_id);
+    CREATE INDEX IF NOT EXISTS idx_va_leads_batch_id ON va_lead_records(import_batch_id);
   `)
 
   // Run self-healing schema migrations for new columns
@@ -317,6 +341,8 @@ function initSchema(db: Database.Database) {
     { table: 'coaching_sessions', column: 'follow_up_completed_at', definition: 'TEXT' },
     { table: 'coaching_sessions', column: 'updated_at', definition: 'TEXT' },
     { table: 'coaching_sessions', column: 'last_edited_by', definition: 'TEXT' },
+    { table: 'ssd_lead_records', column: 'import_batch_id', definition: 'TEXT' },
+    { table: 'va_lead_records', column: 'import_batch_id', definition: 'TEXT' },
   ]
 
   for (const alter of alterColumns) {

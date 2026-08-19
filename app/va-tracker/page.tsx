@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
+import ImportHistoryModal from '@/components/ImportHistoryModal'
 import { format, subDays, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns'
 import * as XLSX from 'xlsx'
 
@@ -35,6 +36,7 @@ interface VaLeadRecord {
   outcome_reason?: string | null
   other_reason_notes?: string | null
   signed_at?: string | null
+  import_batch_id?: string | null
   created_at: string
   updated_at?: string | null
   last_edited_by?: string | null
@@ -121,10 +123,16 @@ export default function VaTrackerPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number | 'all'>(50)
 
+  // Multi-Select State
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   // Modals
   const [showLogModal, setShowLogModal] = useState(false)
   const [editingRecord, setEditingRecord] = useState<VaLeadRecord | null>(null)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [actionSuccessMsg, setActionSuccessMsg] = useState('')
 
   const isMaster = isSuper || isAdmin
@@ -198,12 +206,60 @@ export default function VaTrackerPage() {
     }
   }
 
+  // Multi-Select Helpers
+  const toggleSelectRow = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    const visibleIds = paginatedEntries.map(e => e.id)
+    const allSelected = visibleIds.every(id => selectedIds.includes(id))
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)))
+    } else {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])))
+    }
+  }
+
+  const selectAllFiltered = () => {
+    const allFilteredIds = displayedEntries.map(e => e.id)
+    setSelectedIds(allFilteredIds)
+  }
+
+  const clearSelection = () => {
+    setSelectedIds([])
+  }
+
+  // Bulk Delete
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return
+    setBulkDeleting(true)
+    try {
+      const res = await safeFetchJson('/api/va-tracker', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      showBannerMessage(res.message || `🗑️ Successfully deleted ${selectedIds.length} VA lead records.`)
+      setSelectedIds([])
+      setShowBulkDeleteModal(false)
+      fetchTrackerData()
+    } catch (err: any) {
+      alert(`Error deleting records: ${err.message}`)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   // Delete Record
   async function handleDeleteRecord(id: number, name: string) {
     if (!confirm(`Are you sure you want to delete lead record for "${name}"?`)) return
     try {
       await safeFetchJson(`/api/va-tracker?id=${id}`, { method: 'DELETE' })
       showBannerMessage(`🗑️ Record for "${name}" deleted.`)
+      setSelectedIds(prev => prev.filter(item => item !== id))
       fetchTrackerData()
     } catch (err: any) {
       alert(`Error deleting record: ${err.message}`)
@@ -328,6 +384,14 @@ export default function VaTrackerPage() {
                     style={{ fontSize: 12, fontWeight: 700 }}
                   >
                     📥 Import Excel
+                  </button>
+                  <button
+                    onClick={() => setShowHistoryModal(true)}
+                    className="btn-secondary"
+                    style={{ fontSize: 12, fontWeight: 700, background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}
+                    title="View past spreadsheet imports and undo/revert if needed"
+                  >
+                    ⏪ History & Rollback
                   </button>
                   <button
                     onClick={handleExportExcel}
@@ -579,6 +643,77 @@ export default function VaTrackerPage() {
             </button>
           </div>
 
+          {/* Floating / Sticky Bulk Actions Toolbar */}
+          {selectedIds.length > 0 && (
+            <div
+              className="glass-card"
+              style={{
+                padding: '12px 20px',
+                marginBottom: 16,
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 12,
+                animation: 'fadeIn 0.2s ease-in-out',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>
+                  ☑️ {selectedIds.length} VA lead record{selectedIds.length === 1 ? '' : 's'} selected
+                </span>
+                {displayedEntries.length > selectedIds.length && (
+                  <button
+                    onClick={selectAllFiltered}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#60a5fa',
+                      fontSize: 12,
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
+                    Select all {displayedEntries.length} matching leads
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  className="btn-secondary"
+                  onClick={clearSelection}
+                  style={{ padding: '5px 12px', fontSize: 12 }}
+                >
+                  ✕ Deselect All
+                </button>
+                {canManageTeam && (
+                  <button
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    style={{
+                      background: '#ef4444',
+                      border: '1px solid #dc2626',
+                      color: '#fff',
+                      padding: '5px 14px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    🗑️ Delete Selected ({selectedIds.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Interactive Lead Records Table */}
           <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
             {loading ? (
@@ -594,6 +729,17 @@ export default function VaTrackerPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>
+                      {canManageTeam && (
+                        <th style={{ width: 36, padding: '12px 14px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={paginatedEntries.length > 0 && paginatedEntries.every(e => selectedIds.includes(e.id))}
+                            onChange={toggleSelectAll}
+                            style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                            title="Select/Deselect All on this page"
+                          />
+                        </th>
+                      )}
                       {!isPersonalView && <th style={{ padding: '12px 16px' }}>Intake Rep</th>}
                       <th style={{ padding: '12px 16px' }}>Veteran's Name</th>
                       <th style={{ padding: '12px 16px' }}>Lead ID</th>
@@ -605,99 +751,117 @@ export default function VaTrackerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedEntries.map((e) => (
-                      <tr
-                        key={e.id}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s ease' }}
-                        className="hover-row"
-                      >
-                        {!isPersonalView && (
-                          <td style={{ padding: '12px 16px', fontWeight: 600, color: '#fff' }}>{e.rep_name}</td>
-                        )}
-                        <td style={{ padding: '12px 16px', fontWeight: 700, color: '#fff' }}>
-                          {e.veteran_name}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#94a3b8' }}>
-                          {e.lead_id ? (
-                            <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: 11 }}>
-                              {e.lead_id}
-                            </span>
-                          ) : (
-                            '—'
+                    {paginatedEntries.map((e) => {
+                      const isSelected = selectedIds.includes(e.id)
+
+                      return (
+                        <tr
+                          key={e.id}
+                          style={{
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                            backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                            transition: 'background 0.15s ease',
+                          }}
+                          className="hover-row"
+                        >
+                          {canManageTeam && (
+                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectRow(e.id)}
+                                style={{ cursor: 'pointer', transform: 'scale(1.15)' }}
+                              />
+                            </td>
                           )}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: '#94a3b8' }}>{e.date}</td>
-                        <td style={{ padding: '12px 16px' }}>{getStatusBadge(e.status)}</td>
-                        <td style={{ padding: '12px 16px' }}>
-                          {getAgingBadge(e.date, e.status) || (
-                            e.status === 'Signed E-Sign' && e.signed_at ? (
-                              <span style={{ fontSize: 10, color: '#10b981' }}>Converted {e.signed_at.slice(0, 10)}</span>
+                          {!isPersonalView && (
+                            <td style={{ padding: '12px 16px', fontWeight: 600, color: '#fff' }}>{e.rep_name}</td>
+                          )}
+                          <td style={{ padding: '12px 16px', fontWeight: 700, color: '#fff' }}>
+                            {e.veteran_name}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#94a3b8' }}>
+                            {e.lead_id ? (
+                              <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace', fontSize: 11 }}>
+                                {e.lead_id}
+                              </span>
                             ) : (
                               '—'
-                            )
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 16px', maxWidth: 280 }}>
-                          <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{e.outcome_reason || '—'}</div>
-                          {e.other_reason_notes && (
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, fontStyle: 'italic' }}>
-                              "{e.other_reason_notes}"
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                            {(e.status === 'Sent E-Sign' || e.status === 'Sign Follow Up') && (
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#94a3b8' }}>{e.date}</td>
+                          <td style={{ padding: '12px 16px' }}>{getStatusBadge(e.status)}</td>
+                          <td style={{ padding: '12px 16px' }}>
+                            {getAgingBadge(e.date, e.status) || (
+                              e.status === 'Signed E-Sign' && e.signed_at ? (
+                                <span style={{ fontSize: 10, color: '#10b981' }}>Converted {e.signed_at.slice(0, 10)}</span>
+                              ) : (
+                                '—'
+                              )
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', maxWidth: 280 }}>
+                            <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{e.outcome_reason || '—'}</div>
+                            {e.other_reason_notes && (
+                              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2, fontStyle: 'italic' }}>
+                                "{e.other_reason_notes}"
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                            <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                              {(e.status === 'Sent E-Sign' || e.status === 'Sign Follow Up') && (
+                                <button
+                                  onClick={() => handleMarkSigned(e)}
+                                  style={{
+                                    background: 'rgba(16,185,129,0.15)',
+                                    color: '#10b981',
+                                    border: '1px solid rgba(16,185,129,0.3)',
+                                    padding: '4px 10px',
+                                    borderRadius: 6,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  ✅ Mark Signed
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleMarkSigned(e)}
+                                onClick={() => setEditingRecord(e)}
                                 style={{
-                                  background: 'rgba(16,185,129,0.15)',
-                                  color: '#10b981',
-                                  border: '1px solid rgba(16,185,129,0.3)',
-                                  padding: '4px 10px',
+                                  background: 'rgba(255,255,255,0.06)',
+                                  color: '#cbd5e1',
+                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  padding: '4px 8px',
                                   borderRadius: 6,
                                   fontSize: 11,
-                                  fontWeight: 700,
+                                  fontWeight: 600,
                                   cursor: 'pointer',
                                 }}
                               >
-                                ✅ Mark Signed
+                                ✏️
                               </button>
-                            )}
-                            <button
-                              onClick={() => setEditingRecord(e)}
-                              style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                color: '#cbd5e1',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              ✏️
-                            </button>
-                            {(isMaster || e.rep_username === (session?.user as any)?.email) && (
-                              <button
-                                onClick={() => handleDeleteRecord(e.id, e.veteran_name)}
-                                style={{
-                                  background: 'transparent',
-                                  color: '#ef4444',
-                                  border: 'none',
-                                  padding: '4px 6px',
-                                  fontSize: 12,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                🗑️
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {(isMaster || e.rep_username === (session?.user as any)?.email) && (
+                                <button
+                                  onClick={() => handleDeleteRecord(e.id, e.veteran_name)}
+                                  style={{
+                                    background: 'transparent',
+                                    color: '#ef4444',
+                                    border: 'none',
+                                    padding: '4px 6px',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -802,6 +966,65 @@ export default function VaTrackerPage() {
             }}
           />
         )}
+
+        {/* Modal: Bulk Delete Confirmation */}
+        {showBulkDeleteModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: 480, padding: 28, background: '#0a1628', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 28 }}>⚠️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#f87171' }}>Confirm Bulk Deletion</h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Permanent action</div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 20 }}>
+                Are you sure you want to permanently delete <strong>{selectedIds.length}</strong> selected VA lead record{selectedIds.length === 1 ? '' : 's'}?
+                <br />
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'block', marginTop: 8 }}>
+                  This will remove them from all VA tracker logs and recalculate conversion metrics immediately.
+                </span>
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowBulkDeleteModal(false)}
+                  disabled={bulkDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  style={{
+                    background: '#ef4444',
+                    border: '1px solid #dc2626',
+                    color: '#fff',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {bulkDeleting ? 'Deleting...' : `Yes, Delete ${selectedIds.length} Records`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Import History & Rollback */}
+        <ImportHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          lob="VA"
+          onRollbackSuccess={fetchTrackerData}
+        />
       </main>
     </div>
   )
