@@ -63,6 +63,7 @@ export default function SSDTrackerPage() {
 
   const [from, setFrom] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'))
   const [to, setTo] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [activePreset, setActivePreset] = useState('This month')
   const [repFilter, setRepFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [claimFilter, setClaimFilter] = useState('All')
@@ -694,21 +695,56 @@ export default function SSDTrackerPage() {
               </select>
             )}
 
-            <input
-              type="date"
-              className="input-field"
-              style={{ width: 140, fontSize: 13, margin: 0 }}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
-            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>to</span>
-            <input
-              type="date"
-              className="input-field"
-              style={{ width: 140, fontSize: 13, margin: 0 }}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => {
+                    setActivePreset(p.label)
+                    const range = p.getValue()
+                    setFrom(range.from)
+                    setTo(range.to)
+                  }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: activePreset === p.label ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+                    color: activePreset === p.label ? '#fff' : '#94a3b8',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="date"
+                className="input-field"
+                style={{ width: 135, fontSize: 12, margin: 0, padding: '4px 8px' }}
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value)
+                  setActivePreset('Custom')
+                }}
+              />
+              <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>to</span>
+              <input
+                type="date"
+                className="input-field"
+                style={{ width: 135, fontSize: 12, margin: 0, padding: '4px 8px' }}
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value)
+                  setActivePreset('Custom')
+                }}
+              />
+            </div>
           </div>
         </div>
 

@@ -8,22 +8,34 @@ import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAud
 
 function parseDateString(dateVal: any): string {
   if (!dateVal) return new Date().toISOString().split('T')[0]
-  if (dateVal instanceof Date) return dateVal.toISOString().split('T')[0]
+  if (dateVal instanceof Date) {
+    const y = dateVal.getFullYear()
+    const m = String(dateVal.getMonth() + 1).padStart(2, '0')
+    const d = String(dateVal.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
   if (typeof dateVal === 'number') {
     const d = XLSX.SSF.parse_date_code(dateVal)
     return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
   }
   const str = String(dateVal).trim()
-  const d = new Date(str)
-  if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0]
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`
   }
-  // Try MM/DD/YYYY
-  const parts = str.split(/[-/]/)
+  const mdyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+  if (mdyMatch) {
+    return `${mdyMatch[3]}-${mdyMatch[1].padStart(2, '0')}-${mdyMatch[2].padStart(2, '0')}`
+  }
+  const parts = str.split(' ')[0].split(/[-/]/)
   if (parts.length === 3) {
-    let year = parts[2]
-    if (year.length === 2) year = '20' + year
-    return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+    if (parts[0].length === 4) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
+    } else {
+      let year = parts[2]
+      if (year.length === 2) year = '20' + year
+      return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+    }
   }
   return new Date().toISOString().split('T')[0]
 }
