@@ -184,7 +184,257 @@ export function generateEODReportHtml(params: EODReportParams): { html: string; 
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 2. VA / INTAKE DIVISION REPORT (Exact Spreadsheet Layout)
+  // 2. SSD INTAKE DIVISION REPORT (Exact Master Spreadsheet Layout)
+  // ─────────────────────────────────────────────────────────────
+  if (lob === 'SSD') {
+    let presentCount = 0
+    let absentCount = 0
+
+    const agentDailyMap: Record<
+      string,
+      {
+        agent_name: string
+        capd: number
+        inbound_calls: number
+        case_rejected: number
+        crh: number
+        signed_retainers: number
+        unsigned_retainers: number
+        total_case_wanted: number
+        rfc: number
+        converted_cases: number
+        present: string
+      }
+    > = {}
+
+    perfData.forEach((row) => {
+      const name = row.agent_name ? row.agent_name.trim() : 'Unknown'
+      if (!agentDailyMap[name]) {
+        agentDailyMap[name] = {
+          agent_name: name,
+          capd: 0,
+          inbound_calls: 0,
+          case_rejected: 0,
+          crh: 0,
+          signed_retainers: 0,
+          unsigned_retainers: 0,
+          total_case_wanted: 0,
+          rfc: 0,
+          converted_cases: 0,
+          present: row.present || 'SI',
+        }
+      }
+      const a = agentDailyMap[name]
+      a.capd += row.capd || 0
+      a.inbound_calls += row.inbound_calls || 0
+      a.case_rejected += row.case_rejected || 0
+      a.crh += row.crh || 0
+      a.signed_retainers += row.signed_retainers || 0
+      a.unsigned_retainers += row.unsigned_retainers || 0
+      a.rfc += row.rfc_sent || 0
+      a.converted_cases += row.converted_cases || 0
+      a.total_case_wanted += row.total_case_wanted !== undefined ? row.total_case_wanted : ((row.signed_retainers || 0) + (row.unsigned_retainers || 0))
+      a.present = row.present || a.present
+    })
+
+    Object.values(agentDailyMap).forEach((a) => {
+      const status = (a.present || 'SI').toLowerCase()
+      if (status.includes('no') || status.includes('absent')) absentCount++
+      else presentCount++
+    })
+
+    if (Object.keys(agentDailyMap).length === 0) {
+      presentCount = 0
+      absentCount = 0
+    }
+
+    // Month-to-Date (MTD) Calculations per specialist
+    const mtdSignedMap: Record<string, number> = {}
+    const mtdConvertedMap: Record<string, number> = {}
+
+    const sourceForMtd = mtdPerfData.length > 0 ? mtdPerfData : perfData
+    sourceForMtd.forEach((row) => {
+      const name = row.agent_name ? row.agent_name.trim() : 'Unknown'
+      mtdSignedMap[name] = (mtdSignedMap[name] || 0) + (row.signed_retainers || 0)
+      mtdConvertedMap[name] = (mtdConvertedMap[name] || 0) + (row.converted_cases || 0)
+    })
+
+    const agentRows = Object.values(agentDailyMap)
+      .map((a) => {
+        const totalWanted = a.signed_retainers + a.unsigned_retainers
+        const successRate = totalWanted > 0 ? `${Math.round((a.signed_retainers / totalWanted) * 100)}%` : '0%'
+        const mtdSigned = mtdSignedMap[a.agent_name] !== undefined ? mtdSignedMap[a.agent_name] : a.signed_retainers
+        const mtdTransferred = mtdConvertedMap[a.agent_name] !== undefined ? mtdConvertedMap[a.agent_name] : a.converted_cases
+
+        return {
+          ...a,
+          total_case_wanted: totalWanted,
+          successRate,
+          mtdSigned,
+          mtdTransferred,
+        }
+      })
+      .sort((a, b) => a.agent_name.localeCompare(b.agent_name))
+
+    const totalCapd = agentRows.reduce((sum, r) => sum + r.capd, 0)
+    const totalSigned = agentRows.reduce((sum, r) => sum + r.signed_retainers, 0)
+    const totalUnsigned = agentRows.reduce((sum, r) => sum + r.unsigned_retainers, 0)
+    const totalCaseWanted = totalSigned + totalUnsigned
+    const totalRfc = agentRows.reduce((sum, r) => sum + r.rfc, 0)
+    const totalCrh = agentRows.reduce((sum, r) => sum + r.crh, 0)
+    const totalRejected = agentRows.reduce((sum, r) => sum + r.case_rejected, 0)
+    const totalSuccessRate = totalCaseWanted > 0 ? `${Math.round((totalSigned / totalCaseWanted) * 100)}%` : '0%'
+    const totalDailyConverted = agentRows.reduce((sum, r) => sum + r.converted_cases, 0)
+    const totalMtdSigned = agentRows.reduce((sum, r) => sum + r.mtdSigned, 0)
+    const totalMtdTransferred = agentRows.reduce((sum, r) => sum + r.mtdTransferred, 0)
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SSD Intake - EOD Report</title>
+</head>
+<body style="margin: 0; padding: 10px; font-family: Calibri, Arial, sans-serif; background-color: #ffffff; color: #000000;">
+  <div style="max-width: 1100px; margin: 0 auto;">
+    
+    <!-- 1. Header & Account Details Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="2" style="background-color: #a9d08e; color: #000000; font-size: 15px; font-weight: bold; padding: 6px 10px; text-align: center; border: 1px solid #000000;">
+          SSD Intake - EOD Report
+        </th>
+      </tr>
+      <tr>
+        <th colspan="2" style="background-color: #c6e0b4; color: #000000; font-size: 13px; font-weight: bold; padding: 4px 10px; text-align: center; border: 1px solid #000000;">
+          Account Details
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 30%; font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Client</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Tabak Law LLC</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">LOB</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Social Security Disability (SSD)</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Date</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${dateDisplay}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Team Leader</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamLeader}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Manager</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${teamManager}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Schedule</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">8 a.m. - 5 p.m CDT</td>
+      </tr>
+    </table>
+
+    <!-- 2. Headcount Details Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="2" style="background-color: #c6e0b4; color: #000000; font-size: 13px; font-weight: bold; padding: 4px 10px; text-align: center; border: 1px solid #000000;">
+          Headcount Details
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 30%; font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Present</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${presentCount}</td>
+      </tr>
+      <tr>
+        <td style="font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Absent</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${absentCount}</td>
+      </tr>
+    </table>
+
+    <!-- 3. MTD Transferred Cases Table -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 13px;">
+      <tr>
+        <th colspan="2" style="background-color: #c6e0b4; color: #000000; font-size: 13px; font-weight: bold; padding: 4px 10px; text-align: center; border: 1px solid #000000;">
+          MTD Transferred Cases
+        </th>
+      </tr>
+      <tr>
+        <td style="width: 30%; font-weight: bold; padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">Total Transferred Cases</td>
+        <td style="padding: 4px 8px; border: 1px solid #000000; text-align: center; background-color: #ffffff;">${totalMtdTransferred}</td>
+      </tr>
+    </table>
+
+    <!-- 4. SSD Intake Team Table -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: center;">
+      <thead>
+        <tr>
+          <th colspan="12" style="background-color: #a9d08e; color: #000000; font-size: 13px; font-weight: bold; padding: 6px 10px; text-align: left; border: 1px solid #000000;">
+            Social Security Disability - Intake Team
+          </th>
+        </tr>
+        <tr style="background-color: #a9d08e; color: #000000; font-weight: bold; font-size: 12px;">
+          <th style="padding: 6px 8px; border: 1px solid #000000; text-align: left;">Agent Name</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">CAPD</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Signed</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Unsigned</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Total Case Wanted</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">RFC</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">CRH</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Case Rejected</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Signed Percentage</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">Daily Transferred Cases</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">MTD Signed Cases</th>
+          <th style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">MTD Transferred Cases</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${agentRows
+          .map(
+            (r) => `
+        <tr style="background-color: #ffffff; color: #000000;">
+          <td style="padding: 5px 8px; border: 1px solid #000000; text-align: left;">${r.agent_name}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.capd}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.signed_retainers}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.unsigned_retainers}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.total_case_wanted}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.rfc}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.crh}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.case_rejected}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.successRate}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.converted_cases}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.mtdSigned}</td>
+          <td style="padding: 5px 6px; border: 1px solid #000000; text-align: center;">${r.mtdTransferred}</td>
+        </tr>`
+          )
+          .join('')}
+        <tr style="background-color: #d9d9d9; color: #000000; font-weight: bold;">
+          <td style="padding: 6px 8px; border: 1px solid #000000; text-align: left;">Total</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalCapd}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalSigned}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalUnsigned}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalCaseWanted}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalRfc}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalCrh}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalRejected}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalSuccessRate}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalDailyConverted}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalMtdSigned}</td>
+          <td style="padding: 6px 6px; border: 1px solid #000000; text-align: center;">${totalMtdTransferred}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>`
+
+    const text = `SSD Intake - EOD Report\nDate: ${dateDisplay}\nTeam Leader: ${teamLeader} | Manager: ${teamManager}\nHeadcount: Present: ${presentCount} | Absent: ${absentCount}\nMTD Transferred Cases: ${totalMtdTransferred}\n\nSummary:\nTotal Signed: ${totalSigned} | Unsigned: ${totalUnsigned} | Case Wanted: ${totalCaseWanted} | RFC: ${totalRfc} | CRH: ${totalCrh} | Rejected: ${totalRejected} | Signed %: ${totalSuccessRate} | Daily Transferred: ${totalDailyConverted} | MTD Signed: ${totalMtdSigned} | MTD Transferred: ${totalMtdTransferred}\n`
+    return { html, text }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 3. VA / INTAKE DIVISION REPORT (Exact Spreadsheet Layout)
   // ─────────────────────────────────────────────────────────────
 
   // Attendance Counts
