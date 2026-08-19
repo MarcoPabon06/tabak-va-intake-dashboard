@@ -101,97 +101,52 @@ export async function POST(req: NextRequest) {
   const dataRows = rawRows.slice(1)
   const db = getDb()
 
+  // Active users map for canonical display names
+  const userRows = db.prepare(`SELECT display_name, username, lob FROM users WHERE active = 1`).all() as { display_name: string; username: string; lob: string }[]
+  const agentLookup = new Map<string, { display_name: string; username: string; lob: string }>()
+  for (const u of userRows) {
+    if (u.display_name) {
+      agentLookup.set(u.display_name.toLowerCase().trim(), u)
+      agentLookup.set(u.display_name.toLowerCase().replace(/[^a-z0-9]/g, ''), u)
+    }
+    if (u.username) {
+      agentLookup.set(u.username.toLowerCase().trim(), u)
+      agentLookup.set(u.username.toLowerCase().replace(/[^a-z0-9]/g, ''), u)
+    }
+  }
+
+  function getCanonicalRepName(rawName: string) {
+    if (!rawName) return rawName
+    const clean = rawName.toLowerCase().trim()
+    if (agentLookup.has(clean)) return agentLookup.get(clean)!.display_name
+    const stripped = clean.replace(/[^a-z0-9]/g, '')
+    if (agentLookup.has(stripped)) return agentLookup.get(stripped)!.display_name
+    return rawName.trim()
+  }
+
   const batchId = `batch_ssd_converted_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-  const snapshotList: any[] = []
   let convertedSynced = 0
-  let leadsPromoted = 0
-  let newLeadsCreated = 0
   const dailyConvertedMap: Record<string, Record<string, number>> = {} // date -> rep -> count
 
+  for (const row of dataRows) {
+    if (!row || !Array.isArray(row) || row.length === 0) continue
+
+    const assigneeRaw = row[iAssignee] ? String(row[iAssignee]).trim() : sessionDisplayName
+    const repName = getCanonicalRepName(assigneeRaw || sessionDisplayName)
+    const convertDate = parseIdleTimeDate(row[iIdleTime])
+
+    convertedSynced++
+
+    // Tally for daily_performance
+    if (!dailyConvertedMap[convertDate]) dailyConvertedMap[convertDate] = {}
+    dailyConvertedMap[convertDate][repName] = (dailyConvertedMap[convertDate][repName] || 0) + 1
+  }
+
+  const snapshotList: any[] = []
+  let recordsUpdated = 0
+  let recordsCreated = 0
+
   const syncTransaction = db.transaction(() => {
-    for (const row of dataRows) {
-      if (!row || !Array.isArray(row) || row.length === 0) continue
-
-      const leadId = row[iLeadId] ? String(row[iLeadId]).trim() : ''
-      const firstName = row[iFirstName] ? String(row[iFirstName]).trim() : ''
-      const lastName = row[iLastName] ? String(row[iLastName]).trim() : ''
-      const fullName = [firstName, lastName].filter(Boolean).join(' ') || (leadId ? `Lead #${leadId}` : 'Unknown Client')
-      const clientName = sanitizeCellText(fullName)
-
-      const assigneeRaw = row[iAssignee] ? String(row[iAssignee]).trim() : sessionDisplayName
-      const repName = assigneeRaw || sessionDisplayName
-      const repUsername = repName.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-      const convertDate = parseIdleTimeDate(row[iIdleTime])
-      const convertedTimestamp = `${convertDate} 12:00:00`
-
-      // Determine claim type from tags or default
-      let claimType: string | null = null
-      if (iTags !== -1 && row[iTags]) {
-        const tagStr = String(row[iTags]).toLowerCase()
-        if (tagStr.includes('titleii') && tagStr.includes('titlexvi')) claimType = 'SSDI+SSI'
-        else if (tagStr.includes('title ii') || tagStr.includes('titleii') || tagStr.includes('ssdi')) claimType = 'SSDI Only'
-        else if (tagStr.includes('title xvi') || tagStr.includes('titlexvi') || tagStr.includes('ssi')) claimType = 'SSI Only'
-      }
-
-      // Check if lead already exists in ssd_lead_records
-      let existing: any
-      if (leadId) {
-        existing = db.prepare(`SELECT * FROM ssd_lead_records WHERE lead_id = ?`).get(leadId)
-      }
-      if (!existing) {
-        existing = db.prepare(`
-          SELECT * 
-          FROM ssd_lead_records 
-          WHERE LOWER(client_name) = LOWER(?) AND (rep_username = ? OR LOWER(rep_name) = LOWER(?))
-        `).get(clientName, repUsername, repName)
-      }
-
-      if (existing) {
-        snapshotList.push({
-          id: existing.id,
-          status: existing.status,
-          is_converted: existing.is_converted,
-          converted_at: existing.converted_at,
-          signed_at: existing.signed_at,
-          claim_type: existing.claim_type,
-        })
-
-        // Promote status to 'Signed E-Sign' and mark is_converted = 1
-        db.prepare(`
-          UPDATE ssd_lead_records SET
-            status = 'Signed E-Sign',
-            is_converted = 1,
-            converted_at = ?,
-            signed_at = COALESCE(signed_at, ?),
-            claim_type = COALESCE(claim_type, ?),
-            updated_at = (datetime('now')),
-            last_edited_by = 'CRM Converted Import'
-          WHERE id = ?
-        `).run(convertedTimestamp, convertedTimestamp, claimType, existing.id)
-
-        if (existing.status !== 'Signed E-Sign' || !existing.is_converted) {
-          leadsPromoted++
-        }
-      } else {
-        // Create new converted lead record in ssd_lead_records
-        db.prepare(`
-          INSERT INTO ssd_lead_records (
-            rep_name, rep_username, client_name, lead_id, date, status, claim_type, is_converted, converted_at, signed_at, import_batch_id, last_edited_by
-          ) VALUES (
-            ?, ?, ?, ?, ?, 'Signed E-Sign', ?, 1, ?, ?, ?, 'CRM Converted Import'
-          )
-        `).run(repName, repUsername, clientName, leadId || null, convertDate, claimType, convertedTimestamp, convertedTimestamp, batchId)
-        newLeadsCreated++
-      }
-
-      convertedSynced++
-
-      // Tally for daily_performance
-      if (!dailyConvertedMap[convertDate]) dailyConvertedMap[convertDate] = {}
-      dailyConvertedMap[convertDate][repName] = (dailyConvertedMap[convertDate][repName] || 0) + 1
-    }
-
     // Upsert into daily_performance so Dashboard converted_cases count matches
     for (const [dateStr, reps] of Object.entries(dailyConvertedMap)) {
       for (const [rep, count] of Object.entries(reps)) {
@@ -200,19 +155,33 @@ export async function POST(req: NextRequest) {
         `).get(dateStr, rep) as any
 
         if (existingRow) {
+          snapshotList.push({
+            table: 'daily_performance',
+            id: existingRow.id,
+            previous_converted_cases: existingRow.converted_cases,
+          })
+
           db.prepare(`
             UPDATE daily_performance SET
               converted_cases = MAX(COALESCE(converted_cases, 0), ?)
             WHERE id = ?
           `).run(count, existingRow.id)
+          recordsUpdated++
         } else {
-          db.prepare(`
+          const insertRes = db.prepare(`
             INSERT INTO daily_performance (
               date, agent_name, capd, inbound_calls, case_rejected, crh, signed_retainers, unsigned_retainers, converted_cases, rfc_sent, present
             ) VALUES (
               ?, ?, 0, 0, 0, 0, 0, 0, ?, 0, 'Present'
             )
           `).run(dateStr, rep, count)
+
+          snapshotList.push({
+            table: 'daily_performance',
+            id: insertRes.lastInsertRowid,
+            created: true,
+          })
+          recordsCreated++
         }
       }
     }
@@ -229,8 +198,8 @@ export async function POST(req: NextRequest) {
       userId,
       sessionUsername,
       sessionDisplayName,
-      newLeadsCreated,
-      snapshotList.length,
+      recordsCreated,
+      recordsUpdated,
       snapshotList.length > 0 ? JSON.stringify(snapshotList) : null
     )
   })
@@ -247,16 +216,14 @@ export async function POST(req: NextRequest) {
       buffer,
       rowsProcessed: convertedSynced,
       status: 'SUCCESS',
-      details: `Batch ${batchId}: Synced ${convertedSynced} converted cases (${leadsPromoted} promoted, ${newLeadsCreated} created).`,
+      details: `Batch ${batchId}: Synced ${convertedSynced} converted cases across daily performance.`,
     })
 
     return NextResponse.json({
       success: true,
       batch_id: batchId,
       converted_synced: convertedSynced,
-      leads_promoted: leadsPromoted,
-      new_leads_created: newLeadsCreated,
-      message: `Successfully synchronized ${convertedSynced} converted cases (${leadsPromoted} existing leads promoted to Converted Case, ${newLeadsCreated} new converted records logged).`,
+      message: `Successfully processed ${convertedSynced} converted cases and updated Intake Rep daily performance.`,
     })
   } catch (err: any) {
     console.error('[ssd-tracker import-converted error]:', err)

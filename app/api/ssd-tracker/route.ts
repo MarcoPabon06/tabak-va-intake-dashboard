@@ -82,23 +82,20 @@ export async function GET(req: NextRequest) {
       query += ` AND (
         (date >= ? AND date <= ?)
         OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
-        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
       )`
-      params.push(from, to, from, to, from, to)
+      params.push(from, to, from, to)
     } else if (from) {
       query += ` AND (
         date >= ?
         OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?)
-        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?)
       )`
-      params.push(from, from, from)
+      params.push(from, from)
     } else if (to) {
       query += ` AND (
         date <= ?
         OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
-        OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
       )`
-      params.push(to, to, to)
+      params.push(to, to)
     }
 
     if (statusFilter && statusFilter !== 'All') {
@@ -108,10 +105,10 @@ export async function GET(req: NextRequest) {
         query += ` AND status IN ('Client Refused Help', 'Case Rejected')`
       } else if (statusFilter === 'Signed') {
         query += ` AND status = 'Signed E-Sign'`
-      } else if (statusFilter === 'InApplication') {
-        query += ` AND status = 'Signed E-Sign' AND (is_converted = 0 OR is_converted IS NULL)`
-      } else if (statusFilter === 'Converted') {
-        query += ` AND is_converted = 1`
+      } else if (statusFilter === 'Sent RFC') {
+        query += ` AND status = 'Sent RFC'`
+      } else if (statusFilter === 'Rescheduled') {
+        query += ` AND status = 'Appointment Rescheduled'`
       } else {
         query += ` AND status = ?`
         params.push(statusFilter)
@@ -162,14 +159,12 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN status = 'Sent RFC' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as sent_rfc,
         SUM(CASE WHEN status = 'Appointment Rescheduled' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rescheduled,
         SUM(CASE WHEN status = 'Client Refused Help' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as crh_count,
-        SUM(CASE WHEN status = 'Case Rejected' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rejected_count,
-        SUM(CASE WHEN is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ? THEN 1 ELSE 0 END) as converted_count
+        SUM(CASE WHEN status = 'Case Rejected' AND date >= ? AND date <= ? THEN 1 ELSE 0 END) as rejected_count
       FROM ssd_lead_records
       ${whereClause}
         AND (
           (date >= ? AND date <= ?)
           OR (status = 'Signed E-Sign' AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
-          OR (is_converted = 1 AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ? AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?)
         )
     `).get(
       effectiveFrom, effectiveTo,
@@ -179,9 +174,7 @@ export async function GET(req: NextRequest) {
       effectiveFrom, effectiveTo,
       effectiveFrom, effectiveTo,
       effectiveFrom, effectiveTo,
-      effectiveFrom, effectiveTo,
       ...metricsParams,
-      effectiveFrom, effectiveTo,
       effectiveFrom, effectiveTo,
       effectiveFrom, effectiveTo
     ) as any || {}
@@ -195,12 +188,9 @@ export async function GET(req: NextRequest) {
     const rescheduled = aggStats.rescheduled || 0
     const crhCount = aggStats.crh_count || 0
     const rejectedCount = aggStats.rejected_count || 0
-    const convertedCount = aggStats.converted_count || 0
-    const inAppCount = Math.max(0, signedEsigns - convertedCount)
 
     const totalEsignPool = pendingSignatures + signedEsigns
     const signedSuccessRate = totalEsignPool > 0 ? ((signedEsigns / totalEsignPool) * 100).toFixed(1) : '0.0'
-    const caseConversionRate = signedEsigns > 0 ? ((convertedCount / signedEsigns) * 100).toFixed(1) : '0.0'
 
     // Fast Outcome Reasons Breakdown
     const reasonsBreakdown: Record<string, number> = {}
@@ -299,14 +289,11 @@ export async function GET(req: NextRequest) {
         paper_sent: paperSent,
         pending_signatures: pendingSignatures,
         signed_esigns: signedEsigns,
-        in_application_count: inAppCount,
         sent_rfc: sentRfc,
         rescheduled: rescheduled,
         crh_count: crhCount,
         rejected_count: rejectedCount,
-        converted_count: convertedCount,
         signed_success_rate: Number(signedSuccessRate),
-        case_conversion_rate: Number(caseConversionRate),
         reasons_breakdown: reasonsBreakdown,
         claims_breakdown: claimsBreakdown,
       },

@@ -61,7 +61,20 @@ export async function POST(req: NextRequest) {
         }
 
         if (Array.isArray(snapshots) && snapshots.length > 0) {
-          if (batch.lob === 'SSD' || batch.upload_type.startsWith('ssd_')) {
+          if (batch.upload_type === 'ssd_converted_sync') {
+            for (const snap of snapshots) {
+              if (snap.created) {
+                db.prepare(`DELETE FROM daily_performance WHERE id = ?`).run(snap.id)
+                recordsDeleted++
+              } else {
+                db.prepare(`UPDATE daily_performance SET converted_cases = ? WHERE id = ?`).run(
+                  snap.previous_converted_cases || 0,
+                  snap.id
+                )
+                recordsRestored++
+              }
+            }
+          } else if (batch.lob === 'SSD' || batch.upload_type.startsWith('ssd_')) {
             const restoreStmt = db.prepare(`
               UPDATE ssd_lead_records SET
                 status = ?,

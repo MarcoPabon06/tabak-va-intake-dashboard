@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Aggregate SSD leads
-  const ssdMap = new Map<string, { signed: number; unsigned: number; rfc: number; crh: number; rejected: number; converted: number; canonicalName: string }>()
+  const ssdMap = new Map<string, { signed: number; unsigned: number; rfc: number; crh: number; rejected: number; canonicalName: string }>()
 
   // 2a. SSD Logged leads (unsigned, RFC, CRH, rejected on entry date)
   const ssdLoggedLeads = db.prepare(`
@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
 
     let item = ssdMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, canonicalName }
       ssdMap.set(key, item)
     }
 
@@ -188,34 +188,10 @@ export async function GET(req: NextRequest) {
 
     let item = ssdMap.get(key)
     if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
+      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, canonicalName }
       ssdMap.set(key, item)
     }
     item.signed++
-  }
-
-  // 2c. SSD Converted leads (on actual converted_at date)
-  const ssdConvertedLeads = db.prepare(`
-    SELECT rep_name, rep_username, date, status, signed_at, converted_at
-    FROM ssd_lead_records
-    WHERE is_converted = 1
-      AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) >= ?
-      AND COALESCE(NULLIF(SUBSTR(converted_at, 1, 10), ''), NULLIF(SUBSTR(signed_at, 1, 10), ''), date) <= ?
-  `).all(from, to) as any[]
-
-  for (const lead of ssdConvertedLeads) {
-    const user = getCanonicalAgent(lead.rep_name, lead.rep_username)
-    const canonicalName = user ? user.display_name : lead.rep_name
-    if (!canonicalName) continue
-    const convDate = (lead.converted_at && lead.converted_at.slice(0, 10)) || (lead.signed_at && lead.signed_at.slice(0, 10)) || lead.date
-    const key = `${convDate}___${canonicalName.toLowerCase().trim()}`
-
-    let item = ssdMap.get(key)
-    if (!item) {
-      item = { signed: 0, unsigned: 0, rfc: 0, crh: 0, rejected: 0, converted: 0, canonicalName }
-      ssdMap.set(key, item)
-    }
-    item.converted++
   }
 
   // Dynamically enhance VA and SSD specialist performance with batch tracker records
@@ -243,7 +219,6 @@ export async function GET(req: NextRequest) {
       const ssdData = ssdMap.get(key)
       if (ssdData) {
         const total = (ssdData.signed || 0) + (ssdData.unsigned || 0)
-        const maxConverted = Math.max(row.converted_cases || 0, ssdData.converted || 0)
         return {
           ...row,
           agent_name: canonicalName,
@@ -252,7 +227,7 @@ export async function GET(req: NextRequest) {
           rfc_sent: ssdData.rfc || 0,
           crh: ssdData.crh || 0,
           case_rejected: ssdData.rejected || 0,
-          converted_cases: maxConverted,
+          converted_cases: row.converted_cases || 0,
           total_case_wanted: total,
           signed_success_rate: total > 0 ? (ssdData.signed || 0) / total : 0,
         }
@@ -349,7 +324,7 @@ export async function GET(req: NextRequest) {
         crh: ssdData.crh || 0,
         signed_retainers: ssdData.signed || 0,
         unsigned_retainers: ssdData.unsigned || 0,
-        converted_cases: ssdData.converted || 0,
+        converted_cases: 0,
         rfc_sent: ssdData.rfc || 0,
         total_case_wanted: total,
         signed_success_rate: total > 0 ? (ssdData.signed || 0) / total : 0,
