@@ -136,15 +136,38 @@ export async function POST(req: NextRequest) {
   const batchId = `batch_ssd_converted_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
   let convertedSynced = 0
   const dailyConvertedMap: Record<string, Record<string, number>> = {} // date -> rep -> count
+  const parsedConvertedList: {
+    leadId: string
+    clientName: string
+    convertDate: string
+    repName: string
+    repUsername: string
+    rawTags: string | null
+  }[] = []
 
   for (const row of dataRows) {
     if (!row || !Array.isArray(row) || row.length === 0) continue
 
+    const leadId = row[iLeadId] ? String(row[iLeadId]).trim() : ''
+    const firstName = iFirstName !== -1 && row[iFirstName] ? String(row[iFirstName]).trim() : ''
+    const lastName = iLastName !== -1 && row[iLastName] ? String(row[iLastName]).trim() : ''
+    const clientName = `${firstName} ${lastName}`.trim() || 'Unknown Client'
     const assigneeRaw = row[iAssignee] ? String(row[iAssignee]).trim() : sessionDisplayName
     const repName = getCanonicalRepName(assigneeRaw || sessionDisplayName)
+    const repUsername = repName.toLowerCase().replace(/[^a-z0-9]/g, '')
     const convertDate = parseIdleTimeDate(row[iIdleTime])
+    const rawTags = iTags !== -1 && row[iTags] ? String(row[iTags]).trim() : null
 
     convertedSynced++
+
+    parsedConvertedList.push({
+      leadId: leadId || '—',
+      clientName: sanitizeCellText(clientName),
+      convertDate,
+      repName,
+      repUsername,
+      rawTags: rawTags ? sanitizeCellText(rawTags) : null,
+    })
 
     // Tally for daily_performance
     if (!dailyConvertedMap[convertDate]) dailyConvertedMap[convertDate] = {}
@@ -156,7 +179,30 @@ export async function POST(req: NextRequest) {
   let recordsCreated = 0
 
   const syncTransaction = db.transaction(() => {
-    // Upsert into daily_performance so Dashboard converted_cases count matches
+    // 1. Insert individual converted records into ssd_converted_records
+    const insertConvertedStmt = db.prepare(`
+      INSERT INTO ssd_converted_records (
+        lead_id, client_name, date_converted, rep_name, rep_username, raw_tags, import_batch_id, imported_by
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?
+      )
+    `)
+
+    for (const item of parsedConvertedList) {
+      insertConvertedStmt.run(
+        item.leadId,
+        item.clientName,
+        item.convertDate,
+        item.repName,
+        item.repUsername,
+        item.rawTags,
+        batchId,
+        sessionDisplayName
+      )
+      recordsCreated++
+    }
+
+    // 2. Upsert into daily_performance so Dashboard converted_cases count matches
     for (const [dateStr, reps] of Object.entries(dailyConvertedMap)) {
       for (const [rep, count] of Object.entries(reps)) {
         const existingRow = db.prepare(`
@@ -190,12 +236,11 @@ export async function POST(req: NextRequest) {
             id: insertRes.lastInsertRowid,
             created: true,
           })
-          recordsCreated++
         }
       }
     }
 
-    // Save batch record in import_batches
+    // 3. Save batch record in import_batches
     db.prepare(`
       INSERT INTO import_batches (
         batch_id, lob, upload_type, filename, user_id, username, user_name,

@@ -79,6 +79,8 @@ export default function SSDTrackerPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  const [trackerMode, setTrackerMode] = useState<'leads' | 'converted'>('leads')
+
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'signed' | 'rfc' | 'rescheduled' | 'refused'>('all')
 
   const [entries, setEntries] = useState<SSDLeadRecord[]>([])
@@ -89,14 +91,45 @@ export default function SSDTrackerPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Pagination State
+  // Pagination State (Leads)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState<number | 'all'>(50)
 
-  // Multi-Select State
+  // Multi-Select State (Leads)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // Converted Registry State
+  const [convertedEntries, setConvertedEntries] = useState<any[]>([])
+  const [convertedSummary, setConvertedSummary] = useState<{
+    total_converted: number
+    active_reps_count: number
+    top_rep: string
+    rep_breakdown: Record<string, number>
+  } | null>(null)
+  const [convertedRepsList, setConvertedRepsList] = useState<{ rep_name: string; rep_username: string }[]>([])
+  const [convertedLoading, setConvertedLoading] = useState(false)
+  const [convertedPage, setConvertedPage] = useState(1)
+  const [convertedTotalPages, setConvertedTotalPages] = useState(1)
+  const [convertedTotalCount, setConvertedTotalCount] = useState(0)
+  const [convertedPageSize, setConvertedPageSize] = useState<number | 'all'>(50)
+  const [convertedSearch, setConvertedSearch] = useState('')
+  const [debouncedConvertedSearch, setDebouncedConvertedSearch] = useState('')
+  const [convertedRepFilter, setConvertedRepFilter] = useState('All')
+  const [selectedConvertedIds, setSelectedConvertedIds] = useState<number[]>([])
+  const [showConvertedDeleteModal, setShowConvertedDeleteModal] = useState(false)
+  const [showConvertedSyncModal, setShowConvertedSyncModal] = useState(false)
+  const [convertedSyncFile, setConvertedSyncFile] = useState<File | null>(null)
+  const [convertedSyncing, setConvertedSyncing] = useState(false)
+
+  // Debounce search for Converted Cases
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedConvertedSearch(convertedSearch)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [convertedSearch])
 
   // Modals
   const [showLogModal, setShowLogModal] = useState(false)
@@ -184,6 +217,37 @@ export default function SSDTrackerPage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // Fetch Converted Cases Registry
+  const fetchConvertedData = useCallback(async () => {
+    setConvertedLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+      if (convertedRepFilter !== 'All') params.set('rep', convertedRepFilter)
+      if (debouncedConvertedSearch.trim()) params.set('search', debouncedConvertedSearch.trim())
+      params.set('page', String(convertedPage))
+      params.set('limit', String(convertedPageSize))
+
+      const json = await safeFetchJson(`/api/ssd-tracker/converted-cases?${params.toString()}`)
+      setConvertedEntries(json.records || [])
+      setConvertedSummary(json.summary || null)
+      setConvertedTotalCount(json.total_count || 0)
+      setConvertedTotalPages(json.total_pages || 1)
+      if (json.reps_list) setConvertedRepsList(json.reps_list)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setConvertedLoading(false)
+    }
+  }, [from, to, convertedRepFilter, debouncedConvertedSearch, convertedPage, convertedPageSize])
+
+  useEffect(() => {
+    if (trackerMode === 'converted') {
+      fetchConvertedData()
+    }
+  }, [trackerMode, fetchConvertedData])
 
   // Reset form
   function resetForm() {
@@ -411,6 +475,106 @@ export default function SSDTrackerPage() {
     XLSX.writeFile(wb, `SSD_Intake_Tracker_${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
   }
 
+  // Export Converted Cases to Excel
+  async function handleExportConvertedExcel() {
+    if (convertedEntries.length === 0) {
+      alert('No converted cases to export.')
+      return
+    }
+    try {
+      const params = new URLSearchParams()
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+      if (convertedRepFilter !== 'All') params.set('rep', convertedRepFilter)
+      if (debouncedConvertedSearch.trim()) params.set('search', debouncedConvertedSearch.trim())
+      params.set('limit', 'all')
+
+      const json = await safeFetchJson(`/api/ssd-tracker/converted-cases?${params.toString()}`)
+      const rows = (json.records || convertedEntries).map((c: any) => ({
+        'Date Converted': c.date_converted,
+        'Intake Specialist': c.rep_name,
+        "Lead's Name": c.client_name,
+        'Lead ID': c.lead_id || '',
+        'Tags / Reason': c.raw_tags || '',
+        'Import Batch': c.import_batch_id || '',
+        'Imported By': c.imported_by || '',
+        'Imported At': c.created_at || '',
+      }))
+
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Converted Cases')
+      XLSX.writeFile(wb, `SSD_Converted_Cases_${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+    } catch (e: any) {
+      alert('Export failed: ' + e.message)
+    }
+  }
+
+  // Sync Converted Cases (Idle Time report)
+  async function handleSyncConvertedSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!convertedSyncFile) return
+    setConvertedSyncing(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', convertedSyncFile)
+      const res = await safeFetchJson('/api/ssd-tracker/import-converted', {
+        method: 'POST',
+        body: formData,
+      })
+      setSuccess(res.message || 'Converted Cases synced successfully!')
+      setShowConvertedSyncModal(false)
+      setConvertedSyncFile(null)
+      fetchConvertedData()
+      fetchData()
+      setTimeout(() => setSuccess(''), 5000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setConvertedSyncing(false)
+    }
+  }
+
+  // Delete Single Converted Case
+  async function handleDeleteConverted(record: any) {
+    if (!window.confirm(`Are you sure you want to delete converted record for "${record.client_name}" (Lead ID: ${record.lead_id})?`)) return
+    try {
+      await safeFetchJson(`/api/ssd-tracker/converted-cases?id=${record.id}`, { method: 'DELETE' })
+      setSuccess(`Converted case for "${record.client_name}" deleted.`)
+      setSelectedConvertedIds(prev => prev.filter(id => id !== record.id))
+      fetchConvertedData()
+      fetchData()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  // Bulk Delete Converted Cases
+  async function handleBulkDeleteConverted() {
+    if (selectedConvertedIds.length === 0) return
+    setBulkDeleting(true)
+    setError('')
+    try {
+      const res = await safeFetchJson('/api/ssd-tracker/converted-cases', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedConvertedIds }),
+      })
+      setSuccess(res.message || `Deleted ${selectedConvertedIds.length} converted records.`)
+      setSelectedConvertedIds([])
+      setShowConvertedDeleteModal(false)
+      fetchConvertedData()
+      fetchData()
+      setTimeout(() => setSuccess(''), 4000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
   // Status Badge Helper
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -475,40 +639,72 @@ export default function SSDTrackerPage() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             {canManageTeam && (
               <>
                 <button
                   className="btn-secondary"
-                  style={{ padding: '8px 16px', fontSize: 13 }}
-                  onClick={() => setShowImportModal(true)}
+                  style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(16,185,129,0.12)', borderColor: 'rgba(16,185,129,0.35)', color: '#34d399', fontWeight: 600 }}
+                  onClick={() => setShowConvertedSyncModal(true)}
+                  title="Upload Converted Status / Idle Time report"
                 >
-                  📥 Import Spreadsheet
+                  🔄 Sync Converted Cases
                 </button>
-                <button
-                  className="btn-secondary"
-                  style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}
-                  onClick={() => setShowHistoryModal(true)}
-                  title="View past spreadsheet imports and undo/revert if needed"
-                >
-                  ⏪ History & Rollback
-                </button>
-                <button
-                  className="btn-secondary"
-                  style={{ padding: '8px 16px', fontSize: 13 }}
-                  onClick={handleExportExcel}
-                >
-                  📤 Export XLSX
-                </button>
+                {trackerMode === 'leads' ? (
+                  <>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: 13 }}
+                      onClick={() => setShowImportModal(true)}
+                    >
+                      📥 Import Spreadsheet
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}
+                      onClick={() => setShowHistoryModal(true)}
+                      title="View past spreadsheet imports and undo/revert if needed"
+                    >
+                      ⏪ History & Rollback
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: 13 }}
+                      onClick={handleExportExcel}
+                    >
+                      📤 Export XLSX
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: 13, background: 'rgba(245,158,11,0.12)', borderColor: 'rgba(245,158,11,0.3)', color: '#fbbf24' }}
+                      onClick={() => setShowHistoryModal(true)}
+                      title="View past converted imports and undo/revert if needed"
+                    >
+                      ⏪ History & Rollback
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '8px 16px', fontSize: 13 }}
+                      onClick={handleExportConvertedExcel}
+                    >
+                      📤 Export Converted XLSX
+                    </button>
+                  </>
+                )}
               </>
             )}
-            <button
-              className="btn-primary"
-              style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700 }}
-              onClick={handleOpenLog}
-            >
-              ➕ Log New SSD Lead
-            </button>
+            {trackerMode === 'leads' && (
+              <button
+                className="btn-primary"
+                style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700 }}
+                onClick={handleOpenLog}
+              >
+                ➕ Log New SSD Lead
+              </button>
+            )}
           </div>
         </div>
 
@@ -526,14 +722,60 @@ export default function SSDTrackerPage() {
           </div>
         )}
 
-        {/* KPI Summary Cards */}
-        {summary && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 24 }}>
-            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-primary)' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Leads</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff' }}>{summary.total_leads}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Total logged volume</div>
-            </div>
+        {/* Main View Switcher: Leads Log vs Converted Cases Registry */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 22 }}>
+          <button
+            onClick={() => setTrackerMode('leads')}
+            style={{
+              padding: '10px 22px',
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: trackerMode === 'leads' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
+              color: trackerMode === 'leads' ? '#fff' : 'var(--text-secondary)',
+              border: trackerMode === 'leads' ? '1px solid var(--accent-primary)' : '1px solid rgba(255,255,255,0.1)',
+              boxShadow: trackerMode === 'leads' ? '0 0 15px rgba(59,130,246,0.3)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            📋 SSD Leads Log
+          </button>
+          <button
+            onClick={() => setTrackerMode('converted')}
+            style={{
+              padding: '10px 22px',
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: trackerMode === 'converted' ? '#10b981' : 'rgba(255,255,255,0.05)',
+              color: trackerMode === 'converted' ? '#fff' : 'var(--text-secondary)',
+              border: trackerMode === 'converted' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+              boxShadow: trackerMode === 'converted' ? '0 0 15px rgba(16,185,129,0.3)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            🎉 Converted Cases Registry {convertedTotalCount > 0 && `(${convertedTotalCount.toLocaleString()})`}
+          </button>
+        </div>
+
+        {trackerMode === 'leads' && (
+          <div>
+            {/* KPI Summary Cards */}
+            {summary && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14, marginBottom: 24 }}>
+                <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-primary)' }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Leads</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: '#fff' }}>{summary.total_leads}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Total logged volume</div>
+                </div>
 
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #f59e0b' }}>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Sent Retainers</div>
@@ -1038,6 +1280,386 @@ export default function SSDTrackerPage() {
             </div>
           )}
         </div>
+      </div>
+    )}
+
+    {/* CONVERTED CASES REGISTRY VIEW */}
+    {trackerMode === 'converted' && (
+      <div>
+        {/* KPI Summary Cards */}
+        {convertedSummary && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 24 }}>
+            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Total Converted Cases</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#34d399' }}>{convertedSummary.total_converted.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Cases converted in selected period</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid var(--accent-primary)' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Active Intake Reps</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#60a5fa' }}>{convertedSummary.active_reps_count}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Specialists with conversions</div>
+            </div>
+
+            <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Top Specialist</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#fbbf24', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{convertedSummary.top_rep}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>Highest volume converter</div>
+            </div>
+          </div>
+        )}
+
+        {/* Rep Breakdown Pills */}
+        {convertedSummary && convertedSummary.rep_breakdown && Object.keys(convertedSummary.rep_breakdown).length > 0 && (
+          <div className="glass-card" style={{ padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>Converted by Specialist:</span>
+            {Object.entries(convertedSummary.rep_breakdown).map(([rep, count]) => (
+              <span
+                key={rep}
+                onClick={() => {
+                  setConvertedRepFilter(convertedRepFilter === rep ? 'All' : rep)
+                  setConvertedPage(1)
+                }}
+                style={{
+                  background: convertedRepFilter === rep ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.05)',
+                  border: convertedRepFilter === rep ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: convertedRepFilter === rep ? '#fff' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {rep}: <strong>{count}</strong>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Converted Filter & Search Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="🔍 Search Lead ID, Client Name, Specialist..."
+              style={{ width: 300, fontSize: 13, margin: 0 }}
+              value={convertedSearch}
+              onChange={(e) => {
+                setConvertedSearch(e.target.value)
+                setConvertedPage(1)
+              }}
+            />
+
+            {(isSuper || isAdmin) && (
+              <select
+                className="input-field"
+                style={{ width: 200, fontSize: 13, margin: 0, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                value={convertedRepFilter}
+                onChange={(e) => {
+                  setConvertedRepFilter(e.target.value)
+                  setConvertedPage(1)
+                }}
+              >
+                <option value="All" style={{ background: '#0a1628' }}>All Specialists</option>
+                {convertedRepsList.map((r) => (
+                  <option key={r.rep_name} value={r.rep_name} style={{ background: '#0a1628' }}>
+                    {r.rep_name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Date Presets */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => {
+                    setActivePreset(p.label)
+                    const range = p.getValue()
+                    setFrom(range.from)
+                    setTo(range.to)
+                    setConvertedPage(1)
+                  }}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: activePreset === p.label ? '#10b981' : 'rgba(255,255,255,0.05)',
+                    color: activePreset === p.label ? '#fff' : '#94a3b8',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="date"
+                className="input-field"
+                style={{ width: 135, fontSize: 12, margin: 0, padding: '4px 8px' }}
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value)
+                  setActivePreset('Custom')
+                  setConvertedPage(1)
+                }}
+              />
+              <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>to</span>
+              <input
+                type="date"
+                className="input-field"
+                style={{ width: 135, fontSize: 12, margin: 0, padding: '4px 8px' }}
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value)
+                  setActivePreset('Custom')
+                  setConvertedPage(1)
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Bulk Selection Bar */}
+        {selectedConvertedIds.length > 0 && (
+          <div
+            className="glass-card"
+            style={{
+              padding: '12px 20px',
+              marginBottom: 16,
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 16 }}>🗑️</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#f87171' }}>
+                {selectedConvertedIds.length} converted record{selectedConvertedIds.length === 1 ? '' : 's'} selected
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn-secondary"
+                style={{ padding: '6px 14px', fontSize: 12 }}
+                onClick={() => setSelectedConvertedIds([])}
+              >
+                Deselect All
+              </button>
+              <button
+                style={{
+                  background: '#ef4444',
+                  border: '1px solid #dc2626',
+                  color: '#fff',
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowConvertedDeleteModal(true)}
+              >
+                Delete Selected ({selectedConvertedIds.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Converted Table */}
+        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {convertedLoading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div className="spinner" style={{ margin: '0 auto 12px' }} />
+              <p>Searching and loading converted cases registry...</p>
+            </div>
+          ) : convertedEntries.length === 0 ? (
+            <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: 40, display: 'block', marginBottom: 12 }}>🎉</span>
+              <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                No converted cases found
+              </p>
+              <p style={{ fontSize: 13 }}>
+                Try broadening your date filter or search query, or click <strong>"🔄 Sync Converted Cases"</strong> to import a report.
+              </p>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  {canManageTeam && (
+                    <th style={{ padding: '12px 14px', width: 40, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={convertedEntries.length > 0 && selectedConvertedIds.length === convertedEntries.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedConvertedIds(convertedEntries.map((c) => c.id))
+                          } else {
+                            setSelectedConvertedIds([])
+                          }
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
+                  )}
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', width: 120 }}>Date Converted</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', width: 180 }}>Intake Specialist</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)' }}>Lead / Client Name</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', width: 120 }}>Lead ID</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', width: 160 }}>Tags / Notes</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', width: 180 }}>Imported By / Date</th>
+                  {canManageTeam && (
+                    <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)', width: 80 }}>Action</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {convertedEntries.map((item: any, idx: number) => {
+                  const isSelected = selectedConvertedIds.includes(item.id)
+                  return (
+                    <tr
+                      key={item.id}
+                      style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        background: isSelected ? 'rgba(239, 68, 68, 0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)'),
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {canManageTeam && (
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedConvertedIds((prev) => [...prev, item.id])
+                              } else {
+                                setSelectedConvertedIds((prev) => prev.filter((id) => id !== item.id))
+                              }
+                            }}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        </td>
+                      )}
+                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#34d399' }}>
+                        {item.date_converted}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontWeight: 600, color: '#fff' }}>
+                        {item.rep_name}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#fff' }}>
+                        {item.client_name}
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        {item.lead_id && item.lead_id !== '—' ? (
+                          <span style={{ fontFamily: 'monospace', background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>
+                            #{item.lead_id}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-secondary)' }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 12 }}>
+                        {item.raw_tags || '—'}
+                      </td>
+                      <td style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontSize: 11 }}>
+                        <div>{item.imported_by || 'Admin'}</div>
+                        <div style={{ fontSize: 10, opacity: 0.7 }}>{item.created_at?.slice(0, 16)}</div>
+                      </td>
+                      {canManageTeam && (
+                        <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleDeleteConverted(item)}
+                            title="Delete this converted record"
+                            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 14, opacity: 0.7 }}
+                            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {/* Converted Pagination Footer */}
+          {convertedTotalCount > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Showing <strong>{convertedPageSize === 'all' ? 1 : Math.min((convertedPage - 1) * (convertedPageSize as number) + 1, convertedTotalCount)}</strong> to{' '}
+                <strong>{convertedPageSize === 'all' ? convertedTotalCount : Math.min(convertedPage * (convertedPageSize as number), convertedTotalCount)}</strong> of{' '}
+                <strong>{convertedTotalCount.toLocaleString()}</strong> converted cases
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Rows:</span>
+                  <select
+                    className="input-field"
+                    style={{ padding: '4px 8px', fontSize: 12, margin: 0, width: 75, background: 'rgba(255,255,255,0.05)', color: '#fff' }}
+                    value={convertedPageSize}
+                    onChange={(e) => {
+                      const val = e.target.value === 'all' ? 'all' : parseInt(e.target.value)
+                      setConvertedPageSize(val)
+                      setConvertedPage(1)
+                    }}
+                  >
+                    <option value={25} style={{ background: '#0a1628' }}>25</option>
+                    <option value={50} style={{ background: '#0a1628' }}>50</option>
+                    <option value={100} style={{ background: '#0a1628' }}>100</option>
+                    <option value={250} style={{ background: '#0a1628' }}>250</option>
+                    <option value="all" style={{ background: '#0a1628' }}>All</option>
+                  </select>
+                </div>
+
+                {convertedPageSize !== 'all' && convertedTotalPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12, opacity: convertedPage === 1 ? 0.4 : 1, cursor: convertedPage === 1 ? 'not-allowed' : 'pointer' }}
+                      disabled={convertedPage === 1}
+                      onClick={() => setConvertedPage((p) => Math.max(p - 1, 1))}
+                    >
+                      ◀ Prev
+                    </button>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                      Page <strong>{convertedPage}</strong> of <strong>{convertedTotalPages}</strong>
+                    </span>
+                    <button
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12, opacity: convertedPage === convertedTotalPages ? 0.4 : 1, cursor: convertedPage === convertedTotalPages ? 'not-allowed' : 'pointer' }}
+                      disabled={convertedPage === convertedTotalPages}
+                      onClick={() => setConvertedPage((p) => Math.min(p + 1, convertedTotalPages))}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
 
         {/* LOG NEW LEAD MODAL */}
         {showLogModal && (
@@ -1451,12 +2073,114 @@ export default function SSDTrackerPage() {
           </div>
         )}
 
+        {/* SYNC CONVERTED CASES MODAL */}
+        {showConvertedSyncModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: 520, padding: 28, background: '#0a1628', border: '1px solid rgba(16,185,129,0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 22 }}>🔄</span>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#34d399' }}>Sync Converted Cases</h3>
+                </div>
+                <button onClick={() => setShowConvertedSyncModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              </div>
+
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+                Upload your <strong>Status Report (Converted Cases / Idle Time)</strong> spreadsheet (.xlsx / .xls).
+                <br />
+                <span style={{ color: 'var(--text-primary)', display: 'block', marginTop: 6, fontSize: 12 }}>
+                  ✨ Automatically registers all individual converted leads into the <strong>Converted Cases Registry</strong> and synchronizes converted counts on the <strong>SSD Dashboard</strong> and <strong>EOD Report</strong>.
+                </span>
+              </p>
+
+              <form onSubmit={handleSyncConvertedSubmit}>
+                <div style={{ marginBottom: 20, border: '2px dashed rgba(16,185,129,0.35)', background: 'rgba(16,185,129,0.03)', padding: 24, borderRadius: 10, textAlign: 'center' }}>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    onChange={(e) => setConvertedSyncFile(e.target.files?.[0] || null)}
+                    required
+                    style={{ color: '#fff', fontSize: 13 }}
+                  />
+                  {convertedSyncFile && (
+                    <div style={{ marginTop: 10, fontSize: 12, color: '#34d399' }}>
+                      Selected: <strong>{convertedSyncFile.name}</strong> ({(convertedSyncFile.size / 1024).toFixed(1)} KB)
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                  <button type="button" className="btn-secondary" onClick={() => setShowConvertedSyncModal(false)}>Cancel</button>
+                  <button
+                    type="submit"
+                    className="btn-primary"
+                    disabled={convertedSyncing || !convertedSyncFile}
+                    style={{ fontWeight: 700, background: '#10b981', borderColor: '#059669' }}
+                  >
+                    {convertedSyncing ? 'Syncing & Updating...' : 'Sync Converted Cases'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* CONVERTED CASES BULK DELETE MODAL */}
+        {showConvertedDeleteModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: 480, padding: 28, background: '#0a1628', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                <span style={{ fontSize: 28 }}>⚠️</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#f87171' }}>Delete Converted Records</h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Permanent action</div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.5, marginBottom: 20 }}>
+                Are you sure you want to permanently delete <strong>{selectedConvertedIds.length}</strong> selected converted case record{selectedConvertedIds.length === 1 ? '' : 's'}?
+              </p>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowConvertedDeleteModal(false)}
+                  disabled={bulkDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteConverted}
+                  disabled={bulkDeleting}
+                  style={{
+                    background: '#ef4444',
+                    border: '1px solid #dc2626',
+                    color: '#fff',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: bulkDeleting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {bulkDeleting ? 'Deleting...' : `Yes, Delete ${selectedConvertedIds.length} Records`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* IMPORT HISTORY & ROLLBACK MODAL */}
         <ImportHistoryModal
           isOpen={showHistoryModal}
           onClose={() => setShowHistoryModal(false)}
           lob="SSD"
-          onRollbackSuccess={fetchData}
+          onRollbackSuccess={() => {
+            fetchData()
+            fetchConvertedData()
+          }}
         />
 
       </main>

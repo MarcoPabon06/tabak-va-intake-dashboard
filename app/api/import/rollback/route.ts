@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
     const rollbackTx = db.transaction(() => {
       // 1. Delete all records created in this batch
       if (batch.upload_type === 'ssd_converted_sync') {
-        // Converted sync does not insert into ssd_lead_records; it updates daily_performance
+        try {
+          const delRes = db.prepare(`DELETE FROM ssd_converted_records WHERE import_batch_id = ?`).run(batch.batch_id)
+          recordsDeleted += delRes.changes
+        } catch (e: any) {
+          console.warn('[rollback] Note on deleting ssd_converted_records:', e.message)
+        }
       } else if (batch.lob === 'SSD' || batch.upload_type.startsWith('ssd_')) {
         try {
           const delRes = db.prepare(`DELETE FROM ssd_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)

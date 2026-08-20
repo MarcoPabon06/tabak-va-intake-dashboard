@@ -318,6 +318,25 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_import_batches_lob ON import_batches(lob, created_at);
     CREATE INDEX IF NOT EXISTS idx_import_batches_batch_id ON import_batches(batch_id);
+
+    CREATE TABLE IF NOT EXISTS ssd_converted_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      date_converted TEXT NOT NULL,
+      rep_name TEXT NOT NULL,
+      rep_username TEXT,
+      raw_tags TEXT,
+      import_batch_id TEXT,
+      imported_by TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ssd_converted_date ON ssd_converted_records(date_converted);
+    CREATE INDEX IF NOT EXISTS idx_ssd_converted_lead_id ON ssd_converted_records(lead_id);
+    CREATE INDEX IF NOT EXISTS idx_ssd_converted_rep ON ssd_converted_records(rep_name);
+    CREATE INDEX IF NOT EXISTS idx_ssd_converted_batch ON ssd_converted_records(import_batch_id);
+    CREATE INDEX IF NOT EXISTS idx_ssd_converted_date_rep ON ssd_converted_records(date_converted, rep_name);
   `)
 
   // Run self-healing schema migrations for new columns
