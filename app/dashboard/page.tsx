@@ -11,13 +11,16 @@ import CAPDBarChart from '@/components/charts/CAPDBarChart'
 import WeekdayHeatmap from '@/components/charts/WeekdayHeatmap'
 import ConversionChart from '@/components/charts/ConversionChart'
 import { generateEODReportHtml } from '@/lib/eodReport'
+import { safeFetchJson } from '@/lib/apiClient'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
 
 const PRESETS = [
+  { label: 'Today', getValue: () => ({ from: format(new Date(), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
+  { label: 'Yesterday', getValue: () => ({ from: format(subDays(new Date(), 1), 'yyyy-MM-dd'), to: format(subDays(new Date(), 1), 'yyyy-MM-dd') }) },
+  { label: 'This month', getValue: () => ({ from: format(startOfMonth(new Date()), 'yyyy-MM-dd'), to: format(endOfMonth(new Date()), 'yyyy-MM-dd') }) },
+  { label: 'Last month', getValue: () => ({ from: format(startOfMonth(subDays(startOfMonth(new Date()), 1)), 'yyyy-MM-dd'), to: format(endOfMonth(subDays(startOfMonth(new Date()), 1)), 'yyyy-MM-dd') }) },
   { label: 'Last 7 days', getValue: () => ({ from: format(subDays(new Date(), 7), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
   { label: 'Last 30 days', getValue: () => ({ from: format(subDays(new Date(), 30), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
-  { label: 'This month', getValue: () => ({ from: format(startOfMonth(new Date()), 'yyyy-MM-dd'), to: format(endOfMonth(new Date()), 'yyyy-MM-dd') }) },
-  { label: 'All time', getValue: () => ({ from: '2025-01-01', to: '2099-12-31' }) },
 ]
 
 export default function DashboardPage() {
@@ -32,16 +35,20 @@ export default function DashboardPage() {
   const [selectedLob, setSelectedLob] = useState<string>('')
   const [copyToast, setCopyToast] = useState(false)
 
-  const role = (session?.user as any)?.role || 'regular'
+  const user = session?.user as any
+  const role = user?.role || 'regular'
+  const userLob = user?.lob || 'VA'
   const isSuper = role === 'master' || role === 'superadmin'
   const isAdmin = role === 'admin'
   const isRegular = role === 'regular'
-  const perms = (session?.user as any)?.permissions
-  const userName = session?.user?.name || ''
+  const perms = user?.permissions
+  const userName = user?.name || ''
 
   const allowedLobs: string[] = isSuper
     ? ['VA', 'SSD', 'APPS', 'All']
-    : (perms?.allowedLobs ? [...perms.allowedLobs, ...(perms.allowedLobs.length > 1 ? ['All'] : [])] : ['VA'])
+    : (perms?.allowedLobs && Array.isArray(perms.allowedLobs) && perms.allowedLobs.length > 0
+        ? [...perms.allowedLobs, ...(perms.allowedLobs.length > 1 ? ['All'] : [])]
+        : [userLob])
 
   const canCopyEOD = isSuper || (isAdmin && (perms?.canCopyEOD ?? true))
 
@@ -95,27 +102,26 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user) {
       const u = session.user as any
-      if (allowedLobs.length > 0 && !allowedLobs.includes(selectedLob)) {
-        setSelectedLob(allowedLobs[0])
-      } else if (!selectedLob) {
-        setSelectedLob(u.lob || 'VA')
+      const userDefaultLob = u.lob || 'VA'
+      if (!selectedLob) {
+        setSelectedLob(userDefaultLob)
+      } else if (allowedLobs.length > 0 && !allowedLobs.includes(selectedLob)) {
+        setSelectedLob(allowedLobs.includes(userDefaultLob) ? userDefaultLob : allowedLobs[0])
       }
     }
-  }, [session, allowedLobs])
+  }, [session, allowedLobs, selectedLob])
 
   const fetchData = useCallback(async () => {
     if (status === 'loading' || !selectedLob) return
     setLoading(true)
     try {
       if (selectedLob === 'APPS') {
-        const res = await fetch(`/api/apps-team?from=${from}&to=${to}`)
-        const json = await res.json()
+        const json = await safeFetchJson(`/api/apps-team?from=${from}&to=${to}`)
         setAppsData(json.entries || [])
         setData([])
       } else {
         const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
-        const res = await fetch(`/api/performance?from=${from}&to=${to}${lobParam}`)
-        const json = await res.json()
+        const json = await safeFetchJson(`/api/performance?from=${from}&to=${to}${lobParam}`)
         setData(Array.isArray(json) ? json : [])
         setAppsData([])
       }
