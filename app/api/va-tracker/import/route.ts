@@ -5,6 +5,7 @@ import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedVaTeamLead, VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '../route'
 import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
+import { getBusinessDate } from '@/lib/dateUtils'
 
 function parseDateString(str: string): string {
   str = str.trim()
@@ -26,7 +27,7 @@ function parseDateString(str: string): string {
 
   const parsed = new Date(str)
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0]
+    return getBusinessDate(parsed)
   }
   return str
 }
@@ -204,14 +205,14 @@ export async function POST(req: NextRequest) {
       let dateVal = row[iDate]
       let dateStr: string
       if (dateVal instanceof Date) {
-        dateStr = dateVal.toISOString().split('T')[0]
+        dateStr = getBusinessDate(dateVal)
       } else if (typeof dateVal === 'number') {
         const d = XLSX.SSF.parse_date_code(dateVal)
         dateStr = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
       } else if (typeof dateVal === 'string') {
         dateStr = parseDateString(dateVal)
       } else {
-        dateStr = new Date().toISOString().split('T')[0]
+        dateStr = getBusinessDate()
       }
 
       const rawStatus = row[iStatus] ? String(row[iStatus]).trim() : 'Sent E-Sign'

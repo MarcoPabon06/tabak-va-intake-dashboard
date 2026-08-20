@@ -794,7 +794,7 @@ export default function VaTrackerPage() {
                           <td style={{ padding: '12px 16px' }}>
                             {getAgingBadge(e.date, e.status) || (
                               e.status === 'Signed E-Sign' && e.signed_at ? (
-                                <span style={{ fontSize: 10, color: '#10b981' }}>Converted {e.signed_at.slice(0, 10)}</span>
+                                <span style={{ fontSize: 10, color: '#10b981' }}>Signed {e.signed_at.slice(0, 10)}</span>
                               ) : (
                                 '—'
                               )
@@ -1233,6 +1233,7 @@ function EditLeadModal({
   const [leadId, setLeadId] = useState(record.lead_id || '')
   const [date, setDate] = useState(record.date)
   const [status, setStatus] = useState<string>(record.status)
+  const [signedDate, setSignedDate] = useState<string>(record.signed_at ? record.signed_at.slice(0, 10) : record.date)
   const [outcomeReason, setOutcomeReason] = useState<string>(record.outcome_reason || '')
   const [otherReasonNotes, setOtherReasonNotes] = useState(record.other_reason_notes || '')
   const [repName, setRepName] = useState(record.rep_name)
@@ -1257,6 +1258,7 @@ function EditLeadModal({
           lead_id: leadId.trim() || null,
           date,
           status,
+          signed_at: status === 'Signed E-Sign' ? (signedDate ? `${signedDate} 12:00:00` : undefined) : null,
           outcome_reason: outcomeReason || null,
           other_reason_notes: otherReasonNotes.trim() || null,
           rep_name: isMaster && repName ? repName : undefined,
@@ -1362,6 +1364,22 @@ function EditLeadModal({
               ))}
             </select>
           </div>
+
+          {status === 'Signed E-Sign' && (
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 4 }}>
+                ✍️ Signed Date * (Date Retainer was Signed)
+              </label>
+              <input
+                type="date"
+                required
+                value={signedDate}
+                onChange={(e) => setSignedDate(e.target.value)}
+                className="input-field"
+                style={{ margin: 0, fontSize: 13, borderColor: 'rgba(16,185,129,0.5)', background: 'rgba(16,185,129,0.05)' }}
+              />
+            </div>
+          )}
 
           <div>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Reason for Outcome</label>

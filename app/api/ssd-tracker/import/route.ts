@@ -5,9 +5,10 @@ import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedSsdTeamLead, SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '../route'
 import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
+import { getBusinessDate } from '@/lib/dateUtils'
 
 function parseDateString(dateVal: any): string {
-  if (!dateVal) return new Date().toISOString().split('T')[0]
+  if (!dateVal) return getBusinessDate()
   if (dateVal instanceof Date) {
     const y = dateVal.getFullYear()
     const m = String(dateVal.getMonth() + 1).padStart(2, '0')
@@ -37,7 +38,7 @@ function parseDateString(dateVal: any): string {
       return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
     }
   }
-  return new Date().toISOString().split('T')[0]
+  return getBusinessDate()
 }
 
 function normalizeStatus(raw: string): string {

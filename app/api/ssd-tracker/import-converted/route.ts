@@ -5,26 +5,35 @@ import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedSsdTeamLead } from '../route'
 import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
+import { getBusinessDate } from '@/lib/dateUtils'
 
 function parseIdleTimeDate(dateVal: any): string {
-  if (!dateVal) return new Date().toISOString().split('T')[0]
-  if (dateVal instanceof Date) return dateVal.toISOString().split('T')[0]
+  if (!dateVal) return getBusinessDate()
   if (typeof dateVal === 'number') {
     const d = XLSX.SSF.parse_date_code(dateVal)
     return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
   }
   const str = String(dateVal).trim()
-  const d = new Date(str)
-  if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str.split('T')[0]
+
+  const match = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/)
+  if (match) {
+    let p1 = match[1].padStart(2, '0')
+    let p2 = match[2].padStart(2, '0')
+    let y = match[3]
+    if (y.length === 2) y = '20' + y
+    if (parseInt(p1) > 12) {
+      return `${y}-${p2}-${p1}`
+    } else {
+      return `${y}-${p1}-${p2}`
+    }
   }
-  const parts = str.split(' ')[0].split(/[-/]/)
-  if (parts.length === 3) {
-    let year = parts[2]
-    if (year.length === 2) year = '20' + year
-    return `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    return getBusinessDate(dateVal)
   }
-  return new Date().toISOString().split('T')[0]
+  return getBusinessDate()
 }
 
 export async function POST(req: NextRequest) {

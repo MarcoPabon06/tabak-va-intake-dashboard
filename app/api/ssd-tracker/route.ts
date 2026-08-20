@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
+import { getBusinessTimestamp } from '@/lib/dateUtils'
 import { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '@/lib/ssdTrackerConstants'
 export { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS }
 
@@ -353,7 +354,9 @@ export async function POST(req: NextRequest) {
       ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '')
       : sessionUsername
 
-    const signedAt = status === 'Signed E-Sign' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+    const signedAt = status === 'Signed E-Sign'
+      ? (body.signed_at ? body.signed_at.trim() : getBusinessTimestamp())
+      : null
     const sanitizedClientName = sanitizeCellText(client_name.trim())
     const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
     const sanitizedNotes = other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null
@@ -410,6 +413,7 @@ export async function PUT(req: NextRequest) {
       claim_type,
       outcome_reason,
       other_reason_notes,
+      signed_at,
       is_converted,
       rep_name: customRepName,
     } = body
@@ -434,11 +438,13 @@ export async function PUT(req: NextRequest) {
     }
 
     const newStatus = status || existing.status
-    let signedAt = existing.signed_at
-    if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
-      signedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    let newSignedAt = existing.signed_at
+    if (signed_at !== undefined) {
+      newSignedAt = signed_at ? signed_at.trim() : null
+    } else if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
+      newSignedAt = getBusinessTimestamp()
     } else if (newStatus !== 'Signed E-Sign' && existing.status === 'Signed E-Sign') {
-      signedAt = null
+      newSignedAt = null
     }
 
     const repName = customRepName ? customRepName.trim() : existing.rep_name
@@ -452,7 +458,7 @@ export async function PUT(req: NextRequest) {
 
     let convertedAt = existing.converted_at
     if (newConverted === 1 && existing.is_converted !== 1) {
-      convertedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+      convertedAt = getBusinessTimestamp()
     } else if (newConverted === 0 && existing.is_converted === 1) {
       convertedAt = null
     }
@@ -486,7 +492,7 @@ export async function PUT(req: NextRequest) {
       claim_type !== undefined ? (claim_type || null) : existing.claim_type,
       outcome_reason !== undefined ? (outcome_reason || null) : existing.outcome_reason,
       sanitizedNotes,
-      signedAt,
+      newSignedAt,
       newConverted,
       convertedAt,
       sessionDisplayName,

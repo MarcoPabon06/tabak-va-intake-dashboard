@@ -114,6 +114,7 @@ export default function SSDTrackerPage() {
   const [formOutcomeReason, setFormOutcomeReason] = useState<string>('')
   const [formOtherNotes, setFormOtherNotes] = useState('')
   const [formRepName, setFormRepName] = useState('')
+  const [formSignedDate, setFormSignedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [submitting, setSubmitting] = useState(false)
 
   // Import State
@@ -194,6 +195,7 @@ export default function SSDTrackerPage() {
     setFormOutcomeReason('')
     setFormOtherNotes('')
     setFormRepName('')
+    setFormSignedDate(format(new Date(), 'yyyy-MM-dd'))
     setEditingRecord(null)
   }
 
@@ -211,6 +213,7 @@ export default function SSDTrackerPage() {
     setFormLeadId(record.lead_id || '')
     setFormDate(record.date)
     setFormStatus(record.status)
+    setFormSignedDate(record.signed_at ? record.signed_at.slice(0, 10) : record.date)
     setFormClaimType(record.claim_type || 'SSDI+SSI')
     setFormOutcomeReason(record.outcome_reason || '')
     setFormOtherNotes(record.other_reason_notes || '')
@@ -238,6 +241,7 @@ export default function SSDTrackerPage() {
             lead_id: formLeadId || null,
             date: formDate,
             status: formStatus,
+            signed_at: formStatus === 'Signed E-Sign' ? (formSignedDate ? `${formSignedDate} 12:00:00` : undefined) : null,
             claim_type: formClaimType || null,
             outcome_reason: formOutcomeReason || null,
             other_reason_notes: formOtherNotes || null,
@@ -255,6 +259,7 @@ export default function SSDTrackerPage() {
             lead_id: formLeadId || null,
             date: formDate,
             status: formStatus,
+            signed_at: formStatus === 'Signed E-Sign' ? (formSignedDate ? `${formSignedDate} 12:00:00` : undefined) : null,
             claim_type: formClaimType || null,
             outcome_reason: formOutcomeReason || null,
             other_reason_notes: formOtherNotes || null,
@@ -1129,6 +1134,22 @@ export default function SSDTrackerPage() {
                   </select>
                 </div>
 
+                {formStatus === 'Signed E-Sign' && (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#34d399' }}>
+                      ✍️ Signed Date * (Date Retainer was Signed)
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      className="input-field"
+                      style={{ width: '100%', margin: 0, borderColor: 'rgba(16,185,129,0.5)', background: 'rgba(16,185,129,0.05)' }}
+                      value={formSignedDate}
+                      onChange={(e) => setFormSignedDate(e.target.value)}
+                    />
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Reasoning (Optional)</label>
                   <select
@@ -1269,6 +1290,22 @@ export default function SSDTrackerPage() {
                     ))}
                   </select>
                 </div>
+
+                {formStatus === 'Signed E-Sign' && (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#34d399' }}>
+                      ✍️ Signed Date * (Date Retainer was Signed)
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      className="input-field"
+                      style={{ width: '100%', margin: 0, borderColor: 'rgba(16,185,129,0.5)', background: 'rgba(16,185,129,0.05)' }}
+                      value={formSignedDate}
+                      onChange={(e) => setFormSignedDate(e.target.value)}
+                    />
+                  </div>
+                )}
 
                 <div style={{ marginBottom: 14 }}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Reasoning</label>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
+import { getBusinessTimestamp } from '@/lib/dateUtils'
 
 // Valid statuses & outcome reasons
 export const VA_STATUS_OPTIONS = [
@@ -305,7 +306,9 @@ export async function POST(req: NextRequest) {
       ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '')
       : sessionUsername
 
-    const signedAt = status === 'Signed E-Sign' ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
+    const signedAt = status === 'Signed E-Sign'
+      ? (body.signed_at ? body.signed_at.trim() : getBusinessTimestamp())
+      : null
 
     const sanitizedVeteranName = sanitizeCellText(veteran_name.trim())
     const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
@@ -361,6 +364,7 @@ export async function PUT(req: NextRequest) {
       status,
       outcome_reason,
       other_reason_notes,
+      signed_at,
       rep_name: customRepName,
     } = body
 
@@ -385,11 +389,13 @@ export async function PUT(req: NextRequest) {
     }
 
     const newStatus = status || existing.status
-    let signedAt = existing.signed_at
-    if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
-      signedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    let newSignedAt = existing.signed_at
+    if (signed_at !== undefined) {
+      newSignedAt = signed_at ? signed_at.trim() : null
+    } else if (newStatus === 'Signed E-Sign' && existing.status !== 'Signed E-Sign') {
+      newSignedAt = getBusinessTimestamp()
     } else if (newStatus !== 'Signed E-Sign' && existing.status === 'Signed E-Sign') {
-      signedAt = null
+      newSignedAt = null
     }
 
     const repName = customRepName ? customRepName.trim() : existing.rep_name
@@ -425,7 +431,7 @@ export async function PUT(req: NextRequest) {
       newStatus,
       outcome_reason !== undefined ? (outcome_reason || null) : existing.outcome_reason,
       sanitizedNotes,
-      signedAt,
+      newSignedAt,
       sessionDisplayName,
       id
     )
