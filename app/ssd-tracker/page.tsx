@@ -7,6 +7,7 @@ import ImportHistoryModal from '@/components/ImportHistoryModal'
 import { format, subDays, startOfMonth, endOfMonth, differenceInDays } from 'date-fns'
 import * as XLSX from 'xlsx'
 import { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '@/lib/ssdTrackerConstants'
+import { safeFetchJson } from '@/lib/apiClient'
 
 interface SSDLeadRecord {
   id: number
@@ -153,25 +154,6 @@ export default function SSDTrackerPage() {
   // Import State
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
-
-  // Safe fetch helper
-  async function safeFetchJson(url: string, options?: RequestInit) {
-    const res = await fetch(url, options)
-    const text = await res.text()
-    let json: any
-    try {
-      json = JSON.parse(text)
-    } catch {
-      if (res.status === 429) {
-        throw new Error('Rate limit exceeded: The server is experiencing high traffic. Please wait a moment.')
-      }
-      throw new Error(`Server Error (${res.status}): ${text.slice(0, 150)}`)
-    }
-    if (!res.ok) {
-      throw new Error(json.error || `HTTP error ${res.status}`)
-    }
-    return json
-  }
 
   // Fetch data
   const fetchData = useCallback(async () => {

@@ -6,6 +6,7 @@ import Navigation from '@/components/Navigation'
 import { useSession } from 'next-auth/react'
 import { format, startOfMonth, subDays } from 'date-fns'
 import { generateEODReportHtml } from '@/lib/eodReport'
+import { safeFetchJson } from '@/lib/apiClient'
 
 interface AppEntry {
   id: number
@@ -123,9 +124,7 @@ export default function AppsTeamPage() {
       if (from) queryParams.append('from', from)
       if (to) queryParams.append('to', to)
 
-      const res = await fetch(`/api/apps-team?${queryParams.toString()}`)
-      if (!res.ok) throw new Error('Failed to fetch Apps Team entries.')
-      const data = await res.json()
+      const data = await safeFetchJson(`/api/apps-team?${queryParams.toString()}`)
       setEntries(data.entries || [])
       if (data.summary) setSummary(data.summary)
     } catch (err: any) {
@@ -152,7 +151,7 @@ export default function AppsTeamPage() {
 
     setSubmitting(true)
     try {
-      const res = await fetch('/api/apps-team', {
+      await safeFetchJson('/api/apps-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,9 +164,6 @@ export default function AppsTeamPage() {
           rep_name: repName
         }),
       })
-
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to create entry.')
 
       setSuccess(`Application Lead ID "${leadId}" logged successfully!`)
       setShowLogModal(false)
@@ -188,7 +184,7 @@ export default function AppsTeamPage() {
     setError('')
     setSuccess('')
     try {
-      const res = await fetch('/api/apps-team', {
+      await safeFetchJson('/api/apps-team', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,8 +192,6 @@ export default function AppsTeamPage() {
           converted: 'YES'
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to update entry.')
 
       setSuccess(`Lead ID "${entry.lead_id}" (${entry.client_name}) marked as CONVERTED (YES)! 🎉`)
       fetchData()
@@ -215,7 +209,7 @@ export default function AppsTeamPage() {
     setSuccess('')
 
     try {
-      const res = await fetch('/api/apps-team', {
+      await safeFetchJson('/api/apps-team', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,8 +222,6 @@ export default function AppsTeamPage() {
           other_reason: editingEntry.other_reason
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to update entry.')
 
       setSuccess(`Lead ID "${editingEntry.lead_id}" updated successfully!`)
       setEditingEntry(null)

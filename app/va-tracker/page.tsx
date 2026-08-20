@@ -62,26 +62,7 @@ const PRESETS = [
   { label: 'All time', getValue: () => ({ from: '2024-01-01', to: '2099-12-31' }) },
 ]
 
-/**
- * Safe JSON fetch utility to gracefully handle non-JSON / 429 rate limit responses.
- */
-async function safeFetchJson(url: string, options?: RequestInit) {
-  const res = await fetch(url, options)
-  const text = await res.text()
-  let data: any = {}
-  try {
-    data = JSON.parse(text)
-  } catch {
-    if (res.status === 429 || text.toLowerCase().includes('rate limit')) {
-      throw new Error('Server rate limit reached. Please wait a moment and try again.')
-    }
-    throw new Error(text || `Server error (${res.status})`)
-  }
-  if (!res.ok) {
-    throw new Error(data?.error || `Request failed (${res.status})`)
-  }
-  return data
-}
+import { safeFetchJson } from '@/lib/apiClient'
 
 export default function VaTrackerPage() {
   const { data: session } = useSession()

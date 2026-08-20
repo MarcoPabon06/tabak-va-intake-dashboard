@@ -42,31 +42,48 @@ export default function NotificationBell() {
 
     fetchNotifications()
 
-    // Establish Server-Sent Events (SSE) connection for real-time notifications
-    const eventSource = new EventSource('/api/notifications/sse')
+    // Establish Server-Sent Events (SSE) connection with controlled reconnect backoff
+    let retryTimeout: NodeJS.Timeout | null = null
+    let eventSource: EventSource | null = null
 
-    eventSource.onmessage = (event) => {
-      try {
-        const newNotification: Notification = JSON.parse(event.data)
-        
-        // Add to state (prepend)
-        setNotifications((prev) => [newNotification, ...prev])
-        
-        // Show live Toast alert
-        setToast(newNotification)
-      } catch (err) {
-        console.error('Failed to parse SSE message:', err)
+    function connectSSE() {
+      if (eventSource) {
+        eventSource.close()
+      }
+      eventSource = new EventSource('/api/notifications/sse')
+
+      eventSource.onmessage = (event) => {
+        try {
+          const newNotification: Notification = JSON.parse(event.data)
+          // Add to state (prepend)
+          setNotifications((prev) => [newNotification, ...prev])
+          // Show live Toast alert
+          setToast(newNotification)
+        } catch (err) {
+          console.error('Failed to parse SSE message:', err)
+        }
+      }
+
+      eventSource.onerror = () => {
+        if (eventSource) {
+          eventSource.close()
+          eventSource = null
+        }
+        if (!retryTimeout) {
+          retryTimeout = setTimeout(() => {
+            retryTimeout = null
+            connectSSE()
+          }, 6000)
+        }
       }
     }
 
-    eventSource.onerror = () => {
-      // EventSource automatically handles reconnection, but we log the error
-      console.warn('SSE connection interrupted. Reconnecting...')
-    }
+    connectSSE()
 
     // Close connection on unmount
     return () => {
-      eventSource.close()
+      if (retryTimeout) clearTimeout(retryTimeout)
+      if (eventSource) eventSource.close()
     }
   }, [session?.user?.email])
 

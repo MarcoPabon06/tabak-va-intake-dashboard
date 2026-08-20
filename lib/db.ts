@@ -25,12 +25,15 @@ function getDb(): Database.Database {
     db.pragma('journal_mode = WAL')
     db.pragma('synchronous = NORMAL')
     db.pragma('foreign_keys = ON')
+    db.pragma('busy_timeout = 10000') // Wait up to 10s during concurrent multi-user write bursts
+    db.pragma('temp_store = MEMORY')
+    db.pragma('cache_size = -64000') // 64MB page cache in RAM for instant reads
 
     // Checkpoint any leftover WAL pages from a previous run so the main DB
     // file is fully up-to-date before we start serving requests.
     db.pragma('wal_checkpoint(FULL)')
 
-    console.log(`[db] Opened database at ${DB_PATH}`)
+    console.log(`[db] Opened database at ${DB_PATH} with WAL & busy_timeout=10000`)
     initSchema(db)
   }
   return db
