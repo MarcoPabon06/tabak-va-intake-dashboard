@@ -43,12 +43,22 @@ export async function POST(req: NextRequest) {
 
     const rollbackTx = db.transaction(() => {
       // 1. Delete all records created in this batch
-      if (batch.lob === 'SSD' || batch.upload_type.startsWith('ssd_')) {
-        const delRes = db.prepare(`DELETE FROM ssd_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)
-        recordsDeleted += delRes.changes
+      if (batch.upload_type === 'ssd_converted_sync') {
+        // Converted sync does not insert into ssd_lead_records; it updates daily_performance
+      } else if (batch.lob === 'SSD' || batch.upload_type.startsWith('ssd_')) {
+        try {
+          const delRes = db.prepare(`DELETE FROM ssd_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)
+          recordsDeleted += delRes.changes
+        } catch (e: any) {
+          console.warn('[rollback] Note on deleting ssd_lead_records:', e.message)
+        }
       } else if (batch.lob === 'VA' || batch.upload_type.startsWith('va_')) {
-        const delRes = db.prepare(`DELETE FROM va_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)
-        recordsDeleted += delRes.changes
+        try {
+          const delRes = db.prepare(`DELETE FROM va_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)
+          recordsDeleted += delRes.changes
+        } catch (e: any) {
+          console.warn('[rollback] Note on deleting va_lead_records:', e.message)
+        }
       }
 
       // 2. Restore any records that were updated, from snapshot_data

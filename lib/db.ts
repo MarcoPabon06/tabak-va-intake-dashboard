@@ -318,8 +318,6 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_import_batches_lob ON import_batches(lob, created_at);
     CREATE INDEX IF NOT EXISTS idx_import_batches_batch_id ON import_batches(batch_id);
-    CREATE INDEX IF NOT EXISTS idx_ssd_leads_batch_id ON ssd_lead_records(import_batch_id);
-    CREATE INDEX IF NOT EXISTS idx_va_leads_batch_id ON va_lead_records(import_batch_id);
   `)
 
   // Run self-healing schema migrations for new columns
@@ -330,6 +328,8 @@ function initSchema(db: Database.Database) {
     { table: 'agents', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS'))" },
     { table: 'daily_performance', column: 'converted_cases', definition: 'INTEGER DEFAULT 0' },
     { table: 'daily_performance', column: 'rfc_sent', definition: 'INTEGER DEFAULT 0' },
+    { table: 'daily_performance', column: 'total_case_wanted', definition: 'INTEGER DEFAULT 0' },
+    { table: 'daily_performance', column: 'signed_success_rate', definition: 'REAL DEFAULT 0' },
     { table: 'qa_evaluations', column: 'status', definition: "TEXT DEFAULT 'Pending Acknowledgement'" },
     { table: 'qa_evaluations', column: 'acknowledged_at', definition: 'TEXT' },
     { table: 'qa_evaluations', column: 'dispute_reason', definition: 'TEXT' },
@@ -342,18 +342,35 @@ function initSchema(db: Database.Database) {
     { table: 'coaching_sessions', column: 'updated_at', definition: 'TEXT' },
     { table: 'coaching_sessions', column: 'last_edited_by', definition: 'TEXT' },
     { table: 'ssd_lead_records', column: 'import_batch_id', definition: 'TEXT' },
+    { table: 'ssd_lead_records', column: 'converted_at', definition: 'TEXT' },
+    { table: 'ssd_lead_records', column: 'is_converted', definition: 'INTEGER DEFAULT 0' },
+    { table: 'ssd_lead_records', column: 'claim_type', definition: 'TEXT' },
+    { table: 'ssd_lead_records', column: 'signed_at', definition: 'TEXT' },
+    { table: 'ssd_lead_records', column: 'last_edited_by', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'import_batch_id', definition: 'TEXT' },
+    { table: 'va_lead_records', column: 'signed_at', definition: 'TEXT' },
+    { table: 'va_lead_records', column: 'last_edited_by', definition: 'TEXT' },
   ]
 
   for (const alter of alterColumns) {
     try {
       db.prepare(`ALTER TABLE ${alter.table} ADD COLUMN ${alter.column} ${alter.definition}`).run()
     } catch (e: any) {
-      // Silently ignore if column already exists
+      // Silently ignore if column already exists or table doesn't exist yet
       if (!e.message.includes('duplicate column name') && !e.message.includes('already exists')) {
-        console.error(`Failed to alter table ${alter.table} add ${alter.column}:`, e.message)
+        console.warn(`[db] Note on table ${alter.table} add ${alter.column}:`, e.message)
       }
     }
+  }
+
+  // Create indexes for columns that were added/migrated
+  try {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_ssd_leads_batch_id ON ssd_lead_records(import_batch_id);
+      CREATE INDEX IF NOT EXISTS idx_va_leads_batch_id ON va_lead_records(import_batch_id);
+    `)
+  } catch (e: any) {
+    console.warn('[db] Failed to create batch_id indexes:', e.message)
   }
 
   // Migrate users table schema if it lacks 'APPS' in CHECK constraint
