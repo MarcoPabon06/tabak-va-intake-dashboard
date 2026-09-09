@@ -12,6 +12,7 @@ import WeekdayHeatmap from '@/components/charts/WeekdayHeatmap'
 import ConversionChart from '@/components/charts/ConversionChart'
 import { generateEODReportHtml } from '@/lib/eodReport'
 import { safeFetchJson } from '@/lib/apiClient'
+import AiReportModal from '@/components/AiReportModal'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
 
 const PRESETS = [
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [activePreset, setActivePreset] = useState('This month')
   const [selectedLob, setSelectedLob] = useState<string>('')
   const [copyToast, setCopyToast] = useState(false)
+  const [showAiReportModal, setShowAiReportModal] = useState(false)
 
   const user = session?.user as any
   const role = user?.role || 'regular'
@@ -270,6 +272,29 @@ export default function DashboardPage() {
                 <span>📋</span> Copy EOD Report for Outlook
               </button>
             )}
+            {!isRegular && (
+              <button
+                id="btn-ai-report"
+                type="button"
+                className="btn-primary"
+                style={{
+                  padding: '8px 18px',
+                  fontSize: 13,
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  boxShadow: '0 0 15px rgba(99,102,241,0.4)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setShowAiReportModal(true)}
+              >
+                <span>🤖</span> AI Executive Report
+              </button>
+            )}
           </div>
         </div>
 
@@ -352,6 +377,15 @@ export default function DashboardPage() {
             </div>
           </>
         )}
+
+        {/* AI Executive Report Studio Modal */}
+        <AiReportModal
+          isOpen={showAiReportModal}
+          onClose={() => setShowAiReportModal(false)}
+          currentLob={selectedLob}
+          initialFrom={from}
+          initialTo={to}
+        />
       </main>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

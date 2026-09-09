@@ -511,6 +511,55 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              {/* Google Gemini AI Configuration */}
+              <div className="glass-card" style={{ padding: 24, marginBottom: 24, borderLeft: '4px solid #6366f1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <span style={{ fontSize: 24 }}>🤖</span>
+                  <div>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#fff' }}>
+                      Google Gemini AI Executive Reporting
+                    </h2>
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                      Powers automated executive operations briefings and management memos
+                    </p>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 16 }}>
+                  Enter your Google Gemini API key to enable the <strong>AI Executive Report Studio</strong> on the main dashboard.
+                  You can get a free key anytime from{' '}
+                  <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>
+                    Google AI Studio
+                  </a>.
+                </p>
+
+                {settings.has_gemini_key === 'true' && (
+                  <div style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>✅</span>
+                    <span style={{ fontSize: 12, color: '#34d399', fontWeight: 600 }}>
+                      Active API Key Configured ({settings.gemini_key_preview || 'Saved in Database'})
+                    </span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="field-label" style={{ marginBottom: 6 }}>
+                    {settings.has_gemini_key === 'true' ? 'Update Gemini API Key' : 'Gemini API Key'}
+                  </label>
+                  <input
+                    type="password"
+                    className="input-field"
+                    placeholder="AIzaSy..."
+                    style={{ maxWidth: 450, fontFamily: 'monospace', fontSize: 13 }}
+                    value={settings.gemini_api_key || ''}
+                    onChange={(e) => updateSetting('gemini_api_key', e.target.value)}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Your key is securely stored and never exposed to client browsers or regular users.
+                  </div>
+                </div>
+              </div>
+
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12, marginBottom: 32 }}>
                 <button

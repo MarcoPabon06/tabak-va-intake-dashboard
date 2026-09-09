@@ -340,6 +340,22 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_ssd_converted_rep ON ssd_converted_records(rep_name);
     CREATE INDEX IF NOT EXISTS idx_ssd_converted_batch ON ssd_converted_records(import_batch_id);
     CREATE INDEX IF NOT EXISTS idx_ssd_converted_date_rep ON ssd_converted_records(date_converted, rep_name);
+
+    CREATE TABLE IF NOT EXISTS saved_ai_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      report_type TEXT NOT NULL,
+      lob TEXT NOT NULL,
+      date_from TEXT NOT NULL,
+      date_to TEXT NOT NULL,
+      custom_prompt TEXT,
+      content_markdown TEXT NOT NULL,
+      content_html TEXT NOT NULL,
+      generated_by TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_reports_date ON saved_ai_reports(created_at);
+    CREATE INDEX IF NOT EXISTS idx_ai_reports_lob ON saved_ai_reports(lob);
   `)
 
   // Run self-healing schema migrations for new columns
