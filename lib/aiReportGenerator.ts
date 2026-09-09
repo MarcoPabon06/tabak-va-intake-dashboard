@@ -326,39 +326,118 @@ Write the full executive report now in Markdown format.`
 }
 
 /**
- * Calls the Google Gemini API with fallback models.
+ * Calls the Google Gemini API dynamically discovering available models for the user's API key.
  */
 export async function callGeminiAPI(systemPrompt: string, userPrompt: string, apiKey: string): Promise<string> {
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+  let candidateEndpoints: Array<{ version: string; model: string }> = []
+
+  // 1. Dynamically query ModelService.ListModels to find exact models available for this API key
+  try {
+    for (const ver of ['v1beta', 'v1']) {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${apiKey}`)
+      if (listRes.ok) {
+        const listData = await listRes.json()
+        const validModels = (listData.models || [])
+          .filter((m: any) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
+          .map((m: any) => ({
+            version: ver,
+            model: (m.name || '').replace(/^models\//, ''),
+          }))
+          .filter((m: any) => m.model)
+
+        if (validModels.length > 0) {
+          // Sort by preference: 2.0-flash, 1.5-flash, 2.0-pro, 1.5-pro, others
+          validModels.sort((a: any, b: any) => {
+            const score = (name: string) => {
+              if (name.includes('2.0-flash')) return 10
+              if (name.includes('1.5-flash')) return 8
+              if (name.includes('2.0')) return 7
+              if (name.includes('1.5-pro')) return 6
+              if (name.includes('flash')) return 5
+              if (name.includes('pro')) return 4
+              return 1
+            }
+            return score(b.model) - score(a.model)
+          })
+          candidateEndpoints = validModels
+          console.log(`[aiReportGenerator] Discovered ${validModels.length} models for API key on ${ver}:`, validModels.map((m: any) => m.model).slice(0, 5))
+          break
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('[aiReportGenerator] Model discovery error:', err.message)
+  }
+
+  // 2. Fallback static candidate list if ListModels was empty or restricted
+  if (candidateEndpoints.length === 0) {
+    candidateEndpoints = [
+      { version: 'v1beta', model: 'gemini-2.0-flash' },
+      { version: 'v1beta', model: 'gemini-1.5-flash' },
+      { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
+      { version: 'v1', model: 'gemini-1.5-flash' },
+      { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
+      { version: 'v1beta', model: 'gemini-1.5-pro' },
+      { version: 'v1beta', model: 'gemini-1.5-pro-latest' },
+      { version: 'v1', model: 'gemini-1.5-pro' },
+      { version: 'v1beta', model: 'gemini-pro' },
+    ]
+  }
+
   let lastError = ''
 
-  for (const model of models) {
+  for (const { version, model } of candidateEndpoints) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-      const res = await fetch(url, {
+      const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${apiKey}`
+
+      // Attempt with system_instruction
+      let reqBody: any = {
+        system_instruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: userPrompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 3000,
+        },
+      }
+
+      let res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: systemPrompt }],
-          },
+        body: JSON.stringify(reqBody),
+      })
+
+      // If 400 (system_instruction not supported in v1 or model), fallback to unified prompt
+      if (!res.ok && res.status === 400) {
+        reqBody = {
           contents: [
             {
               role: 'user',
-              parts: [{ text: userPrompt }],
+              parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }],
             },
           ],
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens: 3000,
           },
-        }),
-      })
+        }
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reqBody),
+        })
+      }
 
       if (!res.ok) {
         const errorText = await res.text()
-        lastError = `Model ${model} returned ${res.status}: ${errorText}`
-        console.warn(`[aiReportGenerator] ${lastError}, attempting next model...`)
+        lastError = `Model ${model} (${version}) returned ${res.status}: ${errorText}`
+        console.warn(`[aiReportGenerator] ${lastError}, attempting next candidate...`)
         continue
       }
 
@@ -371,11 +450,11 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
       }
     } catch (err: any) {
       lastError = err.message
-      console.warn(`[aiReportGenerator] Fetch error for ${model}: ${err.message}`)
+      console.warn(`[aiReportGenerator] Fetch error for ${model} (${version}): ${err.message}`)
     }
   }
 
-  throw new Error(`Failed to generate report with Gemini API: ${lastError || 'Unknown error'}`)
+  throw new Error(`Failed to generate report with Gemini API: ${lastError || 'No supported Gemini model could be reached'}`)
 }
 
 /**
