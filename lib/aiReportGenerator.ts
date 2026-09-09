@@ -338,7 +338,21 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
       if (listRes.ok) {
         const listData = await listRes.json()
         const validModels = (listData.models || [])
-          .filter((m: any) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
+          .filter((m: any) => {
+            const name = (m.name || '').toLowerCase()
+            // Only standard Gemini text generation models
+            if (!name.includes('gemini')) return false
+            if (
+              name.includes('deep-research') ||
+              name.includes('embedding') ||
+              name.includes('imagen') ||
+              name.includes('aqa') ||
+              name.includes('tts')
+            ) {
+              return false
+            }
+            return !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent')
+          })
           .map((m: any) => ({
             version: ver,
             model: (m.name || '').replace(/^models\//, ''),
@@ -346,21 +360,25 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
           .filter((m: any) => m.model)
 
         if (validModels.length > 0) {
-          // Sort by preference: 2.0-flash, 1.5-flash, 2.0-pro, 1.5-pro, others
+          // Sort by preference: 2.0-flash, 1.5-flash, 2.0-flash-exp, 1.5-flash-8b, 1.5-pro
           validModels.sort((a: any, b: any) => {
             const score = (name: string) => {
-              if (name.includes('2.0-flash')) return 10
-              if (name.includes('1.5-flash')) return 8
-              if (name.includes('2.0')) return 7
-              if (name.includes('1.5-pro')) return 6
-              if (name.includes('flash')) return 5
-              if (name.includes('pro')) return 4
-              return 1
+              const n = name.toLowerCase()
+              if (n === 'gemini-2.0-flash') return 100
+              if (n === 'gemini-1.5-flash') return 90
+              if (n.includes('2.0-flash')) return 80
+              if (n.includes('1.5-flash')) return 70
+              if (n.includes('2.0-flash-exp')) return 60
+              if (n.includes('1.5-flash-8b')) return 50
+              if (n === 'gemini-1.5-pro') return 40
+              if (n.includes('1.5-pro')) return 30
+              if (n.includes('pro')) return 20
+              return 10
             }
             return score(b.model) - score(a.model)
           })
           candidateEndpoints = validModels
-          console.log(`[aiReportGenerator] Discovered ${validModels.length} models for API key on ${ver}:`, validModels.map((m: any) => m.model).slice(0, 5))
+          console.log(`[aiReportGenerator] Filtered to ${validModels.length} Gemini models on ${ver}:`, validModels.map((m: any) => m.model))
           break
         }
       }
@@ -374,13 +392,11 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
     candidateEndpoints = [
       { version: 'v1beta', model: 'gemini-2.0-flash' },
       { version: 'v1beta', model: 'gemini-1.5-flash' },
-      { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
       { version: 'v1', model: 'gemini-1.5-flash' },
       { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
+      { version: 'v1beta', model: 'gemini-1.5-flash-8b' },
       { version: 'v1beta', model: 'gemini-1.5-pro' },
-      { version: 'v1beta', model: 'gemini-1.5-pro-latest' },
       { version: 'v1', model: 'gemini-1.5-pro' },
-      { version: 'v1beta', model: 'gemini-pro' },
     ]
   }
 
@@ -436,6 +452,15 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
 
       if (!res.ok) {
         const errorText = await res.text()
+        
+        // Detect prepayment depletion
+        if (res.status === 429 && errorText.includes('prepayment credits are depleted')) {
+          throw new Error(
+            'Your Google Cloud project is configured for Prepayment billing and has a $0 balance. ' +
+            'To fix this: In Google AI Studio (https://aistudio.google.com/), click "Get API key" and select "Create API key in new project" to use the 100% Free Tier (1,500 requests/day for free), or top up credits at https://ai.studio/projects.'
+          )
+        }
+
         lastError = `Model ${model} (${version}) returned ${res.status}: ${errorText}`
         console.warn(`[aiReportGenerator] ${lastError}, attempting next candidate...`)
         continue
@@ -449,6 +474,10 @@ export async function callGeminiAPI(systemPrompt: string, userPrompt: string, ap
         return text.trim()
       }
     } catch (err: any) {
+      // Re-throw specific actionable errors
+      if (err.message && err.message.includes('Prepayment billing')) {
+        throw err
+      }
       lastError = err.message
       console.warn(`[aiReportGenerator] Fetch error for ${model} (${version}): ${err.message}`)
     }
