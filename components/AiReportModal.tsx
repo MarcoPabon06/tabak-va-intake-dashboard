@@ -487,7 +487,7 @@ export default function AiReportModal({
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
                     {[
                       'Focus on top converters',
-                      'Analyze call pacing (CAPD)',
+                      'Analyze call volume (CAPD)',
                       'Audit client refusal reasons',
                       'Keep concise for partners',
                     ].map(pill => (
@@ -649,7 +649,7 @@ export default function AiReportModal({
                       )}
                       <div className="glass-card" style={{ padding: '8px 12px', textAlign: 'center' }}>
                         <div style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Avg CAPD</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa' }}>{analyzedMetrics.avg_capd}m</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: '#a78bfa' }}>{analyzedMetrics.avg_capd} calls/d</div>
                       </div>
                     </div>
                   )}

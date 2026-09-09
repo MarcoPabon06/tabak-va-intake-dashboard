@@ -273,8 +273,8 @@ export function gatherReportMetrics(params: { from: string; to: string; lob: str
 export function buildReportPrompt(metrics: MetricSummary, params: ReportGenerationParams): { systemPrompt: string; userPrompt: string } {
   const styleDescriptions = {
     executive: 'Executive Briefing & Operations Summary: High-level executive overview focusing on overall volume, conversion efficiency, notable milestones, top performers, and strategic outlook.',
-    bottlenecks: 'Bottlenecks, Risks & Lost Opportunities: Deep dive into operational friction, high client rejection/refusal reasons, lagging call pacing (CAPD), follow-up leakage, and remediation plans.',
-    coaching: 'Specialist Performance & Coaching Review: Detailed evaluation of individual intake representatives, comparing volume, conversion rates, call handling times, and targeted coaching recommendations.',
+    bottlenecks: 'Bottlenecks, Risks & Lost Opportunities: Deep dive into operational friction, high client rejection/refusal reasons, low outbound call attempts (CAPD), follow-up leakage, and remediation plans.',
+    coaching: 'Specialist Performance & Coaching Review: Detailed evaluation of individual intake representatives, comparing volume, conversion rates, daily call volume (CAPD), and targeted coaching recommendations.',
     monthly: 'Comprehensive Monthly Operations Review: Full-spectrum operational analysis covering departmental KPIs, specialist rankings, pipeline conversion health, and strategic monthly goals.',
   }
 
@@ -284,13 +284,17 @@ Your task is to write an executive-grade, comprehensive, and highly articulate m
 Guiding Principles:
 1. Executive Tone: Write with authority, polish, and analytical precision suitable for managing partners and directors.
 2. Verified Metrics: Reference the exact numbers, percentages, and specialist names provided. Do NOT fabricate or hallucinate metrics outside the provided data.
-3. Structure:
+3. CRITICAL METRIC DEFINITION - CAPD:
+   - CAPD stands for "Calls Attempted Per Day" (measured as a COUNT OF CALLS, e.g. 45 calls/day).
+   - It is strictly the volume of call attempts per representative per day.
+   - It is NEVER duration, minutes, or time spent on the phone. Higher CAPD means higher outreach activity.
+4. Structure:
    - Header with Title, Period, Scope, and Key Metric Badges.
    - 1. Executive Summary & Core KPIs (with concise Markdown summary table).
-   - 2. Division & Specialist Performance Breakdown (highlight top performers, standouts, and pacing).
-   - 3. Operational Friction & Lost Opportunities Analysis (address client refusal reasons, rejections, CAPD times).
+   - 2. Division & Specialist Performance Breakdown (highlight top performers, standouts, and call attempt volume).
+   - 3. Operational Friction & Lost Opportunities Analysis (address client refusal reasons, rejections, low CAPD call activity).
    - 4. Strategic Action Items & Management Recommendations (3-5 concrete tactical next steps).
-4. Formatting: Use clean Markdown headers (###), bold key figures, bullet points, and clean Markdown tables for legibility.`
+5. Formatting: Use clean Markdown headers (###), bold key figures, bullet points, and clean Markdown tables for legibility.`
 
   const userPrompt = `Generate a detailed "${styleDescriptions[params.reportStyle]}" report for Tabak LLC.
 
@@ -312,9 +316,9 @@ VERIFIED DATABASE STATISTICS:
 - Inbound Calls Handled: ${metrics.inbound_calls.toLocaleString()}
 - Client Refused Help (CRH): ${metrics.crh.toLocaleString()}
 - Cases Rejected: ${metrics.rejected.toLocaleString()}
-- Average Call Handling Pacing (CAPD): ${metrics.avg_capd} minutes
+- Average Calls Attempted Per Day (CAPD): ${metrics.avg_capd} calls/day (Note: CAPD is call attempt volume, NOT minutes or call duration)
 
-SPECIALIST PERFORMANCE ROSTER:
+SPECIALIST PERFORMANCE ROSTER (avg_capd is daily call attempts):
 ${JSON.stringify(metrics.reps.slice(0, 15), null, 2)}
 
 COMMON OUTCOME & REFUSAL REASONS:
