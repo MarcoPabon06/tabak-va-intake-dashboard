@@ -63,10 +63,14 @@ const PRESETS = [
 ]
 
 import { safeFetchJson } from '@/lib/apiClient'
+import VaCallbacksQueue, { ScheduleCallbackModal } from '@/components/VaCallbacksQueue'
 
 export default function VaTrackerPage() {
   const { data: session } = useSession()
   const [entries, setEntries] = useState<VaLeadRecord[]>([])
+  const [trackerMode, setTrackerMode] = useState<'leads' | 'callbacks'>('leads')
+  const [showScheduleCallbackModal, setShowScheduleCallbackModal] = useState(false)
+  const [callbackCounts, setCallbackCounts] = useState({ pending: 0, overdue: 0, today: 0, completed: 0 })
   const [summary, setSummary] = useState<SummaryMetrics>({
     total_leads: 0,
     sent_esigns: 0,
@@ -160,9 +164,30 @@ export default function VaTrackerPage() {
     }
   }, [from, to, selectedRep, statusFilter, reasonFilter, debouncedSearch])
 
+  const fetchCallbackCounts = useCallback(async () => {
+    try {
+      const res = await safeFetchJson('/api/va-tracker/callbacks?view=pending')
+      if (res?.counts) {
+        setCallbackCounts(res.counts)
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch callback counts:', err?.message)
+    }
+  }, [])
+
   useEffect(() => {
     fetchTrackerData()
-  }, [fetchTrackerData])
+    fetchCallbackCounts()
+  }, [fetchTrackerData, fetchCallbackCounts])
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchTrackerData()
+      fetchCallbackCounts()
+    }
+    window.addEventListener('va-tracker-updated', handleUpdate)
+    return () => window.removeEventListener('va-tracker-updated', handleUpdate)
+  }, [fetchTrackerData, fetchCallbackCounts])
 
   function showBannerMessage(msg: string) {
     setActionSuccessMsg(msg)
@@ -384,6 +409,23 @@ export default function VaTrackerPage() {
                 </>
               )}
               <button
+                onClick={() => setShowScheduleCallbackModal(true)}
+                className="btn-secondary"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: 'rgba(59,130,246,0.15)',
+                  borderColor: 'rgba(59,130,246,0.35)',
+                  color: '#60a5fa',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <span>⏰</span>
+                <span>Schedule Callback</span>
+              </button>
+              <button
                 onClick={() => setShowLogModal(true)}
                 className="btn-primary"
                 style={{ fontSize: 12, fontWeight: 700 }}
@@ -393,7 +435,145 @@ export default function VaTrackerPage() {
             </div>
           </div>
 
-          {/* KPI Cards */}
+          {/* Overdue Callbacks Action Banner */}
+          {callbackCounts.overdue > 0 && (
+            <div
+              className="fade-in"
+              style={{
+                background: 'linear-gradient(90deg, rgba(239,68,68,0.2) 0%, rgba(185,28,28,0.1) 100%)',
+                border: '1px solid rgba(239,68,68,0.45)',
+                borderRadius: 10,
+                padding: '12px 18px',
+                marginBottom: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 22 }}>🚨</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fca5a5' }}>
+                    Action Required: You have {callbackCounts.overdue} overdue scheduled callback{callbackCounts.overdue > 1 ? 's' : ''}!
+                  </div>
+                  <div style={{ fontSize: 11, color: '#f87171' }}>
+                    Veterans are waiting on follow-up. Please call and record the Law Ruler outcome immediately.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setTrackerMode('callbacks')}
+                className="btn-primary"
+                style={{
+                  background: '#ef4444',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: '6px 14px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ⚡ View Callbacks Queue ({callbackCounts.overdue})
+              </button>
+            </div>
+          )}
+
+          {/* Dual-View Mode Switcher Tabs */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 22,
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              paddingBottom: 14,
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setTrackerMode('leads')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: trackerMode === 'leads' ? '#b82105' : 'rgba(255,255,255,0.04)',
+                  color: trackerMode === 'leads' ? '#fff' : '#94a3b8',
+                  border: trackerMode === 'leads' ? '1px solid #b82105' : '1px solid rgba(255,255,255,0.08)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>📋 VA Leads Log</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    borderRadius: 10,
+                    background: trackerMode === 'leads' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                    color: trackerMode === 'leads' ? '#fff' : '#cbd5e1',
+                  }}
+                >
+                  {summary.total_leads}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setTrackerMode('callbacks')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: trackerMode === 'callbacks' ? '#3b82f6' : 'rgba(255,255,255,0.04)',
+                  color: trackerMode === 'callbacks' ? '#fff' : '#94a3b8',
+                  border: trackerMode === 'callbacks' ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.08)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>⏰ Scheduled Callbacks Queue</span>
+                {callbackCounts.overdue > 0 ? (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 10,
+                      background: '#ef4444',
+                      color: '#fff',
+                    }}
+                  >
+                    {callbackCounts.overdue} overdue!
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: '2px 8px',
+                      borderRadius: 10,
+                      background: trackerMode === 'callbacks' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)',
+                      color: trackerMode === 'callbacks' ? '#fff' : '#cbd5e1',
+                    }}
+                  >
+                    {callbackCounts.pending}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {trackerMode === 'leads' ? (
+            <>
+              {/* KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
             {/* Total Leads */}
             <div className="glass-card" style={{ padding: '16px 20px', borderLeft: '4px solid #3b82f6' }}>
@@ -905,7 +1085,38 @@ export default function VaTrackerPage() {
               </div>
             )}
           </div>
+        </>
+      ) : (
+          <VaCallbacksQueue
+            isMaster={isMaster}
+            repsList={repsList}
+            onCallbackResolved={() => {
+              fetchTrackerData()
+              fetchCallbackCounts()
+            }}
+            showScheduleModal={showScheduleCallbackModal}
+            setShowScheduleModal={setShowScheduleCallbackModal}
+            callbackCounts={callbackCounts}
+            onCountsUpdated={setCallbackCounts}
+          />
+        )}
         </div>
+
+        {/* Modal: Schedule Callback */}
+        {showScheduleCallbackModal && (
+          <ScheduleCallbackModal
+            onClose={() => setShowScheduleCallbackModal(false)}
+            onScheduled={() => {
+              setShowScheduleCallbackModal(false)
+              showBannerMessage('✅ Scheduled callback successfully created!')
+              fetchCallbackCounts()
+              fetchTrackerData()
+              window.dispatchEvent(new CustomEvent('va-tracker-updated'))
+            }}
+            isMaster={isMaster}
+            repsList={repsList}
+          />
+        )}
 
         {/* Modal: Log New Lead */}
         {showLogModal && (

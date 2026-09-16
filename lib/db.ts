@@ -356,6 +356,34 @@ function initSchema(db: Database.Database) {
     );
     CREATE INDEX IF NOT EXISTS idx_ai_reports_date ON saved_ai_reports(created_at);
     CREATE INDEX IF NOT EXISTS idx_ai_reports_lob ON saved_ai_reports(lob);
+
+    CREATE TABLE IF NOT EXISTS va_scheduled_callbacks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lead_id TEXT,
+      veteran_name TEXT NOT NULL,
+      phone_number TEXT,
+      rep_name TEXT NOT NULL,
+      rep_username TEXT NOT NULL,
+      callback_date TEXT NOT NULL,
+      callback_time TEXT NOT NULL,
+      scheduled_datetime TEXT NOT NULL,
+      timezone TEXT DEFAULT 'America/Chicago',
+      notes TEXT,
+      status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'COMPLETED', 'RESCHEDULED', 'CANCELLED')),
+      outcome_status TEXT,
+      outcome_reason TEXT,
+      other_reason_notes TEXT,
+      resolved_at TEXT,
+      resolved_by TEXT,
+      linked_lead_record_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_va_cb_rep_status ON va_scheduled_callbacks(rep_username, status);
+    CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
+    CREATE INDEX IF NOT EXISTS idx_va_cb_date ON va_scheduled_callbacks(callback_date);
+    CREATE INDEX IF NOT EXISTS idx_va_cb_status ON va_scheduled_callbacks(status);
   `)
 
   // Run self-healing schema migrations for new columns
@@ -388,6 +416,8 @@ function initSchema(db: Database.Database) {
     { table: 'va_lead_records', column: 'import_batch_id', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'signed_at', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'last_edited_by', definition: 'TEXT' },
+    { table: 'va_lead_records', column: 'phone_number', definition: 'TEXT' },
+    { table: 'va_lead_records', column: 'scheduled_callback_id', definition: 'INTEGER' },
   ]
 
   for (const alter of alterColumns) {
