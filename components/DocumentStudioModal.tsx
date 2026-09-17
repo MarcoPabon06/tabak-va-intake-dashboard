@@ -110,6 +110,21 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
   const [apiKeyInput, setApiKeyInput] = useState('')
   const [apiKeySavedMsg, setApiKeySavedMsg] = useState('')
   const [savingKey, setSavingKey] = useState(false)
+  const [hasApiKey, setHasApiKey] = useState(false)
+  const [keyPreview, setKeyPreview] = useState('')
+  const [keySource, setKeySource] = useState('')
+
+  const checkApiKeyStatus = useCallback(async () => {
+    try {
+      const res = await safeFetchJson('/api/settings')
+      const hasKey = res.has_gemini_key === 'true' || res.has_env_gemini_key === 'true'
+      setHasApiKey(hasKey)
+      setKeyPreview(res.gemini_key_preview || (res.has_env_gemini_key ? 'Set in Environment' : ''))
+      setKeySource(res.gemini_key_source || (res.has_gemini_key === 'true' ? 'Database' : 'Environment'))
+    } catch {
+      setHasApiKey(false)
+    }
+  }, [])
 
   // Fetch documents and specialists
   const fetchDocumentsData = useCallback(async () => {
@@ -128,8 +143,9 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
   useEffect(() => {
     if (isOpen) {
       fetchDocumentsData()
+      checkApiKeyStatus()
     }
-  }, [isOpen, fetchDocumentsData])
+  }, [isOpen, fetchDocumentsData, checkApiKeyStatus])
 
   // Load roster for a document
   const handleOpenRoster = async (doc: any) => {
@@ -288,14 +304,17 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
   // Save API Key
   const handleSaveApiKey = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!apiKeyInput.trim()) return
     setSavingKey(true)
     try {
       await safeFetchJson('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'gemini_api_key', value: apiKeyInput.trim() }),
+        body: JSON.stringify({ gemini_api_key: apiKeyInput.trim() }),
       })
       setApiKeySavedMsg('✅ Google Gemini API Key saved successfully!')
+      setApiKeyInput('')
+      await checkApiKeyStatus()
       setTimeout(() => setApiKeySavedMsg(''), 4000)
     } catch (err: any) {
       alert(err.message)
@@ -985,6 +1004,19 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
               <p style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.5, marginBottom: 16 }}>
                 The Document Studio utilizes the Google Gemini API to draft operational communications, policies, and standard operating procedures. Enter your Gemini API key below to enable intelligent drafting.
               </p>
+
+              {hasApiKey ? (
+                <div style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', color: '#34d399', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>🟢 <strong>API Key Active</strong> {keyPreview ? `(${keyPreview})` : ''}</span>
+                  <span style={{ fontSize: 10, opacity: 0.85, textTransform: 'uppercase', background: 'rgba(16,185,129,0.2)', padding: '2px 8px', borderRadius: 4 }}>
+                    Source: {keySource || 'Configured'}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+                  ⚠️ No Gemini API key detected. Paste your Google AI Studio API key below.
+                </div>
+              )}
 
               {apiKeySavedMsg && (
                 <div style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, marginBottom: 14 }}>
