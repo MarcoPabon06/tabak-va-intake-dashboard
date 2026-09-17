@@ -9,6 +9,9 @@ import BadgeShelf from '@/components/BadgeShelf'
 import PersonalQA from '@/components/PersonalQA'
 
 import { useState, useEffect } from 'react'
+import { safeFetchJson } from '@/lib/apiClient'
+import SignDocumentModal from '@/components/SignDocumentModal'
+import { downloadSignedDocumentPdf } from '@/lib/pdfGenerator'
 
 export interface GoalSettings {
   goal_signed_retainers?: number
@@ -77,6 +80,29 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
   const [appsData, setAppsData] = useState<AppEntry[]>([])
   const [appsLoading, setAppsLoading] = useState(false)
   const [appsMsg, setAppsMsg] = useState('')
+
+  // Specialist Documents & Signed Policies State
+  const [pendingDocs, setPendingDocs] = useState<any[]>([])
+  const [signedDocs, setSignedDocs] = useState<any[]>([])
+  const [docsSubTab, setDocsSubTab] = useState<'pending' | 'signed'>('pending')
+  const [selectedDocToSign, setSelectedDocToSign] = useState<any | null>(null)
+
+  const fetchSpecialistDocuments = async () => {
+    try {
+      const res = await safeFetchJson('/api/documents')
+      if (res?.pending) setPendingDocs(res.pending)
+      if (res?.signed) setSignedDocs(res.signed)
+    } catch (err) {
+      console.error('Failed to fetch specialist documents:', err)
+    }
+  }
+
+  useEffect(() => {
+    fetchSpecialistDocuments()
+    const handleUpdate = () => fetchSpecialistDocuments()
+    window.addEventListener('documents-updated', handleUpdate)
+    return () => window.removeEventListener('documents-updated', handleUpdate)
+  }, [])
 
   useEffect(() => {
     if (isAPPS) {
@@ -409,6 +435,52 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
 
   return (
     <div style={{ marginBottom: 28 }}>
+      {/* Urgent Pending Signatures Banner */}
+      {pendingDocs.length > 0 && (
+        <div
+          className="fade-in"
+          style={{
+            background: 'linear-gradient(90deg, rgba(239,68,68,0.2) 0%, rgba(185,28,28,0.1) 100%)',
+            border: '1px solid rgba(239,68,68,0.45)',
+            borderRadius: 10,
+            padding: '14px 20px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 24 }}>🚨</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#fca5a5' }}>
+                Action Required: You have {pendingDocs.length} official firm communication{pendingDocs.length > 1 ? 's' : ''} awaiting your electronic signature!
+              </div>
+              <div style={{ fontSize: 11.5, color: '#f87171' }}>
+                Latest: "{pendingDocs[0]?.title}" issued by {pendingDocs[0]?.created_by_name}.
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setSelectedDocToSign(pendingDocs[0])}
+            className="btn-primary"
+            style={{
+              background: '#ef4444',
+              fontSize: 12,
+              fontWeight: 800,
+              padding: '8px 18px',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 0 12px rgba(239,68,68,0.4)',
+            }}
+          >
+            ✍️ Review & Sign ({pendingDocs.length})
+          </button>
+        </div>
+      )}
+
       {/* Welcome banner */}
       <div className="glass-card fade-in" style={{
         padding: '24px 28px',
@@ -561,6 +633,206 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Required Communications & Signed Policies Section */}
+      <div className="glass-card" style={{ padding: '20px 24px', marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>📜</span>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: '#fff' }}>
+                Required Communications & Signed Policies
+              </h3>
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                Andes Workforce, LLC in coordination with Tabak Law, LLC
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => setDocsSubTab('pending')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: docsSubTab === 'pending' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.04)',
+                color: docsSubTab === 'pending' ? '#f87171' : '#94a3b8',
+                border: docsSubTab === 'pending' ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              ⏳ Awaiting Signature ({pendingDocs.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocsSubTab('signed')}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: docsSubTab === 'signed' ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.04)',
+                color: docsSubTab === 'signed' ? '#34d399' : '#94a3b8',
+                border: docsSubTab === 'signed' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              ✓ Signed History ({signedDocs.length})
+            </button>
+          </div>
+        </div>
+
+        {/* List of documents */}
+        {docsSubTab === 'pending' ? (
+          pendingDocs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
+              🎉 All communications and operational policies are up to date!
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {pendingDocs.map((doc) => (
+                <div
+                  key={doc.ack_id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    borderRadius: 8,
+                    background: 'rgba(245,158,11,0.08)',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase' }}>
+                      {doc.category}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', margin: '2px 0' }}>
+                      {doc.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                      Issued by {doc.created_by_name} · {doc.created_at?.slice(0, 10)}
+                      {doc.deadline_date && <span style={{ color: '#f87171', marginLeft: 8 }}>Due: {doc.deadline_date}</span>}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedDocToSign(doc)}
+                    className="btn-primary"
+                    style={{
+                      padding: '7px 16px',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                      border: 'none',
+                    }}
+                  >
+                    ✍️ Review & Sign
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        ) : (
+          signedDocs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8', fontSize: 13 }}>
+              No signed documents yet.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {signedDocs.map((doc) => (
+                <div
+                  key={doc.ack_id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    flexWrap: 'wrap',
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>✓ Signed & Verified</span>
+                      <span style={{ color: '#64748b' }}>·</span>
+                      <span style={{ color: '#94a3b8' }}>{doc.category}</span>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: '2px 0' }}>
+                      {doc.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                      Signed on {doc.signed_at?.replace('T', ' ').slice(0, 19)} UTC
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setSelectedDocToSign(doc)}
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: '5px 12px' }}
+                    >
+                      👁️ View Document
+                    </button>
+                    <button
+                      onClick={() => {
+                        downloadSignedDocumentPdf(
+                          {
+                            id: doc.id,
+                            title: doc.title,
+                            category: doc.category,
+                            content: doc.content,
+                            created_by_name: doc.created_by_name,
+                            created_by_role: doc.created_by_role,
+                            created_at: doc.created_at,
+                            deadline_date: doc.deadline_date,
+                            target_type: doc.target_type,
+                            target_lob: doc.target_lob,
+                          },
+                          {
+                            id: doc.ack_id,
+                            username: agentName,
+                            user_display_name: doc.signature_text || agentName,
+                            user_lob: lob,
+                            status: 'SIGNED',
+                            signature_text: doc.signature_text,
+                            signed_at: doc.signed_at,
+                            ip_address: doc.ip_address,
+                          }
+                        )
+                      }}
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: '5px 12px', color: '#60a5fa', borderColor: 'rgba(59,130,246,0.3)' }}
+                    >
+                      📥 Download PDF
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Sign Document Modal */}
+      {selectedDocToSign && (
+        <SignDocumentModal
+          isOpen={!!selectedDocToSign}
+          document={selectedDocToSign}
+          onClose={() => setSelectedDocToSign(null)}
+          onSignedSuccess={() => {
+            fetchSpecialistDocuments()
+          }}
+        />
+      )}
     </div>
   )
 }

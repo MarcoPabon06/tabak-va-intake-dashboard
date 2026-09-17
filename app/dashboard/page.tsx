@@ -11,8 +11,8 @@ import CAPDBarChart from '@/components/charts/CAPDBarChart'
 import WeekdayHeatmap from '@/components/charts/WeekdayHeatmap'
 import ConversionChart from '@/components/charts/ConversionChart'
 import { generateEODReportHtml } from '@/lib/eodReport'
+import DocumentStudioModal from '@/components/DocumentStudioModal'
 import { safeFetchJson } from '@/lib/apiClient'
-import AiReportModal from '@/components/AiReportModal'
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns'
 
 const PRESETS = [
@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [activePreset, setActivePreset] = useState('This month')
   const [selectedLob, setSelectedLob] = useState<string>('')
   const [copyToast, setCopyToast] = useState(false)
-  const [showAiReportModal, setShowAiReportModal] = useState(false)
+  const [showDocStudioModal, setShowDocStudioModal] = useState(false)
 
   const user = session?.user as any
   const role = user?.role || 'regular'
@@ -274,25 +274,25 @@ export default function DashboardPage() {
             )}
             {!isRegular && (
               <button
-                id="btn-ai-report"
+                id="btn-doc-studio"
                 type="button"
                 className="btn-primary"
                 style={{
                   padding: '8px 18px',
                   fontSize: 13,
-                  background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                   border: 'none',
                   color: '#fff',
                   fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  boxShadow: '0 0 15px rgba(99,102,241,0.4)',
+                  boxShadow: '0 0 15px rgba(2,132,199,0.35)',
                   cursor: 'pointer',
                 }}
-                onClick={() => setShowAiReportModal(true)}
+                onClick={() => setShowDocStudioModal(true)}
               >
-                <span>🤖</span> AI Executive Report
+                <span>📜</span> Communications & Signable Docs
               </button>
             )}
           </div>
@@ -378,13 +378,10 @@ export default function DashboardPage() {
           </>
         )}
 
-        {/* AI Executive Report Studio Modal */}
-        <AiReportModal
-          isOpen={showAiReportModal}
-          onClose={() => setShowAiReportModal(false)}
-          currentLob={selectedLob}
-          initialFrom={from}
-          initialTo={to}
+        {/* Communications & Signable Documents Studio Modal */}
+        <DocumentStudioModal
+          isOpen={showDocStudioModal}
+          onClose={() => setShowDocStudioModal(false)}
         />
       </main>
 

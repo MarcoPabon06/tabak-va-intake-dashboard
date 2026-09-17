@@ -384,6 +384,51 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
     CREATE INDEX IF NOT EXISTS idx_va_cb_date ON va_scheduled_callbacks(callback_date);
     CREATE INDEX IF NOT EXISTS idx_va_cb_status ON va_scheduled_callbacks(status);
+
+    CREATE TABLE IF NOT EXISTS communication_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      content TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_lob TEXT,
+      target_users TEXT,
+      issuing_entity TEXT DEFAULT 'Andes Workforce, LLC (for Tabak Law, LLC)',
+      created_by_id INTEGER,
+      created_by_name TEXT NOT NULL,
+      created_by_username TEXT NOT NULL,
+      created_by_role TEXT NOT NULL,
+      require_signature INTEGER DEFAULT 1,
+      deadline_date TEXT,
+      is_urgent INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'PUBLISHED',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_comm_docs_created ON communication_documents(created_at);
+    CREATE INDEX IF NOT EXISTS idx_comm_docs_target_type ON communication_documents(target_type);
+    CREATE INDEX IF NOT EXISTS idx_comm_docs_status ON communication_documents(status);
+
+    CREATE TABLE IF NOT EXISTS document_acknowledgements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      user_display_name TEXT NOT NULL,
+      user_lob TEXT,
+      status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'SIGNED')),
+      signature_text TEXT,
+      signed_at TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(document_id) REFERENCES communication_documents(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_doc_ack_doc_id ON document_acknowledgements(document_id);
+    CREATE INDEX IF NOT EXISTS idx_doc_ack_username ON document_acknowledgements(username);
+    CREATE INDEX IF NOT EXISTS idx_doc_ack_status ON document_acknowledgements(status);
+    CREATE INDEX IF NOT EXISTS idx_doc_ack_user_status ON document_acknowledgements(username, status);
   `)
 
   // Run self-healing schema migrations for new columns
