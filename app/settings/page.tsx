@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Navigation from '@/components/Navigation'
 
 interface GoalConfig {
@@ -617,14 +617,41 @@ export default function SettingsPage() {
 function SecurityAuditTrailCard() {
   const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number | 'all'>(10)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [typeFilter, setTypeFilter] = useState('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('page', page.toString())
+      params.set('limit', pageSize.toString())
+      if (typeFilter !== 'ALL') params.set('upload_type', typeFilter)
+      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+
+      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setLogs(data.logs || [])
+        setTotalRecords(data.total || 0)
+        setTotalPages(data.totalPages || 1)
+      } else {
+        setLogs([])
+      }
+    } catch {
+      setLogs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [page, pageSize, typeFilter, searchQuery])
 
   useEffect(() => {
-    fetch('/api/admin/audit-logs?limit=25')
-      .then((res) => (res.ok ? res.json() : { logs: [] }))
-      .then((data) => setLogs(data.logs || []))
-      .catch(() => setLogs([]))
-      .finally(() => setLoading(false))
-  }, [])
+    fetchLogs()
+  }, [fetchLogs])
 
   function formatBytes(bytes: number) {
     if (!bytes) return '0 B'
@@ -636,9 +663,37 @@ function SecurityAuditTrailCard() {
 
   function getStatusBadge(status: string) {
     if (status === 'SUCCESS') {
-      return <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}>✅ SUCCESS</span>
+      return (
+        <span
+          style={{
+            padding: '2px 8px',
+            borderRadius: 8,
+            fontSize: 10,
+            fontWeight: 700,
+            background: 'rgba(16,185,129,0.15)',
+            color: '#10b981',
+            border: '1px solid rgba(16,185,129,0.3)',
+          }}
+        >
+          ✅ SUCCESS
+        </span>
+      )
     }
-    return <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 10, fontWeight: 700, background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>❌ REJECTED</span>
+    return (
+      <span
+        style={{
+          padding: '2px 8px',
+          borderRadius: 8,
+          fontSize: 10,
+          fontWeight: 700,
+          background: 'rgba(239,68,68,0.15)',
+          color: '#ef4444',
+          border: '1px solid rgba(239,68,68,0.3)',
+        }}
+      >
+        ❌ REJECTED
+      </span>
+    )
   }
 
   function formatUploadType(type: string) {
@@ -648,9 +703,15 @@ function SecurityAuditTrailCard() {
       case 'va_leads': return '📑 VA Leads'
       case 'apps_team': return '📲 Apps Team'
       case 'qa_scores': return '📋 QA Scores'
+      case 'ssd_converted': return '💼 SSD Converted'
+      case 'ssd_leads': return '📋 SSD Leads'
+      case 'pip': return '📈 PIP Plan'
       default: return type
     }
   }
+
+  const startRecord = pageSize === 'all' ? 1 : Math.min((page - 1) * (pageSize as number) + 1, totalRecords)
+  const endRecord = pageSize === 'all' ? totalRecords : Math.min(page * (pageSize as number), totalRecords)
 
   return (
     <div className="glass-card" style={{ padding: '24px', borderColor: 'rgba(59,130,246,0.3)', marginTop: 24 }}>
@@ -685,19 +746,66 @@ function SecurityAuditTrailCard() {
         </div>
       </div>
 
-      {/* Audit Log Table */}
+      {/* Audit Log Table Header & Filter Bar */}
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16 }}>
-        <h4 style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', marginBottom: 12 }}>
-          Recent File Upload Events
-        </h4>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+          <h4 style={{ fontSize: 13, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', margin: 0 }}>
+            Recent File Upload Events
+          </h4>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search file or user..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setPage(1)
+              }}
+              className="input-field"
+              style={{
+                fontSize: 11.5,
+                padding: '5px 10px',
+                margin: 0,
+                width: 170,
+                background: 'rgba(255,255,255,0.05)',
+              }}
+            />
+
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value)
+                setPage(1)
+              }}
+              className="input-field"
+              style={{
+                fontSize: 11.5,
+                padding: '5px 10px',
+                margin: 0,
+                background: '#0a1628',
+                color: '#fff',
+                width: 140,
+              }}
+            >
+              <option value="ALL">All Types</option>
+              <option value="call_report">CRM Call Report</option>
+              <option value="ssd_converted">SSD Converted</option>
+              <option value="va_leads">VA Leads</option>
+              <option value="apps_team">Apps Team</option>
+              <option value="qa_scores">QA Scores</option>
+              <option value="eod_report">EOD Report</option>
+            </select>
+          </div>
+        </div>
 
         {loading ? (
-          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 20 }}>
+          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 30 }}>
             ⏳ Loading upload audit trail...
           </div>
         ) : logs.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 20 }}>
-            No upload audit events recorded yet.
+          <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: 30 }}>
+            No upload audit events found.
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -733,6 +841,117 @@ function SecurityAuditTrailCard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalRecords > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 6px 0 6px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              marginTop: 10,
+              flexWrap: 'wrap',
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+              Showing <strong>{startRecord}</strong> to <strong>{endRecord}</strong> of <strong>{totalRecords.toLocaleString()}</strong> events
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>Per page:</span>
+                <select
+                  className="input-field"
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: 11.5,
+                    margin: 0,
+                    width: 70,
+                    background: '#0a1628',
+                    color: '#fff',
+                  }}
+                  value={pageSize}
+                  onChange={(e) => {
+                    const val = e.target.value === 'all' ? 'all' : parseInt(e.target.value)
+                    setPageSize(val)
+                    setPage(1)
+                  }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+
+              {pageSize !== 'all' && totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    className="btn-secondary"
+                    style={{
+                      padding: '4px 9px',
+                      fontSize: 11,
+                      opacity: page === 1 ? 0.4 : 1,
+                      cursor: page === 1 ? 'not-allowed' : 'pointer',
+                    }}
+                    disabled={page === 1}
+                    onClick={() => setPage(1)}
+                    title="First Page"
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      opacity: page === 1 ? 0.4 : 1,
+                      cursor: page === 1 ? 'not-allowed' : 'pointer',
+                    }}
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  >
+                    ◀ Prev
+                  </button>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', padding: '0 4px' }}>
+                    Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+                  </span>
+                  <button
+                    className="btn-secondary"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      opacity: page === totalPages ? 0.4 : 1,
+                      cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                    }}
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  >
+                    Next ▶
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{
+                      padding: '4px 9px',
+                      fontSize: 11,
+                      opacity: page === totalPages ? 0.4 : 1,
+                      cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                    }}
+                    disabled={page === totalPages}
+                    onClick={() => setPage(totalPages)}
+                    title="Last Page"
+                  >
+                    ⏭
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

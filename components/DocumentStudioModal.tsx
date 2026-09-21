@@ -1777,6 +1777,28 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
 
             {/* Scrollable Letterhead Paper Preview */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', background: '#020617' }}>
+              {formError && (
+                <div
+                  className="fade-in"
+                  style={{
+                    maxWidth: 820,
+                    margin: '0 auto 16px auto',
+                    background: 'rgba(239,68,68,0.2)',
+                    border: '1.5px solid #ef4444',
+                    color: '#fca5a5',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span>⚠️</span> {formError}
+                </div>
+              )}
+
               <div
                 style={{
                   background: '#ffffff',
@@ -1828,7 +1850,11 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                     {category}
                   </div>
                   <h1 style={{ fontSize: 22, fontWeight: 900, color: '#0f172a', margin: '0 0 10px 0', lineHeight: 1.3 }}>
-                    {title.trim() || 'Untitled Operational Policy / Directive'}
+                    {title.trim() || (
+                      <span style={{ color: '#dc2626', fontStyle: 'italic' }}>
+                        ⚠️ [Missing Document Title — Please add title before issuing]
+                      </span>
+                    )}
                   </h1>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 11.5, color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: 12 }}>
                     <span><strong>Issuing Entity:</strong> Andes Workforce, LLC</span>
