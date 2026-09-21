@@ -23,14 +23,15 @@ export async function GET(req: NextRequest) {
       const acks = db.prepare(`
         SELECT a.id as ack_id, a.status as ack_status, a.signature_text, a.signed_at, a.ip_address,
                d.id, d.title, d.category, d.content, d.issuing_entity, d.created_by_name, d.created_by_role,
-               d.created_at, d.deadline_date, d.is_urgent, d.target_type, d.target_lob
+               d.created_at, d.deadline_date, d.is_urgent, d.target_type, d.target_lob,
+               d.status as doc_status, d.void_reason, d.voided_at, d.voided_by_name
         FROM document_acknowledgements a
         JOIN communication_documents d ON a.document_id = d.id
         WHERE a.username = ? AND d.status != 'ARCHIVED'
-        ORDER BY CASE WHEN a.status = 'PENDING' THEN 0 ELSE 1 END, d.created_at DESC
+        ORDER BY CASE WHEN a.status = 'PENDING' AND d.status != 'VOIDED' THEN 0 ELSE 1 END, d.created_at DESC
       `).all(user.email || user.name)
 
-      const pending = acks.filter((a: any) => a.ack_status === 'PENDING')
+      const pending = acks.filter((a: any) => a.ack_status === 'PENDING' && a.doc_status !== 'VOIDED')
       const signed = acks.filter((a: any) => a.ack_status === 'SIGNED')
 
       return NextResponse.json({
@@ -75,9 +76,9 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN a.status = 'PENDING' THEN 1 ELSE 0 END) as total_pending
       FROM communication_documents d
       LEFT JOIN document_acknowledgements a ON d.id = a.document_id
-      WHERE d.status != 'DELETED'
+      WHERE d.status != 'DELETED' AND d.status != 'ARCHIVED'
       GROUP BY d.id
-      ORDER BY d.created_at DESC
+      ORDER BY CASE WHEN d.status = 'VOIDED' THEN 1 ELSE 0 END, d.created_at DESC
     `).all()
 
     // Also get list of active regular specialists for the recipient selector

@@ -13,6 +13,10 @@ export interface DocumentData {
   deadline_date?: string | null
   target_type: string
   target_lob?: string | null
+  status?: string | null
+  void_reason?: string | null
+  voided_at?: string | null
+  voided_by_name?: string | null
 }
 
 export interface AcknowledgementData {
@@ -95,6 +99,31 @@ export function generateSignedDocumentPdf(
 
   drawHeader()
 
+  const isVoided = docData.status === 'VOIDED'
+
+  if (isVoided) {
+    // Red Void Warning Banner
+    doc.setFillColor(254, 242, 242)
+    doc.setDrawColor(220, 38, 38)
+    doc.setLineWidth(1.5)
+    doc.roundedRect(margin, currentY, contentWidth, 38, 4, 4, 'FD')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(185, 28, 28)
+    doc.text('OFFICIALLY VOIDED & REVOKED BY MANAGEMENT — THIS DOCUMENT IS NULL & VOID', margin + 14, currentY + 15)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(153, 27, 27)
+    const voidFormattedDate = docData.voided_at ? new Date(docData.voided_at).toLocaleDateString() : 'Recorded'
+    const voidInfo = `Revoked on: ${voidFormattedDate} by ${docData.voided_by_name || 'Management'} | Reason: ${docData.void_reason || 'Withdrawn'}`
+    const wrappedVoid = doc.splitTextToSize(voidInfo, contentWidth - 28)
+    doc.text(wrappedVoid[0], margin + 14, currentY + 28)
+
+    currentY += 46
+  }
+
   // 2. Metadata Box
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
@@ -134,6 +163,15 @@ export function generateSignedDocumentPdf(
   doc.setFontSize(9.5)
   doc.setTextColor(30, 41, 59)
 
+  const cleanMarkdownText = (str: string): string => {
+    return str
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/(?<!\*)\*(.*?)(?<!\*)\*/g, '$1')
+      .replace(/(?<!_)_(.*?)(?<!_)_/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+  }
+
   const paragraphs = docData.content.split('\n')
 
   for (let rawPara of paragraphs) {
@@ -150,33 +188,69 @@ export function generateSignedDocumentPdf(
       drawHeader()
     }
 
+    // Horizontal Rule
+    if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
+      doc.setDrawColor(203, 213, 225)
+      doc.setLineWidth(0.8)
+      doc.line(margin, currentY + 4, pageWidth - margin, currentY + 4)
+      currentY += 14
+      continue
+    }
+
+    // Blockquote / Callout
+    if (trimmed.startsWith('> ')) {
+      const quoteText = cleanMarkdownText(trimmed.substring(2))
+      const quoteLines = doc.splitTextToSize(quoteText, contentWidth - 24)
+      if (currentY + quoteLines.length * 13 + 8 > pageHeight - 80) {
+        doc.addPage()
+        currentY = 45
+        drawHeader()
+      }
+      doc.setDrawColor(15, 41, 74)
+      doc.setLineWidth(2.5)
+      doc.line(margin + 4, currentY - 2, margin + 4, currentY + quoteLines.length * 13 - 2)
+      doc.setFont('helvetica', 'italic')
+      doc.setTextColor(51, 65, 85)
+      doc.text(quoteLines, margin + 14, currentY)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(30, 41, 59)
+      currentY += quoteLines.length * 13 + 8
+      continue
+    }
+
     // Headings
     if (trimmed.startsWith('### ')) {
+      const headingText = cleanMarkdownText(trimmed.replace('### ', ''))
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(11)
+      doc.setFontSize(10.5)
       doc.setTextColor(15, 23, 42)
-      doc.text(trimmed.replace('### ', ''), margin, currentY)
-      currentY += 16
+      const hLines = doc.splitTextToSize(headingText, contentWidth)
+      doc.text(hLines, margin, currentY)
+      currentY += hLines.length * 14 + 4
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(30, 41, 59)
       continue
     } else if (trimmed.startsWith('## ')) {
+      const headingText = cleanMarkdownText(trimmed.replace('## ', ''))
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(12)
+      doc.setFontSize(11.5)
       doc.setTextColor(15, 23, 42)
-      doc.text(trimmed.replace('## ', ''), margin, currentY)
-      currentY += 18
+      const hLines = doc.splitTextToSize(headingText, contentWidth)
+      doc.text(hLines, margin, currentY)
+      currentY += hLines.length * 15 + 6
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(30, 41, 59)
       continue
     } else if (trimmed.startsWith('# ')) {
+      const headingText = cleanMarkdownText(trimmed.replace('# ', ''))
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(13)
       doc.setTextColor(184, 33, 5)
-      doc.text(trimmed.replace('# ', ''), margin, currentY)
-      currentY += 20
+      const hLines = doc.splitTextToSize(headingText, contentWidth)
+      doc.text(hLines, margin, currentY)
+      currentY += hLines.length * 16 + 8
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(30, 41, 59)
@@ -185,16 +259,41 @@ export function generateSignedDocumentPdf(
 
     // Bullet point
     if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      const bulletText = trimmed.substring(2)
-      const bulletLines = doc.splitTextToSize(bulletText, contentWidth - 16)
+      const bulletText = cleanMarkdownText(trimmed.substring(2))
+      const bulletLines = doc.splitTextToSize(bulletText, contentWidth - 18)
+      if (currentY + bulletLines.length * 13 > pageHeight - 80) {
+        doc.addPage()
+        currentY = 45
+        drawHeader()
+      }
       doc.text('•', margin + 4, currentY)
       doc.text(bulletLines, margin + 16, currentY)
       currentY += bulletLines.length * 13 + 4
       continue
     }
 
+    // Numbered List (1. , 2. )
+    const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/)
+    if (numMatch) {
+      const numLabel = `${numMatch[1]}.`
+      const itemText = cleanMarkdownText(numMatch[2])
+      const itemLines = doc.splitTextToSize(itemText, contentWidth - 22)
+      if (currentY + itemLines.length * 13 > pageHeight - 80) {
+        doc.addPage()
+        currentY = 45
+        drawHeader()
+      }
+      doc.setFont('helvetica', 'bold')
+      doc.text(numLabel, margin + 4, currentY)
+      doc.setFont('helvetica', 'normal')
+      doc.text(itemLines, margin + 22, currentY)
+      currentY += itemLines.length * 13 + 4
+      continue
+    }
+
     // Standard paragraph
-    const lines = doc.splitTextToSize(trimmed, contentWidth)
+    const cleanPara = cleanMarkdownText(trimmed)
+    const lines = doc.splitTextToSize(cleanPara, contentWidth)
     if (currentY + lines.length * 13 > pageHeight - 80) {
       doc.addPage()
       currentY = 45
@@ -287,35 +386,68 @@ export function generateSignedDocumentPdf(
     doc.text(`${signerName} (${ackData.username})`, col1X + 96, row1Y)
     doc.text(`Contractor (${ackData.user_lob || 'Intake'} Specialist)`, col1X + 96, row2Y)
 
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(4, 120, 87)
-    doc.text(`[DIGITALLY SIGNED /s/ ${signerName}]`, col1X + 96, row3Y)
+    if (isVoided) {
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(185, 28, 28)
+      doc.text(`[VOIDED - SIGNATURE NULLIFIED /s/ ${signerName}]`, col1X + 96, row3Y)
 
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(71, 85, 105)
-    doc.text(verCode, col2X + 85, row1Y)
-    doc.text(ackData.signed_at || new Date().toISOString(), col2X + 85, row2Y)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(71, 85, 105)
+      doc.text(verCode, col2X + 85, row1Y)
+      doc.text(ackData.signed_at || new Date().toISOString(), col2X + 85, row2Y)
 
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(4, 120, 87)
-    doc.text('VERIFIED & TAMPER-EVIDENT', col2X + 85, row3Y)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(185, 28, 28)
+      doc.text('REVOKED / NULL & VOID', col2X + 85, row3Y)
+    } else {
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(4, 120, 87)
+      doc.text(`[DIGITALLY SIGNED /s/ ${signerName}]`, col1X + 96, row3Y)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(71, 85, 105)
+      doc.text(verCode, col2X + 85, row1Y)
+      doc.text(ackData.signed_at || new Date().toISOString(), col2X + 85, row2Y)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(4, 120, 87)
+      doc.text('VERIFIED & TAMPER-EVIDENT', col2X + 85, row3Y)
+    }
   } else {
-    doc.text('[Pending Specialist Action]', col1X + 96, row1Y)
+    doc.text(isVoided ? '[Action Cancelled - Voided]' : '[Pending Specialist Action]', col1X + 96, row1Y)
     doc.text('Independent Contractor', col1X + 96, row2Y)
     doc.setTextColor(220, 38, 38)
-    doc.text('[Awaiting Signature Submission]', col1X + 96, row3Y)
+    doc.text(isVoided ? '[DOCUMENT VOIDED - NO SIGNATURE REQUIRED]' : '[Awaiting Signature Submission]', col1X + 96, row3Y)
 
     doc.setTextColor(71, 85, 105)
-    doc.text('PENDING-SIGNATURE', col2X + 85, row1Y)
-    doc.text('Not yet executed', col2X + 85, row2Y)
+    doc.text(isVoided ? 'VOIDED-DOCUMENT' : 'PENDING-SIGNATURE', col2X + 85, row1Y)
+    doc.text(isVoided ? 'Revoked by Management' : 'Not yet executed', col2X + 85, row2Y)
     doc.setTextColor(220, 38, 38)
-    doc.text('ACTION REQUIRED', col2X + 85, row3Y)
+    doc.text(isVoided ? 'VOIDED & CANCELLED' : 'ACTION REQUIRED', col2X + 85, row3Y)
   }
 
-  // 5. Page Footers (Page X of Y)
+  // 5. Page Footers (Page X of Y) & Watermark
   const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
+
+    // Diagonal VOID watermark across each page if voided
+    if (isVoided) {
+      doc.saveGraphicsState()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(85)
+      doc.setTextColor(239, 68, 68)
+      try {
+        // @ts-ignore
+        if (typeof doc.setGState === 'function' && doc.GState) {
+          // @ts-ignore
+          doc.setGState(new doc.GState({ opacity: 0.15 }))
+        }
+      } catch {}
+      doc.text('VOIDED', pageWidth / 2, pageHeight / 2, { angle: 45, align: 'center' })
+      doc.restoreGraphicsState()
+    }
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.setTextColor(148, 163, 184)

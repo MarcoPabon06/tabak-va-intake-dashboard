@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { safeFetchJson } from '@/lib/apiClient'
 import { downloadSignedDocumentPdf, DocumentData, AcknowledgementData } from '@/lib/pdfGenerator'
+import FormattedMarkdown from './FormattedMarkdown'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
-  document: (DocumentData & { ack_id?: number; ack_status?: string; signature_text?: string; signed_at?: string; ip_address?: string }) | null
+  document: (DocumentData & { ack_id?: number; ack_status?: string; signature_text?: string; signed_at?: string; ip_address?: string; doc_status?: string }) | null
   onSignedSuccess?: () => void
   readOnly?: boolean
 }
@@ -28,11 +29,16 @@ export default function SignDocumentModal({
   if (!isOpen || !doc) return null
 
   const isAlreadySigned = doc.ack_status === 'SIGNED' || !!signedRecord
+  const isVoided = doc.status === 'VOIDED' || doc.doc_status === 'VOIDED'
   const effectiveSigner = signedRecord?.signature_text || doc.signature_text || ''
   const effectiveSignedAt = signedRecord?.signed_at || doc.signed_at || ''
 
   const handleSign = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isVoided) {
+      setError('This document was officially voided by management and can no longer be signed.')
+      return
+    }
     if (!confirmed) {
       setError('Please check the confirmation box agreeing to the contractor acknowledgment statement.')
       return
@@ -73,6 +79,13 @@ export default function SignDocumentModal({
   }
 
   const handleDownloadPdf = () => {
+    const docData: DocumentData = {
+      ...doc,
+      status: doc.status || doc.doc_status,
+      void_reason: doc.void_reason,
+      voided_at: doc.voided_at,
+      voided_by_name: doc.voided_by_name,
+    }
     const ack: AcknowledgementData = {
       username: 'Specialist',
       user_display_name: effectiveSigner || 'Contractor',
@@ -81,7 +94,7 @@ export default function SignDocumentModal({
       signed_at: effectiveSignedAt || undefined,
       ip_address: doc.ip_address || undefined,
     }
-    downloadSignedDocumentPdf(doc, ack)
+    downloadSignedDocumentPdf(docData, ack)
   }
 
   return (
@@ -229,6 +242,20 @@ export default function SignDocumentModal({
               </div>
             </div>
 
+            {/* Revocation Warning Box if Voided */}
+            {isVoided && (
+              <div style={{ background: '#fef2f2', border: '1.5px solid #ef4444', borderRadius: 8, padding: '14px 18px', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🚫</span> OFFICIALLY VOIDED & REVOKED BY MANAGEMENT
+                </div>
+                <div style={{ fontSize: 12, color: '#991b1b', marginTop: 4 }}>
+                  Revoked on {doc.voided_at ? new Date(doc.voided_at).toLocaleDateString() : 'Recorded'} by {doc.voided_by_name || 'Management'}.
+                  <br />
+                  <strong>Void Reason:</strong> "{doc.void_reason || 'Withdrawn by management'}"
+                </div>
+              </div>
+            )}
+
             {/* Document Meta Strip */}
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 18px', marginBottom: 24 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#b82105', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -245,29 +272,7 @@ export default function SignDocumentModal({
             </div>
 
             {/* Formatted Markdown Body */}
-            <div style={{ fontSize: 13.5, color: '#334155', whiteSpace: 'pre-wrap', marginBottom: 32 }}>
-              {doc.content.split('\n').map((line, idx) => {
-                const trimmed = line.trim()
-                if (trimmed.startsWith('### ')) {
-                  return <h3 key={idx} style={{ fontSize: 15, fontWeight: 800, color: '#0f172a', margin: '20px 0 8px 0' }}>{trimmed.replace('### ', '')}</h3>
-                }
-                if (trimmed.startsWith('## ')) {
-                  return <h2 key={idx} style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: '22px 0 10px 0' }}>{trimmed.replace('## ', '')}</h2>
-                }
-                if (trimmed.startsWith('# ')) {
-                  return <h1 key={idx} style={{ fontSize: 18, fontWeight: 800, color: '#b82105', margin: '24px 0 12px 0' }}>{trimmed.replace('# ', '')}</h1>
-                }
-                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                  return (
-                    <div key={idx} style={{ display: 'flex', gap: 8, marginLeft: 12, marginBottom: 4 }}>
-                      <span>•</span>
-                      <span>{trimmed.substring(2)}</span>
-                    </div>
-                  )
-                }
-                return <p key={idx} style={{ margin: '0 0 10px 0' }}>{line}</p>
-              })}
-            </div>
+            <FormattedMarkdown content={doc.content} style={{ marginBottom: 32 }} />
 
             {/* Digital Signature Certificate Block */}
             <div
@@ -317,6 +322,15 @@ export default function SignDocumentModal({
                   <div>
                     <span style={{ color: '#64748b', display: 'block', fontSize: 10, fontWeight: 700 }}>SECURITY AUDIT</span>
                     <strong style={{ color: '#047857' }}>Verified via Portal Session</strong>
+                  </div>
+                </div>
+              ) : isVoided ? (
+                <div style={{ background: '#fef2f2', border: '1px solid #f87171', borderRadius: 8, padding: '16px 20px', textAlign: 'center', color: '#991b1b', marginTop: 14 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <span>🚫</span> OFFICIAL COMMUNICATION VOIDED
+                  </div>
+                  <div style={{ fontSize: 11.5, marginTop: 4 }}>
+                    This document has been officially revoked and nullified by management. No electronic signature or contractor acknowledgment is required.
                   </div>
                 </div>
               ) : !readOnly ? (

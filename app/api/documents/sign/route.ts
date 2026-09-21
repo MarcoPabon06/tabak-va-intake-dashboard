@@ -33,6 +33,17 @@ export async function POST(req: NextRequest) {
 
     const db = getDb()
 
+    // Verify document is not voided
+    const doc = db.prepare('SELECT status, void_reason FROM communication_documents WHERE id = ?').get(document_id) as any
+    if (!doc) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    }
+    if (doc.status === 'VOIDED') {
+      return NextResponse.json({
+        error: `This document was officially voided by management ("${doc.void_reason || 'Revoked'}") and can no longer be signed.`,
+      }, { status: 400 })
+    }
+
     // Find pending acknowledgement for this user
     const username = user.email || user.name
     const ack = db.prepare(`

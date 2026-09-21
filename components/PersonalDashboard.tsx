@@ -745,78 +745,90 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {signedDocs.map((doc) => (
-                <div
-                  key={doc.ack_id}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    flexWrap: 'wrap',
-                    gap: 12,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#34d399', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>✓ Signed & Verified</span>
-                      <span style={{ color: '#64748b' }}>·</span>
-                      <span style={{ color: '#94a3b8' }}>{doc.category}</span>
+              {signedDocs.map((doc) => {
+                const isVoided = doc.doc_status === 'VOIDED'
+                return (
+                  <div
+                    key={doc.ack_id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      background: isVoided ? 'rgba(239,68,68,0.06)' : 'rgba(255,255,255,0.02)',
+                      border: isVoided ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(255,255,255,0.06)',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: isVoided ? '#f87171' : '#34d399', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{isVoided ? '🚫 VOIDED (NULL & VOID)' : '✓ Signed & Verified'}</span>
+                        <span style={{ color: '#64748b' }}>·</span>
+                        <span style={{ color: '#94a3b8' }}>{doc.category}</span>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: '2px 0' }}>
+                        {doc.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                        Signed on {doc.signed_at?.replace('T', ' ').slice(0, 19)} UTC
+                      </div>
+                      {isVoided && (
+                        <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 4, fontStyle: 'italic' }}>
+                          Revoked by {doc.voided_by_name || 'Management'} on {doc.voided_at?.slice(0, 10)}: "{doc.void_reason || 'Withdrawn'}"
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: '2px 0' }}>
-                      {doc.title}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                      Signed on {doc.signed_at?.replace('T', ' ').slice(0, 19)} UTC
-                    </div>
-                  </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => setSelectedDocToSign(doc)}
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: '5px 12px' }}
-                    >
-                      👁️ View Document
-                    </button>
-                    <button
-                      onClick={() => {
-                        downloadSignedDocumentPdf(
-                          {
-                            id: doc.id,
-                            title: doc.title,
-                            category: doc.category,
-                            content: doc.content,
-                            created_by_name: doc.created_by_name,
-                            created_by_role: doc.created_by_role,
-                            created_at: doc.created_at,
-                            deadline_date: doc.deadline_date,
-                            target_type: doc.target_type,
-                            target_lob: doc.target_lob,
-                          },
-                          {
-                            id: doc.ack_id,
-                            username: agentName,
-                            user_display_name: doc.signature_text || agentName,
-                            user_lob: lob,
-                            status: 'SIGNED',
-                            signature_text: doc.signature_text,
-                            signed_at: doc.signed_at,
-                            ip_address: doc.ip_address,
-                          }
-                        )
-                      }}
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: '5px 12px', color: '#60a5fa', borderColor: 'rgba(59,130,246,0.3)' }}
-                    >
-                      📥 Download PDF
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => setSelectedDocToSign(doc)}
+                        className="btn-secondary"
+                        style={{ fontSize: 11, padding: '5px 12px' }}
+                      >
+                        👁️ View Document
+                      </button>
+                      <button
+                        onClick={() => {
+                          downloadSignedDocumentPdf(
+                            {
+                              id: doc.id,
+                              title: doc.title,
+                              category: doc.category,
+                              content: doc.content,
+                              created_by_name: doc.created_by_name,
+                              created_by_role: doc.created_by_role,
+                              created_at: doc.created_at,
+                              deadline_date: doc.deadline_date,
+                              target_type: doc.target_type,
+                              target_lob: doc.target_lob,
+                              status: doc.doc_status,
+                              void_reason: doc.void_reason,
+                              voided_at: doc.voided_at,
+                              voided_by_name: doc.voided_by_name,
+                            },
+                            {
+                              id: doc.ack_id,
+                              username: agentName,
+                              user_display_name: doc.signature_text || agentName,
+                              user_lob: lob,
+                              status: 'SIGNED',
+                              signature_text: doc.signature_text,
+                              signed_at: doc.signed_at,
+                              ip_address: doc.ip_address,
+                            }
+                          )
+                        }}
+                        className="btn-secondary"
+                        style={{ fontSize: 11, padding: '5px 12px', color: isVoided ? '#f87171' : '#60a5fa', borderColor: isVoided ? 'rgba(239,68,68,0.4)' : 'rgba(59,130,246,0.3)' }}
+                      >
+                        📥 Download PDF
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )
         )}

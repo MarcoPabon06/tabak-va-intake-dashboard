@@ -402,6 +402,10 @@ function initSchema(db: Database.Database) {
       deadline_date TEXT,
       is_urgent INTEGER DEFAULT 0,
       status TEXT DEFAULT 'PUBLISHED',
+      void_reason TEXT,
+      voided_at TEXT,
+      voided_by_username TEXT,
+      voided_by_name TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -416,7 +420,7 @@ function initSchema(db: Database.Database) {
       username TEXT NOT NULL,
       user_display_name TEXT NOT NULL,
       user_lob TEXT,
-      status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'SIGNED')),
+      status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'SIGNED', 'VOIDED')),
       signature_text TEXT,
       signed_at TEXT,
       ip_address TEXT,
@@ -433,6 +437,10 @@ function initSchema(db: Database.Database) {
 
   // Run self-healing schema migrations for new columns
   const alterColumns = [
+    { table: 'communication_documents', column: 'void_reason', definition: 'TEXT' },
+    { table: 'communication_documents', column: 'voided_at', definition: 'TEXT' },
+    { table: 'communication_documents', column: 'voided_by_username', definition: 'TEXT' },
+    { table: 'communication_documents', column: 'voided_by_name', definition: 'TEXT' },
     { table: 'users', column: 'display_name', definition: 'TEXT' },
     { table: 'users', column: 'active', definition: 'INTEGER DEFAULT 1' },
     { table: 'users', column: 'lob', definition: "TEXT DEFAULT 'VA' CHECK(lob IN ('VA', 'SSD', 'APPS'))" },
@@ -569,6 +577,43 @@ function initSchema(db: Database.Database) {
     }
   } catch (e: any) {
     console.error('Failed to migrate time_off_requests schema:', e.message)
+  }
+
+  // Migrate document_acknowledgements schema if it lacks 'VOIDED' in CHECK constraint
+  try {
+    const docAckInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='document_acknowledgements'").get() as { sql: string } | undefined
+    if (docAckInfo && docAckInfo.sql && !docAckInfo.sql.includes('VOIDED')) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE document_acknowledgements_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          username TEXT NOT NULL,
+          user_display_name TEXT NOT NULL,
+          user_lob TEXT,
+          status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'SIGNED', 'VOIDED')),
+          signature_text TEXT,
+          signed_at TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          notes TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY(document_id) REFERENCES communication_documents(id) ON DELETE CASCADE
+        );
+        INSERT INTO document_acknowledgements_tmp SELECT * FROM document_acknowledgements;
+        DROP TABLE document_acknowledgements;
+        ALTER TABLE document_acknowledgements_tmp RENAME TO document_acknowledgements;
+        CREATE INDEX IF NOT EXISTS idx_doc_ack_doc_id ON document_acknowledgements(document_id);
+        CREATE INDEX IF NOT EXISTS idx_doc_ack_username ON document_acknowledgements(username);
+        CREATE INDEX IF NOT EXISTS idx_doc_ack_status ON document_acknowledgements(status);
+        CREATE INDEX IF NOT EXISTS idx_doc_ack_user_status ON document_acknowledgements(username, status);
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated document_acknowledgements table to include VOIDED status')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate document_acknowledgements schema:', e.message)
   }
 
   // Migrate users table schema if it lacks 'permissions' or 'email' column or 'admin' role CHECK constraint
