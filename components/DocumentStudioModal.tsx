@@ -1520,6 +1520,11 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
             justifyContent: 'center',
             padding: 20,
           }}
+          onClick={(e) => {
+            e.stopPropagation()
+            setDocToVoid(null)
+            setVoidReason('')
+          }}
         >
           <div
             className="glass-card"
@@ -1531,6 +1536,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
               background: '#0f172a',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ width: 42, height: 42, borderRadius: 10, background: 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
@@ -1640,7 +1646,10 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
             zIndex: 10000,
             padding: 20,
           }}
-          onClick={() => setShowPreIssuancePreview(false)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowPreIssuancePreview(false)
+          }}
         >
           <div
             className="fade-in"
@@ -1895,7 +1904,10 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
             zIndex: 10000,
             padding: 20,
           }}
-          onClick={() => setViewingDoc(null)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setViewingDoc(null)
+          }}
         >
           <div
             className="fade-in"
