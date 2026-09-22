@@ -64,11 +64,12 @@ const PRESETS = [
 
 import { safeFetchJson } from '@/lib/apiClient'
 import VaCallbacksQueue, { ScheduleCallbackModal } from '@/components/VaCallbacksQueue'
+import VaEfficiencyQueue from '@/components/VaEfficiencyQueue'
 
 export default function VaTrackerPage() {
   const { data: session } = useSession()
   const [entries, setEntries] = useState<VaLeadRecord[]>([])
-  const [trackerMode, setTrackerMode] = useState<'leads' | 'callbacks'>('leads')
+  const [trackerMode, setTrackerMode] = useState<'leads' | 'callbacks' | 'efficiency'>('leads')
   const [showScheduleCallbackModal, setShowScheduleCallbackModal] = useState(false)
   const [callbackCounts, setCallbackCounts] = useState({ pending: 0, overdue: 0, today: 0, completed: 0 })
   const [summary, setSummary] = useState<SummaryMetrics>({
@@ -567,6 +568,26 @@ export default function VaTrackerPage() {
                     {callbackCounts.pending}
                   </span>
                 )}
+              </button>
+
+              <button
+                onClick={() => setTrackerMode('efficiency')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: trackerMode === 'efficiency' ? '#10b981' : 'rgba(255,255,255,0.04)',
+                  color: trackerMode === 'efficiency' ? '#fff' : '#94a3b8',
+                  border: trackerMode === 'efficiency' ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.08)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>⏱️ Dialer Adherence</span>
               </button>
             </div>
           </div>
@@ -1086,21 +1107,23 @@ export default function VaTrackerPage() {
             )}
           </div>
         </>
+      ) : trackerMode === 'callbacks' ? (
+        <VaCallbacksQueue
+          isMaster={isMaster}
+          repsList={repsList}
+          onCallbackResolved={() => {
+            fetchTrackerData()
+            fetchCallbackCounts()
+          }}
+          showScheduleModal={showScheduleCallbackModal}
+          setShowScheduleModal={setShowScheduleCallbackModal}
+          callbackCounts={callbackCounts}
+          onCountsUpdated={setCallbackCounts}
+        />
       ) : (
-          <VaCallbacksQueue
-            isMaster={isMaster}
-            repsList={repsList}
-            onCallbackResolved={() => {
-              fetchTrackerData()
-              fetchCallbackCounts()
-            }}
-            showScheduleModal={showScheduleCallbackModal}
-            setShowScheduleModal={setShowScheduleCallbackModal}
-            callbackCounts={callbackCounts}
-            onCountsUpdated={setCallbackCounts}
-          />
-        )}
-        </div>
+        <VaEfficiencyQueue isMaster={isMaster} />
+      )}
+      </div>
 
         {/* Modal: Schedule Callback */}
         {showScheduleCallbackModal && (

@@ -72,9 +72,45 @@ function progressColor(pct: number) {
   return '#ef4444'
 }
 
+function formatHms(sec: number): string {
+  if (!sec || isNaN(sec) || sec < 0) return '00:00:00'
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
 export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA' }: Props) {
   const isSSD = lob === 'SSD'
   const isAPPS = lob === 'APPS'
+
+  // VA Dialer Efficiency Adherence State (VA Intake only)
+  const [efficiencyRecord, setEfficiencyRecord] = useState<any | null>(null)
+  const [efficiencyLoading, setEfficiencyLoading] = useState(false)
+
+  const fetchEfficiencyData = async () => {
+    if (lob !== 'VA' || !agentName) return
+    setEfficiencyLoading(true)
+    try {
+      const res = await safeFetchJson(`/api/va-tracker/efficiency?rep=${encodeURIComponent(agentName)}`)
+      if (res?.records && res.records.length > 0) {
+        setEfficiencyRecord(res.records[0])
+      } else {
+        setEfficiencyRecord(null)
+      }
+    } catch (err) {
+      console.error('Failed to load dialer efficiency:', err)
+    } finally {
+      setEfficiencyLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchEfficiencyData()
+    const handleEfficiencyUpdate = () => fetchEfficiencyData()
+    window.addEventListener('efficiency-updated', handleEfficiencyUpdate)
+    return () => window.removeEventListener('efficiency-updated', handleEfficiencyUpdate)
+  }, [lob, agentName])
 
   // Apps Team State
   const [appsData, setAppsData] = useState<AppEntry[]>([])
@@ -532,6 +568,386 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
 
       {/* QA Score Summary */}
       <PersonalQA agentName={agentName} />
+
+      {/* Law Ruler Dialer Status Adherence Card (VA Intake only) */}
+      {!isSSD && !isAPPS && (
+        <div
+          className="glass-card fade-in"
+          style={{
+            padding: '22px 24px',
+            marginBottom: 16,
+            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(30, 41, 59, 0.4) 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 14, marginBottom: 16 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 20 }}>⏱️</span>
+                <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fff' }}>
+                  Law Ruler Dialer Status Adherence
+                </h3>
+                {efficiencyRecord?.is_narrative_rep === 1 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      background: 'rgba(59,130,246,0.2)',
+                      color: '#60a5fa',
+                      border: '1px solid rgba(59,130,246,0.3)',
+                    }}
+                  >
+                    📝 VA Narrative Project (2.5h Busy Allowed)
+                  </span>
+                )}
+                {efficiencyRecord?.is_onboarding_rep === 1 && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: 12,
+                      background: 'rgba(168,85,247,0.2)',
+                      color: '#c084fc',
+                      border: '1px solid rgba(168,85,247,0.3)',
+                    }}
+                  >
+                    🌱 Onboarding Trainee
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
+                Operational standards adherence for {efficiencyRecord ? `shift date ${efficiencyRecord.date}` : 'your latest shift'} &bull; Tabak & Andes Policy (Sept 21, 2026)
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <a
+                href="https://forms.cloud.microsoft/r/KmyM1LBSzh"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  padding: '7px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(59,130,246,0.15)',
+                  color: '#60a5fa',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  textDecoration: 'none',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span>📋 Submit Exception Form</span>
+                <span>↗</span>
+              </a>
+            </div>
+          </div>
+
+          {efficiencyLoading ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              Loading your dialer metrics...
+            </div>
+          ) : !efficiencyRecord ? (
+            <div
+              style={{
+                padding: '16px 20px',
+                borderRadius: 10,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px dashed rgba(255,255,255,0.12)',
+                color: 'var(--text-secondary)',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}
+            >
+              <div>
+                <strong>No Law Ruler dialer shift uploaded for your account yet.</strong>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Daily dialer logs are imported each morning by Team Leads. Once imported, your wrap-up pacing and busy time adherence will reflect here automatically.
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                Standards: 2h max wrap-up &bull; 30m busy allowance (2.5h for narratives)
+              </div>
+            </div>
+          ) : (
+            <div>
+              {/* If an exception was approved */}
+              {efficiencyRecord.exception_status === 'APPROVED_EXCEPTION' && (
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: 'rgba(168,85,247,0.12)',
+                    border: '1px solid rgba(168,85,247,0.3)',
+                    color: '#e9d5ff',
+                    fontSize: 12,
+                    marginBottom: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>🟣</span>
+                  <div>
+                    <strong>Shift Exception Approved:</strong> {efficiencyRecord.exception_reason || 'Documented & approved by Team Lead'}
+                    {efficiencyRecord.exception_reviewed_by && ` (Reviewed by ${efficiencyRecord.exception_reviewed_by})`}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                {/* Wrap-Up Card */}
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${
+                      efficiencyRecord.wrap_up_status === 'VIOLATION'
+                        ? 'rgba(239,68,68,0.4)'
+                        : efficiencyRecord.wrap_up_status === 'WARNING'
+                        ? 'rgba(245,158,11,0.4)'
+                        : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                        ? 'rgba(168,85,247,0.4)'
+                        : 'rgba(16,185,129,0.3)'
+                    }`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      Wrap-Up Time (2h Cap)
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        background:
+                          efficiencyRecord.wrap_up_status === 'VIOLATION'
+                            ? 'rgba(239,68,68,0.2)'
+                            : efficiencyRecord.wrap_up_status === 'WARNING'
+                            ? 'rgba(245,158,11,0.2)'
+                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                            ? 'rgba(168,85,247,0.2)'
+                            : 'rgba(16,185,129,0.2)',
+                        color:
+                          efficiencyRecord.wrap_up_status === 'VIOLATION'
+                            ? '#ef4444'
+                            : efficiencyRecord.wrap_up_status === 'WARNING'
+                            ? '#f59e0b'
+                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                            ? '#c084fc'
+                            : '#10b981',
+                      }}
+                    >
+                      {efficiencyRecord.wrap_up_status === 'VIOLATION'
+                        ? '🔴 Over Limit'
+                        : efficiencyRecord.wrap_up_status === 'WARNING'
+                        ? '🟡 Warning'
+                        : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                        ? '🟣 Excused'
+                        : '🟢 Compliant'}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>
+                    {formatHms(efficiencyRecord.wrap_up_time_sec)}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>
+                      / 02:00:00 cap
+                    </span>
+                  </div>
+
+                  <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                    <div
+                      style={{
+                        width: `${Math.min(Math.round((efficiencyRecord.wrap_up_time_sec / 7200) * 100), 100)}%`,
+                        height: '100%',
+                        background:
+                          efficiencyRecord.wrap_up_status === 'VIOLATION'
+                            ? '#ef4444'
+                            : efficiencyRecord.wrap_up_status === 'WARNING'
+                            ? '#f59e0b'
+                            : '#10b981',
+                        borderRadius: 3,
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Avg Wrap-Up / Call:</span>
+                    <strong style={{ color: efficiencyRecord.avg_wrap_up_per_call_sec > 90 ? '#f59e0b' : '#10b981' }}>
+                      {Math.round(efficiencyRecord.avg_wrap_up_per_call_sec)}s / call
+                    </strong>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {efficiencyRecord.total_calls_handled} total calls handled
+                  </div>
+                </div>
+
+                {/* Busy Time Card */}
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${
+                      efficiencyRecord.busy_status === 'VIOLATION'
+                        ? 'rgba(239,68,68,0.4)'
+                        : efficiencyRecord.busy_status === 'WARNING'
+                        ? 'rgba(245,158,11,0.4)'
+                        : efficiencyRecord.busy_status === 'EXCUSED'
+                        ? 'rgba(168,85,247,0.4)'
+                        : 'rgba(16,185,129,0.3)'
+                    }`,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      Busy Time ({efficiencyRecord.is_narrative_rep ? '2.5h' : '30m'} Budget)
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        background:
+                          efficiencyRecord.busy_status === 'VIOLATION'
+                            ? 'rgba(239,68,68,0.2)'
+                            : efficiencyRecord.busy_status === 'WARNING'
+                            ? 'rgba(245,158,11,0.2)'
+                            : efficiencyRecord.busy_status === 'EXCUSED'
+                            ? 'rgba(168,85,247,0.2)'
+                            : 'rgba(16,185,129,0.2)',
+                        color:
+                          efficiencyRecord.busy_status === 'VIOLATION'
+                            ? '#ef4444'
+                            : efficiencyRecord.busy_status === 'WARNING'
+                            ? '#f59e0b'
+                            : efficiencyRecord.busy_status === 'EXCUSED'
+                            ? '#c084fc'
+                            : '#10b981',
+                      }}
+                    >
+                      {efficiencyRecord.busy_status === 'VIOLATION'
+                        ? '🔴 Over Limit'
+                        : efficiencyRecord.busy_status === 'WARNING'
+                        ? '🟡 Warning'
+                        : efficiencyRecord.busy_status === 'EXCUSED'
+                        ? '🟣 Excused'
+                        : '🟢 Compliant'}
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const baseSec = efficiencyRecord.is_narrative_rep ? 9000 : 1800
+                    const totalAllowedSec = baseSec + (efficiencyRecord.meeting_credit_sec || 0)
+                    const busyPct = Math.min(Math.round((efficiencyRecord.busy_time_sec / totalAllowedSec) * 100), 100)
+                    return (
+                      <>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>
+                          {formatHms(efficiencyRecord.busy_time_sec)}
+                          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>
+                            / {formatHms(totalAllowedSec)} allowed
+                          </span>
+                        </div>
+
+                        <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                          <div
+                            style={{
+                              width: `${busyPct}%`,
+                              height: '100%',
+                              background:
+                                efficiencyRecord.busy_status === 'VIOLATION'
+                                  ? '#ef4444'
+                                  : efficiencyRecord.busy_status === 'WARNING'
+                                  ? '#f59e0b'
+                                  : '#10b981',
+                              borderRadius: 3,
+                            }}
+                          />
+                        </div>
+
+                        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Meeting Credits:</span>
+                          <strong style={{ color: efficiencyRecord.meeting_credit_sec > 0 ? '#60a5fa' : 'var(--text-muted)' }}>
+                            {efficiencyRecord.meeting_credit_sec > 0
+                              ? `+${Math.round(efficiencyRecord.meeting_credit_sec / 60)}m (${efficiencyRecord.meeting_notes || 'Credited'})`
+                              : 'None'}
+                          </strong>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Active pauses / breaks limit
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+
+                {/* Dialer Presence Breakdown */}
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      Total Presence Breakdown
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📞 Talk Time</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#3b82f6' }}>
+                          {formatHms(efficiencyRecord.total_talk_time_sec)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>🟢 Available Time</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#10b981' }}>
+                          {formatHms(efficiencyRecord.time_available_sec)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📲 Inbound Talk</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#a855f7' }}>
+                          {formatHms(efficiencyRecord.inbound_talk_time_sec)}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>📤 Outbound Talk</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#f59e0b' }}>
+                          {formatHms(efficiencyRecord.outbound_talk_time_sec)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 11, color: 'var(--text-muted)' }}>
+                    Calls made: {efficiencyRecord.calls_made} &bull; Received: {efficiencyRecord.calls_received} &bull; Missed: {efficiencyRecord.calls_missed}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Goal Progress Bars */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 16 }}>

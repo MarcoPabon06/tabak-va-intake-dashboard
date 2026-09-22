@@ -434,6 +434,57 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_doc_ack_username ON document_acknowledgements(username);
     CREATE INDEX IF NOT EXISTS idx_doc_ack_status ON document_acknowledgements(status);
     CREATE INDEX IF NOT EXISTS idx_doc_ack_user_status ON document_acknowledgements(username, status);
+
+    CREATE TABLE IF NOT EXISTS va_dialer_efficiency_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      agent_username TEXT,
+      lob TEXT DEFAULT 'VA',
+      avg_talk_time TEXT,
+      total_talk_time_sec INTEGER DEFAULT 0,
+      time_available_sec INTEGER DEFAULT 0,
+      wrap_up_time_sec INTEGER DEFAULT 0,
+      busy_time_sec INTEGER DEFAULT 0,
+      offline_time_sec INTEGER DEFAULT 0,
+      inbound_talk_time_sec INTEGER DEFAULT 0,
+      outbound_talk_time_sec INTEGER DEFAULT 0,
+      calls_made INTEGER DEFAULT 0,
+      calls_received INTEGER DEFAULT 0,
+      calls_recycled INTEGER DEFAULT 0,
+      calls_declined INTEGER DEFAULT 0,
+      calls_missed INTEGER DEFAULT 0,
+      total_calls_handled INTEGER DEFAULT 0,
+      avg_wrap_up_per_call_sec REAL DEFAULT 0,
+      is_narrative_rep INTEGER DEFAULT 0,
+      is_onboarding_rep INTEGER DEFAULT 0,
+      meeting_credit_sec INTEGER DEFAULT 0,
+      meeting_notes TEXT,
+      exception_status TEXT DEFAULT 'NONE' CHECK(exception_status IN ('NONE', 'APPROVED_EXCEPTION', 'PENDING_REVIEW', 'REJECTED')),
+      exception_reason TEXT,
+      exception_reviewed_by TEXT,
+      exception_reviewed_at TEXT,
+      wrap_up_status TEXT DEFAULT 'COMPLIANT' CHECK(wrap_up_status IN ('COMPLIANT', 'WARNING', 'VIOLATION', 'EXCUSED')),
+      busy_status TEXT DEFAULT 'COMPLIANT' CHECK(busy_status IN ('COMPLIANT', 'WARNING', 'VIOLATION', 'EXCUSED')),
+      raw_date_range TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_va_dialer_eff_date_agent ON va_dialer_efficiency_records(date, agent_name);
+    CREATE INDEX IF NOT EXISTS idx_va_dialer_eff_date ON va_dialer_efficiency_records(date);
+    CREATE INDEX IF NOT EXISTS idx_va_dialer_eff_agent ON va_dialer_efficiency_records(agent_name);
+    CREATE INDEX IF NOT EXISTS idx_va_dialer_eff_status ON va_dialer_efficiency_records(wrap_up_status, busy_status);
+
+    CREATE TABLE IF NOT EXISTS va_dialer_narrative_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_start_date TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      agent_username TEXT,
+      assigned_by TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_va_narrative_week_agent ON va_dialer_narrative_assignments(week_start_date, agent_name);
+    CREATE INDEX IF NOT EXISTS idx_va_narrative_week ON va_dialer_narrative_assignments(week_start_date);
   `)
 
   // Run self-healing schema migrations for new columns
