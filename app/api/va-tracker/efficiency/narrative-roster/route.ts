@@ -29,14 +29,17 @@ export async function GET(req: NextRequest) {
     const db = getDb()
 
     // 1. Get all active VA intake reps
-    const activeReps = db.prepare(`SELECT name, username FROM users WHERE active = 1 AND lob = 'VA' AND role = 'regular' ORDER BY display_name ASC`).all() as any[]
+    const activeReps = db.prepare(`SELECT display_name, username FROM users WHERE active = 1 AND lob = 'VA' AND role = 'regular' ORDER BY display_name ASC`).all() as any[]
     
     // Also include reps from agents table if not in users
     const agentRows = db.prepare(`SELECT name FROM agents WHERE active = 1 AND lob = 'VA' ORDER BY name ASC`).all() as any[]
     const combinedRepsMap = new Map<string, string>()
-    activeReps.forEach(r => combinedRepsMap.set(r.name, r.username))
+    activeReps.forEach(r => {
+      const repName = r.display_name || r.username
+      if (repName) combinedRepsMap.set(repName, r.username)
+    })
     agentRows.forEach(a => {
-      if (!combinedRepsMap.has(a.name)) {
+      if (a.name && !combinedRepsMap.has(a.name)) {
         combinedRepsMap.set(a.name, a.name.toLowerCase().replace(/[^a-z0-9]/g, ''))
       }
     })
