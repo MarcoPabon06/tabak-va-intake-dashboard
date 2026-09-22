@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { safeFetchJson } from '@/lib/apiClient'
-import { format, differenceInMinutes, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
+import { getCentralDiffMinutes, getBusinessDate } from '@/lib/dateUtils'
 import { VA_OUTCOME_REASONS } from '@/app/va-tracker/page'
 
 export interface ScheduledCallback {
@@ -39,12 +40,20 @@ export function downloadIcsFile(cb: ScheduledCallback) {
   try {
     const [year, month, day] = cb.callback_date.split('-').map(Number)
     const [hour, minute] = cb.callback_time.split(':').map(Number)
-    const start = new Date(year, month - 1, day, hour, minute)
-    const end = new Date(start.getTime() + 30 * 60 * 1000)
-
     const pad = (n: number) => String(n).padStart(2, '0')
+    const startStr = `${year}${pad(month)}${pad(day)}T${pad(hour)}${pad(minute)}00`
+
+    // Default 30 min duration
+    let endHour = hour
+    let endMinute = minute + 30
+    if (endMinute >= 60) {
+      endHour += 1
+      endMinute -= 60
+    }
+    const endStr = `${year}${pad(month)}${pad(day)}T${pad(endHour)}${pad(endMinute)}00`
+
     const formatIcsDate = (d: Date) =>
-      `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
+      `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`
 
     const icsContent = [
       'BEGIN:VCALENDAR',
@@ -54,15 +63,15 @@ export function downloadIcsFile(cb: ScheduledCallback) {
       'BEGIN:VEVENT',
       `UID:va-callback-${cb.id}-${Date.now()}@tabaklaw.com`,
       `DTSTAMP:${formatIcsDate(new Date())}`,
-      `DTSTART:${formatIcsDate(start)}`,
-      `DTEND:${formatIcsDate(end)}`,
-      `SUMMARY:VA Callback: ${cb.veteran_name}${cb.lead_id ? ` (#${cb.lead_id})` : ''}`,
-      `DESCRIPTION:Scheduled Law Ruler callback with ${cb.veteran_name}.\n${cb.phone_number ? `Phone: ${cb.phone_number}\n` : ''}${cb.notes ? `Notes: ${cb.notes}\n` : ''}`,
+      `DTSTART;TZID=America/Chicago:${startStr}`,
+      `DTEND;TZID=America/Chicago:${endStr}`,
+      `SUMMARY:VA Callback (CT): ${cb.veteran_name}${cb.lead_id ? ` (#${cb.lead_id})` : ''}`,
+      `DESCRIPTION:Scheduled Law Ruler callback with ${cb.veteran_name} (US Central Time).\n${cb.phone_number ? `Phone: ${cb.phone_number}\n` : ''}${cb.notes ? `Notes: ${cb.notes}\n` : ''}`,
       'STATUS:CONFIRMED',
       'BEGIN:VALARM',
       'TRIGGER:-PT5M',
       'ACTION:DISPLAY',
-      'DESCRIPTION:Reminder: VA Intake Callback',
+      'DESCRIPTION:Reminder: VA Intake Callback (Central US Time)',
       'END:VALARM',
       'END:VEVENT',
       'END:VCALENDAR',
@@ -72,7 +81,7 @@ export function downloadIcsFile(cb: ScheduledCallback) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `Callback_${cb.veteran_name.replace(/[^a-zA-Z0-9]/g, '_')}.ics`)
+    link.setAttribute('download', `Callback_${cb.veteran_name.replace(/[^a-zA-Z0-9]/g, '_')}_CT.ics`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -150,7 +159,7 @@ export default function VaCallbacksQueue({
     }
   }
 
-  // Status Badge and Relative Countdown Helper
+  // Status Badge and Relative Countdown Helper (Central US Time / CT)
   const renderTimeStatus = (cb: ScheduledCallback) => {
     if (cb.status === 'COMPLETED') {
       return (
@@ -160,9 +169,7 @@ export default function VaCallbacksQueue({
       )
     }
 
-    const now = new Date()
-    const target = new Date(`${cb.callback_date}T${cb.callback_time}:00`)
-    const diffMins = differenceInMinutes(target, now)
+    const diffMins = getCentralDiffMinutes(cb.callback_date, cb.callback_time)
 
     if (diffMins < 0) {
       const overdueMins = Math.abs(diffMins)
@@ -300,7 +307,7 @@ export default function VaCallbacksQueue({
                 <th style={{ padding: '12px 16px', fontWeight: 700 }}>Veteran Name</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Lead ID</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Phone</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Scheduled Date & Time</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Scheduled Date & Time (CT)</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Status / Countdown</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Notes</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Specialist</th>
@@ -364,7 +371,7 @@ export default function VaCallbacksQueue({
                     {/* Scheduled Date & Time */}
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ fontWeight: 700, color: '#f8fafc' }}>{cb.callback_date}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>at {cb.callback_time}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>at {cb.callback_time} CT</div>
                     </td>
 
                     {/* Countdown / Status */}
@@ -515,7 +522,7 @@ export function ScheduleCallbackModal({
   const [veteranName, setVeteranName] = useState('')
   const [leadId, setLeadId] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')
-  const [callbackDate, setCallbackDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [callbackDate, setCallbackDate] = useState(getBusinessDate())
   const [callbackTime, setCallbackTime] = useState('14:00')
   const [repName, setRepName] = useState('')
   const [notes, setNotes] = useState('')
@@ -562,12 +569,17 @@ export function ScheduleCallbackModal({
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 20 }} onClick={onClose}>
       <div className="glass-card fade-in" style={{ maxWidth: 520, width: '100%', padding: 26, background: '#0a1628', border: '1px solid rgba(245,158,11,0.4)' }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 22 }}>⏰</span>
-            <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#fbbf24' }}>Schedule VA Call Back</h3>
+            <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: '#fbbf24' }}>Schedule VA Call Back · Central US Time (CT)</h3>
           </div>
           <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: '#93c5fd', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+          <span>⏰</span>
+          <span>All callbacks are scheduled and monitored in <strong>US Central Time (CT / America/Chicago)</strong>.</span>
         </div>
 
         {error && (
@@ -645,7 +657,7 @@ export function ScheduleCallbackModal({
               />
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Callback Time *</label>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>Callback Time (Central US Time / CT) *</label>
               <input
                 type="time"
                 required
@@ -868,7 +880,7 @@ function QuickRescheduleModal({
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 20 }} onClick={onClose}>
       <div className="glass-card fade-in" style={{ maxWidth: 440, width: '100%', padding: 24, background: '#0a1628', border: '1px solid rgba(245,158,11,0.4)' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fbbf24' }}>Reschedule Callback</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fbbf24' }}>Reschedule Callback · Central US Time (CT)</h3>
           <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
         </div>
 
@@ -892,7 +904,7 @@ function QuickRescheduleModal({
               />
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>New Time *</label>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>New Time (Central US Time / CT) *</label>
               <input
                 type="time"
                 required

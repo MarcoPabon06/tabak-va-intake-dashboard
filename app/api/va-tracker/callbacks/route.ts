@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { isAuthorizedForVaTracker, isAuthorizedVaTeamLead } from '../route'
 import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
-import { getBusinessDate } from '@/lib/dateUtils'
+import { getBusinessDate, getBusinessTime } from '@/lib/dateUtils'
 
 export const CALLBACK_OUTCOME_OPTIONS = [
   'Contacting',
@@ -36,10 +36,10 @@ export async function GET(req: NextRequest) {
     const currentDisplayName = session.user?.name || ''
     const isMaster = isAuthorizedVaTeamLead(session)
 
-    // Current local time string (YYYY-MM-DD HH:mm:ss)
+    // Current Central US time strings (America/Chicago)
     const now = new Date()
     const todayStr = getBusinessDate(now)
-    const currentTimeStr = now.toTimeString().slice(0, 5) // HH:mm
+    const currentTimeStr = getBusinessTime(now) // HH:mm in America/Chicago
     const currentDateTimeStr = `${todayStr} ${currentTimeStr}:00`
 
     // Scoping condition
@@ -47,44 +47,72 @@ export async function GET(req: NextRequest) {
     const scopeParams: any[] = []
 
     if (!isMaster && userRole === 'regular') {
-      scopeSql = ` AND (LOWER(TRIM(rep_username)) = LOWER(TRIM(?)) OR LOWER(TRIM(rep_name)) = LOWER(TRIM(?)))`
-      scopeParams.push(currentUsername, currentDisplayName)
+      scopeSql = ` AND (
+        LOWER(TRIM(rep_username)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(rep_name)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(COALESCE(created_by, ''))) = LOWER(TRIM(?))
+      )`
+      scopeParams.push(currentUsername, currentDisplayName, currentUsername)
     } else if (rep && rep !== 'All') {
-      scopeSql = ` AND (LOWER(TRIM(rep_username)) = LOWER(TRIM(?)) OR LOWER(TRIM(rep_name)) = LOWER(TRIM(?)))`
-      scopeParams.push(rep, rep)
+      scopeSql = ` AND (
+        LOWER(TRIM(rep_username)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(rep_name)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(COALESCE(created_by, ''))) = LOWER(TRIM(?))
+      )`
+      scopeParams.push(rep, rep, rep)
     }
 
-    // SPECIAL LIGHTWEIGHT MODE: alerts polling
+    // SPECIAL LIGHTWEIGHT MODE: alerts polling (Restricted strictly to Intake Reps)
     if (view === 'alerts') {
+      // Administrators and Team Leads do not get popup reminders
+      if (userRole !== 'regular' || isMaster) {
+        return NextResponse.json({
+          dueNow: [],
+          overdueCount: 0,
+          dueTodayCount: 0,
+          currentDateTime: currentDateTimeStr,
+          timezone: 'America/Chicago',
+        })
+      }
+
+      // Strictly scope to the logged-in Intake Rep who sets it up or is assigned
+      const repAlertScopeSql = ` AND (
+        LOWER(TRIM(rep_username)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(rep_name)) = LOWER(TRIM(?))
+        OR LOWER(TRIM(COALESCE(created_by, ''))) = LOWER(TRIM(?))
+      )`
+      const repAlertParams = [currentUsername, currentDisplayName, currentUsername]
+
       // Find callbacks that are PENDING and scheduled_datetime <= currentDateTimeStr (Due now or Overdue within last 24h)
       const dueNowQuery = `
         SELECT * FROM va_scheduled_callbacks
         WHERE status = 'PENDING'
           AND scheduled_datetime <= ?
           AND callback_date >= date(?, '-2 day')
-          ${scopeSql}
+          ${repAlertScopeSql}
         ORDER BY scheduled_datetime ASC
         LIMIT 10
       `
-      const dueNow = db.prepare(dueNowQuery).all(currentDateTimeStr, todayStr, ...scopeParams)
+      const dueNow = db.prepare(dueNowQuery).all(currentDateTimeStr, todayStr, ...repAlertParams)
 
-      // Total overdue count
+      // Total overdue count for this rep
       const overdueCountRow = db.prepare(`
         SELECT COUNT(*) as count FROM va_scheduled_callbacks
-        WHERE status = 'PENDING' AND scheduled_datetime < ? ${scopeSql}
-      `).get(currentDateTimeStr, ...scopeParams) as { count: number }
+        WHERE status = 'PENDING' AND scheduled_datetime < ? ${repAlertScopeSql}
+      `).get(currentDateTimeStr, ...repAlertParams) as { count: number }
 
-      // Total due today count
+      // Total due today count for this rep
       const dueTodayCountRow = db.prepare(`
         SELECT COUNT(*) as count FROM va_scheduled_callbacks
-        WHERE status = 'PENDING' AND callback_date = ? ${scopeSql}
-      `).get(todayStr, ...scopeParams) as { count: number }
+        WHERE status = 'PENDING' AND callback_date = ? ${repAlertScopeSql}
+      `).get(todayStr, ...repAlertParams) as { count: number }
 
       return NextResponse.json({
         dueNow,
         overdueCount: overdueCountRow?.count || 0,
         dueTodayCount: dueTodayCountRow?.count || 0,
         currentDateTime: currentDateTimeStr,
+        timezone: 'America/Chicago',
       })
     }
 
@@ -195,8 +223,8 @@ export async function POST(req: NextRequest) {
       INSERT INTO va_scheduled_callbacks (
         lead_id, veteran_name, phone_number, rep_name, rep_username,
         callback_date, callback_time, scheduled_datetime, notes,
-        status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', datetime('now'), datetime('now'))
+        status, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
     `)
 
     const result = stmt.run(
@@ -208,7 +236,8 @@ export async function POST(req: NextRequest) {
       callback_date,
       callback_time,
       scheduledDatetime,
-      notes ? sanitizeCellText(notes) : null
+      notes ? sanitizeCellText(notes) : null,
+      sessionUsername
     )
 
     return NextResponse.json({
@@ -251,7 +280,8 @@ export async function PUT(req: NextRequest) {
     if (!isMaster) {
       const isOwner =
         existing.rep_username?.toLowerCase() === sessionUsername.toLowerCase() ||
-        existing.rep_name?.toLowerCase() === sessionDisplayName.toLowerCase()
+        existing.rep_name?.toLowerCase() === sessionDisplayName.toLowerCase() ||
+        existing.created_by?.toLowerCase() === sessionUsername.toLowerCase()
       if (!isOwner) {
         return NextResponse.json({ error: 'Forbidden: You can only update your own callbacks' }, { status: 403 })
       }
@@ -453,7 +483,8 @@ export async function DELETE(req: NextRequest) {
     if (!isMaster) {
       const isOwner =
         existing.rep_username?.toLowerCase() === sessionUsername.toLowerCase() ||
-        existing.rep_name?.toLowerCase() === sessionDisplayName.toLowerCase()
+        existing.rep_name?.toLowerCase() === sessionDisplayName.toLowerCase() ||
+        existing.created_by?.toLowerCase() === sessionUsername.toLowerCase()
       if (!isOwner) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }

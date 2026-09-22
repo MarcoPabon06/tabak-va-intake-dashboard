@@ -25,7 +25,10 @@ export default function ScheduledCallbackReminder() {
   const user = session?.user as any
   const userRole = user?.role || 'regular'
   const userLob = user?.lob || 'VA'
-  const isVaAuthorized = userRole === 'master' || userRole === 'superadmin' || userRole === 'admin' || (userRole === 'regular' && userLob === 'VA')
+
+  // Proactive pop-up alerts and chimes are strictly for the Intake Rep
+  // Administrators and Team Leads are explicitly exempted from pop-up interruptions
+  const isIntakeRep = userRole === 'regular' && userLob === 'VA'
 
   const [activeAlert, setActiveAlert] = useState<ScheduledCallback | null>(null)
   const [snoozedIds, setSnoozedIds] = useState<Record<number, number>>({}) // id -> snoozeUntil timestamp
@@ -87,7 +90,7 @@ export default function ScheduledCallbackReminder() {
 
   // Check alerts every 30 seconds
   const checkCallbacks = async () => {
-    if (!isVaAuthorized || !session) return
+    if (!isIntakeRep || !session) return
     try {
       const data = await safeFetchJson('/api/va-tracker/callbacks?view=alerts')
       setOverdueCount(data.overdueCount || 0)
@@ -118,7 +121,7 @@ export default function ScheduledCallbackReminder() {
   }
 
   useEffect(() => {
-    if (!session || !isVaAuthorized) return
+    if (!session || !isIntakeRep) return
 
     checkCallbacks()
     const interval = setInterval(checkCallbacks, 30000) // Every 30 seconds
@@ -131,7 +134,7 @@ export default function ScheduledCallbackReminder() {
       clearInterval(interval)
       window.removeEventListener('va-tracker-updated', handleUpdate)
     }
-  }, [session, isVaAuthorized, snoozedIds])
+  }, [session, isIntakeRep, snoozedIds])
 
   // Snooze for 5 minutes
   const handleSnooze = (minutes = 5) => {
@@ -217,7 +220,7 @@ export default function ScheduledCallbackReminder() {
     }
   }
 
-  if (!isVaAuthorized || !activeAlert) return null
+  if (!isIntakeRep || !activeAlert) return null
 
   return (
     <div
@@ -264,7 +267,7 @@ export default function ScheduledCallbackReminder() {
                 Scheduled Callback Due NOW!
               </h3>
               <div style={{ fontSize: 11, color: '#fecaca', fontWeight: 600 }}>
-                Law Ruler VA Intake Reminder · Update Required
+                Law Ruler VA Intake Reminder · Central US Time (CT)
               </div>
             </div>
           </div>
@@ -311,7 +314,7 @@ export default function ScheduledCallbackReminder() {
                   borderRadius: 12,
                 }}
               >
-                🔴 Due at {activeAlert.callback_time}
+                🔴 Due at {activeAlert.callback_time} CT
               </span>
             </div>
 
@@ -497,7 +500,7 @@ export default function ScheduledCallbackReminder() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 4 }}>
-                    New Time *
+                    New Time (Central US Time / CT) *
                   </label>
                   <input
                     type="time"

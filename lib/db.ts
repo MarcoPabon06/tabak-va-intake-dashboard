@@ -375,6 +375,7 @@ function initSchema(db: Database.Database) {
       other_reason_notes TEXT,
       resolved_at TEXT,
       resolved_by TEXT,
+      created_by TEXT,
       linked_lead_record_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
@@ -471,6 +472,7 @@ function initSchema(db: Database.Database) {
     { table: 'va_lead_records', column: 'last_edited_by', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'phone_number', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'scheduled_callback_id', definition: 'INTEGER' },
+    { table: 'va_scheduled_callbacks', column: 'created_by', definition: 'TEXT' },
   ]
 
   for (const alter of alterColumns) {
