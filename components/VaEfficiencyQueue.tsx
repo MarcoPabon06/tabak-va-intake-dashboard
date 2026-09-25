@@ -300,16 +300,16 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
         {/* Team Wrap-Up KPI */}
         <div className="glass-card" style={{ padding: '14px 18px', borderLeft: '4px solid #3b82f6' }}>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>
-            Team Avg Wrap-Up Time
+            Team Avg Wrap-Up Velocity
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 20, fontWeight: 900, color: summary.avg_wrap_up_time_sec > 7200 ? '#ef4444' : '#fff' }}>
-              {formatHms(summary.avg_wrap_up_time_sec)}
+            <span style={{ fontSize: 20, fontWeight: 900, color: summary.avg_wrap_up_per_call_sec > 120 ? '#ef4444' : summary.avg_wrap_up_per_call_sec > 90 ? '#f59e0b' : '#fff' }}>
+              {summary.avg_wrap_up_per_call_sec}s
             </span>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/ 02:00:00 cap</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>/ call (Target: ≤90s)</span>
           </div>
           <div style={{ fontSize: 11, color: '#60a5fa', marginTop: 4, fontWeight: 600 }}>
-            ⚡ Avg {formatCompact(summary.avg_wrap_up_per_call_sec)} / call (Target: 60–90s)
+            Total avg duration: {formatHms(summary.avg_wrap_up_time_sec)}
           </div>
         </div>
 
@@ -435,7 +435,7 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Calls Handled</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Total Talk Time</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Available</th>
-                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Wrap-Up Time (Cap: 2h)</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Wrap-Up Pacing (Target: ≤90s)</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Time on Busy</th>
                 <th style={{ padding: '12px 14px', fontWeight: 700 }}>Time Offline</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
@@ -557,20 +557,26 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                         {formatHms(r.time_available_sec)}
                       </td>
 
-                      {/* Wrap-Up Time with 2h Cap and Avg per call */}
+                      {/* Wrap-Up Pacing with Avg per call (90s target) */}
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontWeight: 800, color: r.wrap_up_time_sec > 7200 && !isExcused ? '#f87171' : '#fff' }}>
-                            {formatHms(r.wrap_up_time_sec)}
+                          <span style={{ fontWeight: 800, color: r.wrap_up_status === 'VIOLATION' && !isExcused ? '#f87171' : r.wrap_up_status === 'WARNING' && !isExcused ? '#fbbf24' : '#fff' }}>
+                            {r.avg_wrap_up_per_call_sec}s
+                            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 3 }}>/ call</span>
                           </span>
                           {r.wrap_up_status === 'VIOLATION' && !isExcused && (
                             <span style={{ fontSize: 10, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', padding: '1px 5px', borderRadius: 4, fontWeight: 800 }}>
-                              Over 2h Cap
+                              Outlier (&gt;{r.is_onboarding_rep ? '150s' : '120s'})
                             </span>
                           )}
                           {r.wrap_up_status === 'WARNING' && !isExcused && (
                             <span style={{ fontSize: 10, background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
-                              Near Cap
+                              Near Limit
+                            </span>
+                          )}
+                          {r.wrap_up_status === 'COMPLIANT' && (
+                            <span style={{ fontSize: 10, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                              On Target
                             </span>
                           )}
                           {isExcused && (
@@ -579,10 +585,11 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 10.5, color: r.avg_wrap_up_per_call_sec > 120 ? '#f87171' : '#94a3b8', marginTop: 2 }}>
-                          ⚡ <strong>{r.avg_wrap_up_per_call_sec}s</strong> / call
-                          {r.avg_wrap_up_per_call_sec <= 60 && ' (🚀 Fast)'}
-                          {r.avg_wrap_up_per_call_sec > 120 && ' (⚠️ Lingering)'}
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Total: {formatHms(r.wrap_up_time_sec)}
+                          {r.is_onboarding_rep === 1 && (
+                            <span style={{ color: '#c084fc', marginLeft: 4 }}>&bull; 🌱 Trainee (≤120s)</span>
+                          )}
                         </div>
                       </td>
 

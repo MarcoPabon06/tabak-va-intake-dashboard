@@ -676,7 +676,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
                 </div>
               </div>
               <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                Standards: 2h max wrap-up &bull; 30m busy allowance (2.5h for narratives)
+                Standards: ≤90s avg wrap-up/call (≤120s for onboarding) &bull; 30m busy allowance (2.5h for narratives)
               </div>
             </div>
           ) : (
@@ -706,94 +706,106 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
               )}
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                {/* Wrap-Up Card */}
-                <div
-                  style={{
-                    padding: 16,
-                    borderRadius: 10,
-                    background: 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${
-                      efficiencyRecord.wrap_up_status === 'VIOLATION'
-                        ? 'rgba(239,68,68,0.4)'
-                        : efficiencyRecord.wrap_up_status === 'WARNING'
-                        ? 'rgba(245,158,11,0.4)'
-                        : efficiencyRecord.wrap_up_status === 'EXCUSED'
-                        ? 'rgba(168,85,247,0.4)'
-                        : 'rgba(16,185,129,0.3)'
-                    }`,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                      Wrap-Up Time (2h Cap)
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        padding: '2px 8px',
-                        borderRadius: 10,
-                        background:
-                          efficiencyRecord.wrap_up_status === 'VIOLATION'
-                            ? 'rgba(239,68,68,0.2)'
-                            : efficiencyRecord.wrap_up_status === 'WARNING'
-                            ? 'rgba(245,158,11,0.2)'
-                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
-                            ? 'rgba(168,85,247,0.2)'
-                            : 'rgba(16,185,129,0.2)',
-                        color:
-                          efficiencyRecord.wrap_up_status === 'VIOLATION'
-                            ? '#ef4444'
-                            : efficiencyRecord.wrap_up_status === 'WARNING'
-                            ? '#f59e0b'
-                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
-                            ? '#c084fc'
-                            : '#10b981',
-                      }}
-                    >
-                      {efficiencyRecord.wrap_up_status === 'VIOLATION'
-                        ? '🔴 Over Limit'
-                        : efficiencyRecord.wrap_up_status === 'WARNING'
-                        ? '🟡 Warning'
-                        : efficiencyRecord.wrap_up_status === 'EXCUSED'
-                        ? '🟣 Excused'
-                        : '🟢 Compliant'}
-                    </span>
-                  </div>
+                {/* Wrap-Up Velocity Card */}
+                {(() => {
+                  const targetSec = efficiencyRecord.is_onboarding_rep === 1 ? 120 : 90
+                  const warningMaxSec = efficiencyRecord.is_onboarding_rep === 1 ? 150 : 120
+                  const avgSec = Math.round(efficiencyRecord.avg_wrap_up_per_call_sec || 0)
+                  const wrapPct = Math.min(Math.round((avgSec / targetSec) * 100), 100)
 
-                  <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>
-                    {formatHms(efficiencyRecord.wrap_up_time_sec)}
-                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>
-                      / 02:00:00 cap
-                    </span>
-                  </div>
-
-                  <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                  return (
                     <div
                       style={{
-                        width: `${Math.min(Math.round((efficiencyRecord.wrap_up_time_sec / 7200) * 100), 100)}%`,
-                        height: '100%',
-                        background:
+                        padding: 16,
+                        borderRadius: 10,
+                        background: 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${
                           efficiencyRecord.wrap_up_status === 'VIOLATION'
-                            ? '#ef4444'
+                            ? 'rgba(239,68,68,0.4)'
                             : efficiencyRecord.wrap_up_status === 'WARNING'
-                            ? '#f59e0b'
-                            : '#10b981',
-                        borderRadius: 3,
+                            ? 'rgba(245,158,11,0.4)'
+                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                            ? 'rgba(168,85,247,0.4)'
+                            : 'rgba(16,185,129,0.3)'
+                        }`,
                       }}
-                    />
-                  </div>
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          Wrap-Up Pacing ({targetSec}s Target)
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            background:
+                              efficiencyRecord.wrap_up_status === 'VIOLATION'
+                                ? 'rgba(239,68,68,0.2)'
+                                : efficiencyRecord.wrap_up_status === 'WARNING'
+                                ? 'rgba(245,158,11,0.2)'
+                                : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                                ? 'rgba(168,85,247,0.2)'
+                                : 'rgba(16,185,129,0.2)',
+                            color:
+                              efficiencyRecord.wrap_up_status === 'VIOLATION'
+                                ? '#ef4444'
+                                : efficiencyRecord.wrap_up_status === 'WARNING'
+                                ? '#f59e0b'
+                                : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                                ? '#c084fc'
+                                : '#10b981',
+                          }}
+                        >
+                          {efficiencyRecord.wrap_up_status === 'VIOLATION'
+                            ? `🔴 Outlier (>${warningMaxSec}s)`
+                            : efficiencyRecord.wrap_up_status === 'WARNING'
+                            ? '🟡 Near Limit'
+                            : efficiencyRecord.wrap_up_status === 'EXCUSED'
+                            ? '🟣 Excused'
+                            : '🟢 On Target'}
+                        </span>
+                      </div>
 
-                  <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Avg Wrap-Up / Call:</span>
-                    <strong style={{ color: efficiencyRecord.avg_wrap_up_per_call_sec > 90 ? '#f59e0b' : '#10b981' }}>
-                      {Math.round(efficiencyRecord.avg_wrap_up_per_call_sec)}s / call
-                    </strong>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {efficiencyRecord.total_calls_handled} total calls handled
-                  </div>
-                </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 2 }}>
+                        {avgSec}s
+                        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>
+                          / call (Target: ≤{targetSec}s)
+                        </span>
+                      </div>
+
+                      <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', margin: '8px 0' }}>
+                        <div
+                          style={{
+                            width: `${wrapPct}%`,
+                            height: '100%',
+                            background:
+                              efficiencyRecord.wrap_up_status === 'VIOLATION'
+                                ? '#ef4444'
+                                : efficiencyRecord.wrap_up_status === 'WARNING'
+                                ? '#f59e0b'
+                                : '#10b981',
+                            borderRadius: 3,
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Total Wrap-Up:</span>
+                        <strong style={{ color: '#fff' }}>
+                          {formatHms(efficiencyRecord.wrap_up_time_sec)}
+                        </strong>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {efficiencyRecord.total_calls_handled} total calls handled
+                        {efficiencyRecord.is_onboarding_rep === 1 && (
+                          <span style={{ color: '#c084fc', marginLeft: 6 }}>&bull; 🌱 Trainee Grace (+30s)</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Busy Time Card */}
                 <div

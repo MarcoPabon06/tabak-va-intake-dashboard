@@ -17,15 +17,33 @@ export function evaluateCompliance(record: {
   exception_status: string
 }) {
   // 1. Wrap-Up Compliance:
-  // Policy: 2 hours (7,200s) maximum ceiling.
-  // Warning at 1h 45m (6,300s).
+  // Evaluated on average wrap-up velocity per call rather than raw daily total.
+  // Standard Reps: Target <= 90s (Compliant), 91s - 120s (Warning), > 120s (Violation / Outlier).
+  // Onboarding Reps: Target <= 120s (Compliant), 121s - 150s (Warning), > 150s (Violation / Outlier).
+  // Low-Volume Protection: Reps with fewer than 15 calls and <= 45 min total wrap-up (2,700s) are protected from outlier penalties.
   let wrapUpStatus = 'COMPLIANT'
   if (record.exception_status === 'APPROVED_EXCEPTION') {
     wrapUpStatus = 'EXCUSED'
-  } else if (record.wrap_up_time_sec > 7200) {
-    wrapUpStatus = 'VIOLATION'
-  } else if (record.wrap_up_time_sec > 6300) {
-    wrapUpStatus = 'WARNING'
+  } else {
+    const totalCalls = record.total_calls_handled || 0
+    const avgWrapUp = totalCalls > 0 ? (record.wrap_up_time_sec / totalCalls) : 0
+    const isOnboarding = record.is_onboarding_rep === 1
+
+    const targetSec = isOnboarding ? 120 : 90
+    const warningMaxSec = isOnboarding ? 150 : 120
+
+    // Low call volume safeguard floor: if fewer than 15 calls handled and total wrap-up is <= 45 min, protect from outlier penalty
+    const isLowVolumeProtected = totalCalls < 15 && record.wrap_up_time_sec <= 2700
+
+    if (isLowVolumeProtected) {
+      wrapUpStatus = 'COMPLIANT'
+    } else if (avgWrapUp > warningMaxSec) {
+      wrapUpStatus = 'VIOLATION'
+    } else if (avgWrapUp > targetSec) {
+      wrapUpStatus = 'WARNING'
+    } else {
+      wrapUpStatus = 'COMPLIANT'
+    }
   }
 
   // 2. Busy Compliance:
