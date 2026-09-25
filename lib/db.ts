@@ -750,6 +750,38 @@ function initSchema(db: Database.Database) {
 
   // Clean up any daily performance records with invalid date formats (e.g. MM/DD/YYYY)
   db.exec("DELETE FROM daily_performance WHERE date NOT LIKE '____-__-__'")
+
+  // Auto-migrate / re-evaluate existing dialer efficiency records to the velocity standard (<=90s)
+  try {
+    const records = db.prepare(`SELECT id, wrap_up_time_sec, total_calls_handled, is_onboarding_rep, wrap_up_status, exception_status FROM va_dialer_efficiency_records WHERE exception_status != 'APPROVED_EXCEPTION'`).all() as any[]
+    const updStmt = db.prepare(`UPDATE va_dialer_efficiency_records SET wrap_up_status = ?, avg_wrap_up_per_call_sec = ?, updated_at = datetime('now') WHERE id = ?`)
+    for (const r of records) {
+      const totalCalls = r.total_calls_handled || 0
+      const avgWrapUp = totalCalls > 0 ? (r.wrap_up_time_sec / totalCalls) : 0
+      const isOnboarding = r.is_onboarding_rep === 1
+      const targetSec = isOnboarding ? 120 : 90
+      const warningMaxSec = isOnboarding ? 150 : 120
+      const isLowVolumeProtected = totalCalls < 15 && r.wrap_up_time_sec <= 2700
+
+      let newStatus = 'COMPLIANT'
+      if (isLowVolumeProtected) {
+        newStatus = 'COMPLIANT'
+      } else if (avgWrapUp > warningMaxSec) {
+        newStatus = 'VIOLATION'
+      } else if (avgWrapUp > targetSec) {
+        newStatus = 'WARNING'
+      } else {
+        newStatus = 'COMPLIANT'
+      }
+
+      const avgRounded = Math.round(avgWrapUp)
+      if (r.wrap_up_status !== newStatus) {
+        updStmt.run(newStatus, avgRounded, r.id)
+      }
+    }
+  } catch (e: any) {
+    // Silently ignore if table does not exist yet
+  }
 }
 
 export interface UserPermissions {

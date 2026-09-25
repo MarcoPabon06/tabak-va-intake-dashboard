@@ -170,15 +170,44 @@ export async function GET(req: NextRequest) {
     let warningCount = 0
     let excusedCount = 0
 
+    const updateStmt = db.prepare(`
+      UPDATE va_dialer_efficiency_records
+      SET wrap_up_status = ?, busy_status = ?, avg_wrap_up_per_call_sec = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `)
+
     records.forEach((r) => {
-      totalCallsHandled += r.total_calls_handled || 0
+      const totalCalls = r.total_calls_handled || 0
+      const avgWrapUp = totalCalls > 0 ? Math.round(r.wrap_up_time_sec / totalCalls) : 0
+      r.avg_wrap_up_per_call_sec = avgWrapUp
+
+      // Live re-evaluation against latest policy standards (ensuring legacy records are self-healed)
+      const { wrapUpStatus, busyStatus } = evaluateCompliance({
+        wrap_up_time_sec: r.wrap_up_time_sec || 0,
+        busy_time_sec: r.busy_time_sec || 0,
+        total_calls_handled: totalCalls,
+        is_narrative_rep: r.is_narrative_rep || 0,
+        is_onboarding_rep: r.is_onboarding_rep || 0,
+        meeting_credit_sec: r.meeting_credit_sec || 0,
+        exception_status: r.exception_status || 'NONE',
+      })
+
+      if (r.wrap_up_status !== wrapUpStatus || r.busy_status !== busyStatus) {
+        r.wrap_up_status = wrapUpStatus
+        r.busy_status = busyStatus
+        try {
+          updateStmt.run(wrapUpStatus, busyStatus, avgWrapUp, r.id)
+        } catch {}
+      }
+
+      totalCallsHandled += totalCalls
       totalTalkSec += r.total_talk_time_sec || 0
       totalWrapUpSec += r.wrap_up_time_sec || 0
       totalBusySec += r.busy_time_sec || 0
       totalAvailableSec += r.time_available_sec || 0
       totalOfflineSec += r.offline_time_sec || 0
 
-      if (r.exception_status === 'APPROVED_EXCEPTION') {
+      if (r.exception_status === 'APPROVED_EXCEPTION' || r.wrap_up_status === 'EXCUSED' || r.busy_status === 'EXCUSED') {
         excusedCount++
       } else if (r.wrap_up_status === 'VIOLATION' || r.busy_status === 'VIOLATION') {
         violationCount++
