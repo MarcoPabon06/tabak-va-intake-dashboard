@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getGeminiApiKey, callGeminiAPI } from '@/lib/aiReportGenerator'
+import { formatIssueDate, syncMemoHeaderDate } from '@/lib/documentHelpers'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,17 +18,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { prompt, category, target_lob, title } = body
+    const { prompt, category, target_lob, title, issue_date } = body
 
     if (!prompt?.trim()) {
       return NextResponse.json({ error: 'Prompt or instructions are required' }, { status: 400 })
     }
 
+    const { longDate, isoDate } = formatIssueDate(issue_date)
+
     const apiKey = getGeminiApiKey()
 
     if (!apiKey) {
       // Fallback: Generate structured legal-grade template
-      const fallback = generateTemplateContent(category, title || 'Operational Directive', target_lob)
+      const fallback = generateTemplateContent(category, title || 'Operational Directive', target_lob, longDate)
       return NextResponse.json({ content: fallback, fromFallback: true })
     }
 
@@ -38,6 +41,7 @@ The document will be issued to independent contractors working on the Tabak Law,
 Guiding Principles:
 1. Tone: Authoritative, fair, clear, and professional.
 2. Structure in Markdown:
+   - If including an executive memorandum header block (e.g. TO, COPIES TO, ISSUING ENTITY, CLIENT ACCOUNT, DATE, DOCUMENT CLASSIFICATION), the DATE MUST ALWAYS match the document issuance date: "${longDate}". NEVER use "March 30, 2026" or any arbitrary/hardcoded date.
    - ### 1. Background & Purpose
    - ### 2. Operational Guidelines & Policy Directives (use bolding and clear bullet points)
    - ### 3. Quality Standards & Compliance Requirements
@@ -46,18 +50,22 @@ Guiding Principles:
    - Issuing Agency: Andes Workforce, LLC
    - Client Law Firm: Tabak Law, LLC
    - Specialists are independent contractors of Andes Workforce, LLC assigned to Tabak Law, LLC.
-4. Do NOT include a signature box at the bottom, as the platform automatically renders a verified digital signature certificate block below your text.
-5. Write directly in clean Markdown.`
+4. Document Issuance Date: ${longDate} (${isoDate}).
+5. Do NOT include a signature box at the bottom, as the platform automatically renders a verified digital signature certificate block below your text.
+6. Write directly in clean Markdown.`
 
     const userPrompt = `Draft a formal ${category || 'Operational Policy'} communication.
 DOCUMENT TITLE: ${title || 'Operational Directive'}
+DOCUMENT ISSUE DATE: ${longDate} (${isoDate})
 TARGET DIVISION: ${target_lob ? target_lob + ' Intake Team' : 'All Intake Personnel'}
 ADMINISTRATOR INSTRUCTIONS:
 "${prompt}"
 
+CRITICAL REQUIREMENT: If you include a memorandum metadata header block (TO, COPIES TO, ISSUING ENTITY, CLIENT ACCOUNT, DATE, DOCUMENT CLASSIFICATION), you MUST set DATE: ${longDate}. NEVER output "March 30, 2026".
 Write the complete document body in Markdown now.`
 
-    const content = await callGeminiAPI(systemPrompt, userPrompt, apiKey)
+    const rawContent = await callGeminiAPI(systemPrompt, userPrompt, apiKey)
+    const content = syncMemoHeaderDate(rawContent, longDate)
     return NextResponse.json({ content, fromFallback: false })
   } catch (err: any) {
     console.error('[POST /api/documents/generate-ai error]:', err)
@@ -65,10 +73,11 @@ Write the complete document body in Markdown now.`
   }
 }
 
-function generateTemplateContent(category: string, title: string, lob?: string): string {
+function generateTemplateContent(category: string, title: string, lob?: string, issueDate?: string): string {
   const target = lob ? `${lob} Intake` : 'Legal Intake'
+  const dateStr = issueDate || formatIssueDate().longDate
   return `### 1. Purpose & Operational Scope
-This operational directive establishes mandatory standards and expectations for all independent contractors providing services to **Tabak Law, LLC** through **Andes Workforce, LLC** across the ${target} division.
+This operational directive establishes mandatory standards and expectations for all independent contractors providing services to **Tabak Law, LLC** through **Andes Workforce, LLC** across the ${target} division, effective as of **${dateStr}**.
 
 ### 2. Core Policy Guidelines
 - **Queue Readiness & Adherence:** Contractors are expected to maintain prompt schedule adherence, active call availability, and immediate responsiveness during assigned operational hours.

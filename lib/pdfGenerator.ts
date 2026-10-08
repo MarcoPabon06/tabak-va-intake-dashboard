@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf'
 import { TABAK_LOGO_BASE64, ANDES_LOGO_BASE64 } from './logoAssets'
+import { formatIssueDate, syncMemoHeaderDate } from './documentHelpers'
 
 export interface DocumentData {
   id: number
@@ -172,7 +173,9 @@ export function generateSignedDocumentPdf(
       .replace(/`([^`]+)`/g, '$1')
   }
 
-  const paragraphs = docData.content.split('\n')
+  const { longDate } = formatIssueDate(docData.created_at)
+  const sanitizedContent = syncMemoHeaderDate(docData.content, longDate)
+  const paragraphs = sanitizedContent.split('\n')
 
   for (let rawPara of paragraphs) {
     const trimmed = rawPara.trim()

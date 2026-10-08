@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { formatIssueDate, syncMemoHeaderDate } from '@/lib/documentHelpers'
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,7 +30,19 @@ export async function GET(req: NextRequest) {
         JOIN communication_documents d ON a.document_id = d.id
         WHERE a.username = ? AND d.status != 'ARCHIVED'
         ORDER BY CASE WHEN a.status = 'PENDING' AND d.status != 'VOIDED' THEN 0 ELSE 1 END, d.created_at DESC
-      `).all(user.email || user.name)
+      `).all(user.email || user.name) as any[]
+
+      // Synchronize and self-heal any memo dates in content
+      for (const a of acks) {
+        const { longDate } = formatIssueDate(a.created_at)
+        const healed = syncMemoHeaderDate(a.content, longDate)
+        if (healed !== a.content) {
+          try {
+            db.prepare('UPDATE communication_documents SET content = ? WHERE id = ?').run(healed, a.id)
+          } catch {}
+          a.content = healed
+        }
+      }
 
       const pending = acks.filter((a: any) => a.ack_status === 'PENDING' && a.doc_status !== 'VOIDED')
       const signed = acks.filter((a: any) => a.ack_status === 'SIGNED')
@@ -53,10 +66,20 @@ export async function GET(req: NextRequest) {
         LEFT JOIN document_acknowledgements a ON d.id = a.document_id
         WHERE d.id = ?
         GROUP BY d.id
-      `).get(docId)
+      `).get(docId) as any
 
       if (!doc) {
         return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+      }
+
+      // Synchronize and self-heal any memo date in content
+      const { longDate } = formatIssueDate(doc.created_at)
+      const healed = syncMemoHeaderDate(doc.content, longDate)
+      if (healed !== doc.content) {
+        try {
+          db.prepare('UPDATE communication_documents SET content = ? WHERE id = ?').run(healed, doc.id)
+        } catch {}
+        doc.content = healed
       }
 
       const roster = db.prepare(`
@@ -79,7 +102,18 @@ export async function GET(req: NextRequest) {
       WHERE d.status != 'DELETED' AND d.status != 'ARCHIVED'
       GROUP BY d.id
       ORDER BY CASE WHEN d.status = 'VOIDED' THEN 1 ELSE 0 END, d.created_at DESC
-    `).all()
+    `).all() as any[]
+
+    for (const d of documents) {
+      const { longDate } = formatIssueDate(d.created_at)
+      const healed = syncMemoHeaderDate(d.content, longDate)
+      if (healed !== d.content) {
+        try {
+          db.prepare('UPDATE communication_documents SET content = ? WHERE id = ?').run(healed, d.id)
+        } catch {}
+        d.content = healed
+      }
+    }
 
     // Also get list of active regular specialists for the recipient selector
     const activeSpecialists = db.prepare(`
@@ -122,6 +156,7 @@ export async function POST(req: NextRequest) {
       target_lob,
       target_users,
       issuing_entity = 'Andes Workforce, LLC (for Tabak Law, LLC)',
+      issue_date,
       deadline_date,
       is_urgent = false,
       require_signature = true,
@@ -131,21 +166,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Document Title and Content are required' }, { status: 400 })
     }
 
+    const { longDate, isoDate } = formatIssueDate(issue_date)
+    const sanitizedContent = syncMemoHeaderDate(content.trim(), longDate)
+
     const db = getDb()
+
+    const createdAt = issue_date
+      ? `${isoDate} ${new Date().toISOString().slice(11, 19)}`
+      : new Date().toISOString().replace('T', ' ').slice(0, 19)
 
     // 1. Insert communication document
     const insertDoc = db.prepare(`
       INSERT INTO communication_documents (
         title, category, content, target_type, target_lob, target_users,
         issuing_entity, created_by_id, created_by_name, created_by_username,
-        created_by_role, require_signature, deadline_date, is_urgent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_by_role, require_signature, deadline_date, is_urgent, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const result = insertDoc.run(
       title.trim(),
       category || 'Operational Policy',
-      content.trim(),
+      sanitizedContent,
       target_type,
       target_lob || null,
       target_users ? JSON.stringify(target_users) : null,
@@ -156,7 +198,9 @@ export async function POST(req: NextRequest) {
       user.role,
       require_signature ? 1 : 0,
       deadline_date || null,
-      is_urgent ? 1 : 0
+      is_urgent ? 1 : 0,
+      createdAt,
+      createdAt
     )
 
     const documentId = Number(result.lastInsertRowid)

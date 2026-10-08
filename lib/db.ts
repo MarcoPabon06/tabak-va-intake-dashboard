@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
+import { formatIssueDate, syncMemoHeaderDate } from './documentHelpers'
 
 const DB_PATH = process.env.DATABASE_PATH
   ? path.resolve(process.env.DATABASE_PATH)
@@ -777,6 +778,25 @@ function initSchema(db: Database.Database) {
       const avgRounded = Math.round(avgWrapUp)
       if (r.wrap_up_status !== newStatus) {
         updStmt.run(newStatus, avgRounded, r.id)
+      }
+    }
+  } catch (e: any) {
+    // Silently ignore if table does not exist yet
+  }
+
+  // Auto-heal any communication_documents with hallucinated "March 30, 2026" or mismatched memo dates
+  try {
+    const staleDocs = db.prepare(`
+      SELECT id, created_at, content FROM communication_documents
+      WHERE content LIKE '%March 30, 2026%' OR content LIKE '%March 30 2026%'
+    `).all() as { id: number; created_at: string; content: string }[]
+
+    for (const d of staleDocs) {
+      const { longDate } = formatIssueDate(d.created_at)
+      const healed = syncMemoHeaderDate(d.content, longDate)
+      if (healed !== d.content) {
+        db.prepare('UPDATE communication_documents SET content = ? WHERE id = ?').run(healed, d.id)
+        console.log(`[db] Self-healed communication_document #${d.id} date to ${longDate}`)
       }
     }
   } catch (e: any) {

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { safeFetchJson } from '@/lib/apiClient'
 import { downloadSignedDocumentPdf, DocumentData, AcknowledgementData } from '@/lib/pdfGenerator'
+import { formatIssueDate, syncMemoHeaderDate } from '@/lib/documentHelpers'
 import FormattedMarkdown from './FormattedMarkdown'
 
 interface Props {
@@ -272,7 +273,10 @@ export default function SignDocumentModal({
             </div>
 
             {/* Formatted Markdown Body */}
-            <FormattedMarkdown content={doc.content} style={{ marginBottom: 32 }} />
+            <FormattedMarkdown
+              content={syncMemoHeaderDate(doc.content, formatIssueDate(doc.created_at).longDate)}
+              style={{ marginBottom: 32 }}
+            />
 
             {/* Digital Signature Certificate Block */}
             <div

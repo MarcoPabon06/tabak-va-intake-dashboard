@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { safeFetchJson } from '@/lib/apiClient'
 import { downloadSignedDocumentPdf, DocumentData, AcknowledgementData } from '@/lib/pdfGenerator'
+import { formatIssueDate, syncMemoHeaderDate } from '@/lib/documentHelpers'
 import FormattedMarkdown from './FormattedMarkdown'
 
 interface Props {
@@ -90,6 +91,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
   const [targetType, setTargetType] = useState<'ALL' | 'LOB' | 'INDIVIDUAL'>('ALL')
   const [targetLob, setTargetLob] = useState<'VA' | 'SSD' | 'APPS'>('VA')
   const [targetUsers, setTargetUsers] = useState<string[]>([])
+  const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [deadlineDate, setDeadlineDate] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
   const [content, setContent] = useState('')
@@ -215,11 +217,13 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
           category,
           title: title.trim() || undefined,
           target_lob: targetType === 'LOB' ? targetLob : undefined,
+          issue_date: issueDate,
         }),
       })
 
       if (res.content) {
-        setContent(res.content)
+        const { longDate } = formatIssueDate(issueDate)
+        setContent(syncMemoHeaderDate(res.content, longDate))
       }
     } catch (err: any) {
       setFormError(err.message || 'Failed to generate AI draft')
@@ -258,16 +262,20 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
     setFormError('')
 
     try {
+      const { longDate } = formatIssueDate(issueDate)
+      const sanitizedContent = syncMemoHeaderDate(content.trim(), longDate)
+
       const res = await safeFetchJson('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: title.trim(),
           category,
-          content: content.trim(),
+          content: sanitizedContent,
           target_type: targetType,
           target_lob: targetType === 'LOB' ? targetLob : null,
           target_users: targetType === 'INDIVIDUAL' ? targetUsers : null,
+          issue_date: issueDate || null,
           deadline_date: deadlineDate || null,
           is_urgent: isUrgent,
           require_signature: true,
@@ -278,6 +286,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
       setTitle('')
       setContent('')
       setAiPrompt('')
+      setIssueDate(new Date().toISOString().slice(0, 10))
       setDeadlineDate('')
       setIsUrgent(false)
       setTargetUsers([])
@@ -294,14 +303,15 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
 
   // Generate & Download Pre-Issuance Test PDF
   const handleDownloadTestPdf = () => {
+    const { longDate } = formatIssueDate(issueDate)
     const docData: DocumentData = {
       id: 0,
       title: title.trim() || 'Untitled Operational Directive',
       category: category || 'Operational Policy',
-      content: content.trim() || 'No document body content provided.',
+      content: syncMemoHeaderDate(content.trim() || 'No document body content provided.', longDate),
       created_by_name: 'Management (Test Preview)',
       created_by_role: 'manager',
-      created_at: new Date().toISOString(),
+      created_at: issueDate ? `${issueDate}T12:00:00.000Z` : new Date().toISOString(),
       deadline_date: deadlineDate || null,
       target_type: targetType,
       target_lob: targetType === 'LOB' ? targetLob : null,
@@ -341,11 +351,12 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
 
   // Download PDF
   const handleDownloadDocPdf = (doc: any, ack?: any) => {
+    const { longDate } = formatIssueDate(doc.created_at)
     const docData: DocumentData = {
       id: doc.id,
       title: doc.title,
       category: doc.category,
-      content: doc.content,
+      content: syncMemoHeaderDate(doc.content, longDate),
       created_by_name: doc.created_by_name,
       created_by_role: doc.created_by_role,
       created_at: doc.created_at,
@@ -675,6 +686,26 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                       </select>
                     </div>
                   )}
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
+                      Document Issue Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={issueDate}
+                      onChange={(e) => {
+                        const newDate = e.target.value
+                        setIssueDate(newDate)
+                        if (content) {
+                          const { longDate } = formatIssueDate(newDate)
+                          setContent((prev) => syncMemoHeaderDate(prev, longDate))
+                        }
+                      }}
+                      className="input-field"
+                      style={{ margin: 0, fontSize: 12, width: '100%' }}
+                    />
+                  </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
@@ -1722,6 +1753,9 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                 <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: 'rgba(59,130,246,0.15)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.3)' }}>
                   {targetType === 'ALL' ? '👥 Company-Wide (All Intake)' : targetType === 'LOB' ? `🏛️ Division ${targetLob}` : `👤 ${targetUsers.length} Specific Representative(s)`}
                 </span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: 'rgba(16,185,129,0.15)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  📅 Issued: {issueDate}
+                </span>
                 {deadlineDate && (
                   <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: 'rgba(245,158,11,0.15)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}>
                     📅 Due: {deadlineDate}
@@ -1858,14 +1892,17 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                   </h1>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 11.5, color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: 12 }}>
                     <span><strong>Issuing Entity:</strong> Andes Workforce, LLC</span>
-                    <span><strong>Effective Date:</strong> {new Date().toLocaleDateString()}</span>
+                    <span><strong>Date Issued:</strong> {issueDate || new Date().toISOString().slice(0, 10)}</span>
                     {deadlineDate && <span><strong>Signature Due:</strong> {deadlineDate}</span>}
                     {isUrgent && <span style={{ color: '#dc2626', fontWeight: 800 }}>🚨 High Priority Response Required</span>}
                   </div>
                 </div>
 
                 {/* Rendered Document Body via FormattedMarkdown */}
-                <FormattedMarkdown content={content} style={{ marginBottom: 36 }} />
+                <FormattedMarkdown
+                  content={syncMemoHeaderDate(content, formatIssueDate(issueDate).longDate)}
+                  style={{ marginBottom: 36 }}
+                />
 
                 {/* Independent Contractor Legal Clause & Certificate Preview */}
                 <div
@@ -2062,7 +2099,10 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                 </div>
 
                 {/* Rendered Document Body via FormattedMarkdown */}
-                <FormattedMarkdown content={viewingDoc.content} style={{ marginBottom: 36 }} />
+                <FormattedMarkdown
+                  content={syncMemoHeaderDate(viewingDoc.content, formatIssueDate(viewingDoc.created_at).longDate)}
+                  style={{ marginBottom: 36 }}
+                />
 
                 {/* Independent Contractor Legal Clause */}
                 <div
