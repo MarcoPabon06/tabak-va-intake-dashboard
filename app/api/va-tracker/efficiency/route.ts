@@ -129,11 +129,11 @@ export async function GET(req: NextRequest) {
 
     if (statusFilter && statusFilter !== 'all') {
       if (statusFilter === 'violation') {
-        filterSql += ` AND (wrap_up_status = 'VIOLATION' OR busy_status = 'VIOLATION')`
+        filterSql += ` AND (wrap_up_status = 'VIOLATION' OR busy_status = 'VIOLATION') AND (exception_status IS NULL OR exception_status != 'APPROVED_EXCEPTION')`
       } else if (statusFilter === 'compliant') {
-        filterSql += ` AND (wrap_up_status = 'COMPLIANT' AND busy_status = 'COMPLIANT')`
+        filterSql += ` AND ((wrap_up_status != 'VIOLATION' AND busy_status != 'VIOLATION') OR exception_status = 'APPROVED_EXCEPTION')`
       } else if (statusFilter === 'warning') {
-        filterSql += ` AND (wrap_up_status = 'WARNING' OR busy_status = 'WARNING')`
+        filterSql += ` AND (wrap_up_status = 'WARNING' OR busy_status = 'WARNING') AND wrap_up_status != 'VIOLATION' AND busy_status != 'VIOLATION' AND (exception_status IS NULL OR exception_status != 'APPROVED_EXCEPTION')`
       } else if (statusFilter === 'excused') {
         filterSql += ` AND (exception_status = 'APPROVED_EXCEPTION' OR wrap_up_status = 'EXCUSED' OR busy_status = 'EXCUSED')`
       } else if (statusFilter === 'narrative') {
@@ -149,8 +149,8 @@ export async function GET(req: NextRequest) {
         ${filterSql}
       ORDER BY 
         CASE 
-          WHEN wrap_up_status = 'VIOLATION' OR busy_status = 'VIOLATION' THEN 1
-          WHEN wrap_up_status = 'WARNING' OR busy_status = 'WARNING' THEN 2
+          WHEN (wrap_up_status = 'VIOLATION' OR busy_status = 'VIOLATION') AND (exception_status IS NULL OR exception_status != 'APPROVED_EXCEPTION') THEN 1
+          WHEN (wrap_up_status = 'WARNING' OR busy_status = 'WARNING') AND (exception_status IS NULL OR exception_status != 'APPROVED_EXCEPTION') THEN 2
           ELSE 3
         END ASC,
         calls_made DESC
@@ -166,6 +166,7 @@ export async function GET(req: NextRequest) {
     let totalAvailableSec = 0
     let totalOfflineSec = 0
     let compliantCount = 0
+    let onTargetCount = 0
     let violationCount = 0
     let warningCount = 0
     let excusedCount = 0
@@ -207,13 +208,20 @@ export async function GET(req: NextRequest) {
       totalAvailableSec += r.time_available_sec || 0
       totalOfflineSec += r.offline_time_sec || 0
 
-      if (r.exception_status === 'APPROVED_EXCEPTION' || r.wrap_up_status === 'EXCUSED' || r.busy_status === 'EXCUSED') {
+      const isExcused = r.exception_status === 'APPROVED_EXCEPTION' || r.wrap_up_status === 'EXCUSED' || r.busy_status === 'EXCUSED'
+      const isViolation = !isExcused && (r.wrap_up_status === 'VIOLATION' || r.busy_status === 'VIOLATION')
+      const isWarning = !isExcused && !isViolation && (r.wrap_up_status === 'WARNING' || r.busy_status === 'WARNING')
+
+      if (isExcused) {
         excusedCount++
-      } else if (r.wrap_up_status === 'VIOLATION' || r.busy_status === 'VIOLATION') {
+        compliantCount++ // Excused shifts count as compliant
+      } else if (isViolation) {
         violationCount++
-      } else if (r.wrap_up_status === 'WARNING' || r.busy_status === 'WARNING') {
+      } else if (isWarning) {
         warningCount++
+        compliantCount++ // Near limit reps have NOT exceeded the metric goal, so they ARE counted as compliant!
       } else {
+        onTargetCount++
         compliantCount++
       }
     })
@@ -227,10 +235,11 @@ export async function GET(req: NextRequest) {
       avg_busy_time_sec: n > 0 ? Math.round(totalBusySec / n) : 0,
       avg_wrap_up_per_call_sec: totalCallsHandled > 0 ? Math.round(totalWrapUpSec / totalCallsHandled) : 0,
       compliant_count: compliantCount,
+      on_target_count: onTargetCount,
       violation_count: violationCount,
       warning_count: warningCount,
       excused_count: excusedCount,
-      adherence_rate: n > 0 ? Math.round(((compliantCount + excusedCount) / n) * 100) : 100,
+      adherence_rate: n > 0 ? Math.round((compliantCount / n) * 100) : 100,
     }
 
     return NextResponse.json({

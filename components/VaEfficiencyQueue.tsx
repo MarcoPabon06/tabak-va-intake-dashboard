@@ -46,6 +46,7 @@ interface SummaryStats {
   avg_busy_time_sec: number
   avg_wrap_up_per_call_sec: number
   compliant_count: number
+  on_target_count?: number
   violation_count: number
   warning_count: number
   excused_count: number
@@ -85,6 +86,7 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
     avg_busy_time_sec: 0,
     avg_wrap_up_per_call_sec: 0,
     compliant_count: 0,
+    on_target_count: 0,
     violation_count: 0,
     warning_count: 0,
     excused_count: 0,
@@ -339,11 +341,16 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
               {summary.adherence_rate}%
             </span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              ({summary.compliant_count + summary.excused_count} / {summary.total_specialists} compliant)
+              ({summary.compliant_count} / {summary.total_specialists} compliant)
             </span>
           </div>
-          <div style={{ fontSize: 11, color: summary.violation_count > 0 ? '#f87171' : '#34d399', marginTop: 4 }}>
-            {summary.violation_count > 0 ? `⚠️ ${summary.violation_count} Over-Target Flags` : '✅ All Reps Within Policy'}
+          <div style={{ fontSize: 11, color: summary.violation_count > 0 ? '#f87171' : '#34d399', marginTop: 4, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            <span>{summary.violation_count > 0 ? `⚠️ ${summary.violation_count} Over-Target Flags` : '✅ All Reps Within Policy'}</span>
+            {summary.warning_count > 0 && (
+              <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                &bull; {summary.warning_count} Near Limit
+              </span>
+            )}
           </div>
         </div>
 
@@ -398,6 +405,13 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
             style={{ fontSize: 11, padding: '3px 10px', color: '#34d399', background: statusFilter === 'compliant' ? 'rgba(16,185,129,0.2)' : undefined }}
           >
             🟢 Compliant ({summary.compliant_count})
+          </button>
+          <button
+            onClick={() => setStatusFilter('warning')}
+            className="btn-secondary"
+            style={{ fontSize: 11, padding: '3px 10px', color: '#fbbf24', background: statusFilter === 'warning' ? 'rgba(245,158,11,0.2)' : undefined }}
+          >
+            🟡 Near Limit ({summary.warning_count})
           </button>
           <button
             onClick={() => setStatusFilter('excused')}
@@ -461,9 +475,9 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                 </tr>
               ) : (
                 records.map((r) => {
-                  const isViolation = r.wrap_up_status === 'VIOLATION' || r.busy_status === 'VIOLATION'
                   const isExcused = r.exception_status === 'APPROVED_EXCEPTION' || r.wrap_up_status === 'EXCUSED' || r.busy_status === 'EXCUSED'
-                  const isWarning = (r.wrap_up_status === 'WARNING' || r.busy_status === 'WARNING') && !isViolation && !isExcused
+                  const isViolation = !isExcused && (r.wrap_up_status === 'VIOLATION' || r.busy_status === 'VIOLATION')
+                  const isWarning = !isExcused && !isViolation && (r.wrap_up_status === 'WARNING' || r.busy_status === 'WARNING')
 
                   // Allowed busy calculation
                   const baseBusyAllowed = r.is_narrative_rep ? 9000 : 1800
@@ -503,8 +517,25 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                             {r.agent_name.slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 800, color: '#fff', fontSize: 13 }}>
-                              {r.agent_name}
+                            <div style={{ fontWeight: 800, color: '#fff', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>{r.agent_name}</span>
+                              {isViolation ? (
+                                <span style={{ fontSize: 9.5, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                  🔴 Over Target
+                                </span>
+                              ) : isExcused ? (
+                                <span style={{ fontSize: 9.5, background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', border: '1px solid rgba(192, 132, 252, 0.4)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                  🟣 Compliant • Excused
+                                </span>
+                              ) : isWarning ? (
+                                <span style={{ fontSize: 9.5, background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', border: '1px solid rgba(245, 158, 11, 0.4)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                  🟡 Compliant • Near Limit
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 9.5, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                                  🟢 Compliant
+                                </span>
+                              )}
                             </div>
                             <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
                               {r.is_narrative_rep === 1 && (
@@ -520,11 +551,6 @@ export default function VaEfficiencyQueue({ isMaster }: Props) {
                               {r.meeting_credit_sec > 0 && (
                                 <span style={{ fontSize: 9.5, background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
                                   🤝 +{Math.round(r.meeting_credit_sec / 60)}m Meeting
-                                </span>
-                              )}
-                              {r.exception_status === 'APPROVED_EXCEPTION' && (
-                                <span style={{ fontSize: 9.5, background: 'rgba(192, 132, 252, 0.2)', color: '#c084fc', border: '1px solid rgba(192, 132, 252, 0.4)', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
-                                  🟣 Excused
                                 </span>
                               )}
                             </div>

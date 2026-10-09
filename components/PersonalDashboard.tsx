@@ -587,6 +587,78 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
                 <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fff' }}>
                   Law Ruler Dialer Status Adherence
                 </h3>
+                {efficiencyRecord && (() => {
+                  const isExcused = efficiencyRecord.exception_status === 'APPROVED_EXCEPTION' || efficiencyRecord.wrap_up_status === 'EXCUSED' || efficiencyRecord.busy_status === 'EXCUSED'
+                  const isViolation = !isExcused && (efficiencyRecord.wrap_up_status === 'VIOLATION' || efficiencyRecord.busy_status === 'VIOLATION')
+                  const isWarning = !isExcused && !isViolation && (efficiencyRecord.wrap_up_status === 'WARNING' || efficiencyRecord.busy_status === 'WARNING')
+
+                  if (isViolation) {
+                    return (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                        }}
+                      >
+                        🔴 Over Target
+                      </span>
+                    )
+                  }
+                  if (isExcused) {
+                    return (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          background: 'rgba(192, 132, 252, 0.2)',
+                          color: '#c084fc',
+                          border: '1px solid rgba(192, 132, 252, 0.4)',
+                        }}
+                      >
+                        🟣 Compliant (Excused)
+                      </span>
+                    )
+                  }
+                  if (isWarning) {
+                    return (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          color: '#fbbf24',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                        }}
+                      >
+                        🟡 Compliant (Near Limit)
+                      </span>
+                    )
+                  }
+                  return (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: 12,
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                      }}
+                    >
+                      🟢 Compliant (On Target)
+                    </span>
+                  )
+                })()}
                 {efficiencyRecord?.is_narrative_rep === 1 && (
                   <span
                     style={{
@@ -855,7 +927,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
                       {efficiencyRecord.busy_status === 'VIOLATION'
                         ? '🔴 Over Limit'
                         : efficiencyRecord.busy_status === 'WARNING'
-                        ? '🟡 Warning'
+                        ? '🟡 Near Limit'
                         : efficiencyRecord.busy_status === 'EXCUSED'
                         ? '🟣 Excused'
                         : '🟢 Compliant'}
