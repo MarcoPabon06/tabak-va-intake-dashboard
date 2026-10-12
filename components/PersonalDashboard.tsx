@@ -2,7 +2,7 @@
 
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar, Cell,
+  ResponsiveContainer, BarChart, Bar, Cell, ReferenceLine,
 } from 'recharts'
 import { computeBadges } from '@/lib/badges'
 import BadgeShelf from '@/components/BadgeShelf'
@@ -1112,9 +1112,14 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
         </div>
 
         <div className="glass-card" style={{ padding: '20px 16px' }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
-            My Daily CAPD
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+              My Daily CAPD
+            </h3>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'rgba(184, 33, 5, 0.1)', padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(184, 33, 5, 0.2)' }}>
+              Target: {g.goal_avg_capd || 40} calls/day
+            </span>
+          </div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={trendData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -1124,6 +1129,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
                 contentStyle={{ background: 'rgba(10,22,40,0.97)', border: '1px solid rgba(184, 33, 5, 0.3)', borderRadius: 10, fontSize: 13 }}
                 labelStyle={{ color: '#f8fafc', fontWeight: 700 }}
               />
+              <ReferenceLine y={g.goal_avg_capd || 40} stroke="rgba(184, 33, 5, 0.5)" strokeDasharray="6 3" label={{ value: `${g.goal_avg_capd || 40}`, position: 'right', fill: '#b82105', fontSize: 11 }} />
               <Bar dataKey="capd" radius={[4, 4, 0, 0]} name="CAPD">
                 {trendData.map((entry, i) => (
                   <Cell key={i} fill={entry.capd >= (g.goal_avg_capd || 40) ? '#10b981' : '#f59e0b'} fillOpacity={0.8} />

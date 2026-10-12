@@ -15,10 +15,13 @@ interface Row {
   present: string
 }
 
+import { GoalSettings } from './PersonalDashboard'
+
 interface Props {
   data: Row[]
   lob?: string
   appsData?: any[]
+  goals?: GoalSettings
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -40,7 +43,11 @@ function getRateColor(rate: number) {
   return '#94a3b8'
 }
 
-export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) {
+export default function Leaderboard({ data, lob = 'VA', appsData = [], goals }: Props) {
+  const targetCapd = lob === 'SSD'
+    ? (goals?.goal_avg_capd_ssd ?? goals?.goal_avg_capd ?? 40)
+    : (goals?.goal_avg_capd_va ?? goals?.goal_avg_capd ?? 40)
+
   if (lob === 'APPS') {
     const byRep: Record<string, { total: number; converted: number; pending: number }> = {}
     for (const item of appsData) {
@@ -302,7 +309,7 @@ export default function Leaderboard({ data, lob = 'VA', appsData = [] }: Props) 
                     </>
                   )}
                   <td style={{ textAlign: 'right' }}>
-                    <span style={{ color: row.avgCapd >= 40 ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
+                    <span style={{ color: row.avgCapd >= targetCapd ? '#10b981' : '#f59e0b', fontWeight: 600 }}>
                       {row.avgCapd}
                     </span>
                   </td>

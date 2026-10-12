@@ -113,37 +113,8 @@ export default function DashboardPage() {
     }
   }, [session, allowedLobs, selectedLob])
 
-  const fetchData = useCallback(async () => {
-    if (status === 'loading' || !selectedLob) return
-    setLoading(true)
-    try {
-      if (selectedLob === 'APPS') {
-        const json = await safeFetchJson(`/api/apps-team?from=${from}&to=${to}`)
-        setAppsData(json.entries || [])
-        setData([])
-      } else {
-        const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
-        const json = await safeFetchJson(`/api/performance?from=${from}&to=${to}${lobParam}`)
-        setData(Array.isArray(json) ? json : [])
-        setAppsData([])
-      }
-    } catch {
-      setData([])
-      setAppsData([])
-    } finally {
-      setLoading(false)
-    }
-  }, [from, to, selectedLob, status])
-
-  useEffect(() => {
-    if (status !== 'loading') {
-      fetchData()
-    }
-  }, [fetchData, status])
-
-  // Fetch goal settings once
-  useEffect(() => {
-    fetch('/api/settings')
+  const fetchGoals = useCallback(() => {
+    fetch('/api/settings', { cache: 'no-store' })
       .then((r) => r.json())
       .then((s) => setGoals({
         // VA
@@ -161,6 +132,39 @@ export default function DashboardPage() {
       }))
       .catch(() => {})
   }, [])
+
+  const fetchData = useCallback(async () => {
+    if (status === 'loading' || !selectedLob) return
+    setLoading(true)
+    fetchGoals()
+    try {
+      if (selectedLob === 'APPS') {
+        const json = await safeFetchJson(`/api/apps-team?from=${from}&to=${to}`)
+        setAppsData(json.entries || [])
+        setData([])
+      } else {
+        const lobParam = selectedLob && selectedLob !== 'All' ? `&lob=${selectedLob}` : ''
+        const json = await safeFetchJson(`/api/performance?from=${from}&to=${to}${lobParam}`)
+        setData(Array.isArray(json) ? json : [])
+        setAppsData([])
+      }
+    } catch {
+      setData([])
+      setAppsData([])
+    } finally {
+      setLoading(false)
+    }
+  }, [from, to, selectedLob, status, fetchGoals])
+
+  useEffect(() => {
+    if (status !== 'loading') {
+      fetchData()
+    }
+  }, [fetchData, status])
+
+  useEffect(() => {
+    fetchGoals()
+  }, [fetchGoals])
 
   function applyPreset(preset: typeof PRESETS[0]) {
     const vals = preset.getValue()
@@ -351,7 +355,7 @@ export default function DashboardPage() {
             {/* ── Team Dashboard ── */}
             {selectedLob !== 'APPS' && (
               <>
-                <SummaryCards data={data} lob={selectedLob} />
+                <SummaryCards data={data} lob={selectedLob} goals={goals} />
 
                 {/* Charts Row 1 */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
@@ -365,7 +369,7 @@ export default function DashboardPage() {
 
                 {/* Charts Row 2 */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-                  <CAPDBarChart data={data} />
+                  <CAPDBarChart data={data} lob={selectedLob} goals={goals} />
                   <WeekdayHeatmap data={data} />
                 </div>
               </>
@@ -373,7 +377,7 @@ export default function DashboardPage() {
 
             {/* Leaderboard */}
             <div style={{ marginTop: selectedLob === 'APPS' ? 0 : 16 }}>
-              <Leaderboard data={data} lob={selectedLob} appsData={appsData} />
+              <Leaderboard data={data} lob={selectedLob} appsData={appsData} goals={goals} />
             </div>
           </>
         )}

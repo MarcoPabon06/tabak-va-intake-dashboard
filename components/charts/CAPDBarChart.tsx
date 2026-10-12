@@ -12,6 +12,8 @@ import {
   ReferenceLine,
 } from 'recharts'
 
+import { GoalSettings } from '../PersonalDashboard'
+
 const AGENT_COLORS: Record<string, string> = {
   'Daniel Castillo': '#b82105',
   'Adriana Soto': '#ec4899',
@@ -28,9 +30,18 @@ interface Row {
 
 interface Props {
   data: Row[]
+  targetCapd?: number
+  goals?: GoalSettings
+  lob?: string
 }
 
-export default function CAPDBarChart({ data }: Props) {
+export default function CAPDBarChart({ data, targetCapd, goals, lob = 'VA' }: Props) {
+  const target = targetCapd ?? (
+    lob === 'SSD'
+      ? (goals?.goal_avg_capd_ssd ?? goals?.goal_avg_capd ?? 40)
+      : (goals?.goal_avg_capd_va ?? goals?.goal_avg_capd ?? 40)
+  )
+
   // Aggregate per agent
   const byAgent: Record<string, { total: number; days: number }> = {}
   for (const row of data) {
@@ -73,7 +84,7 @@ export default function CAPDBarChart({ data }: Props) {
           Avg Calls Per Day (CAPD)
         </h3>
         <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'rgba(184, 33, 5, 0.1)', padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(184, 33, 5, 0.2)' }}>
-          Target: 40 calls/day
+          Target: {target} calls/day
         </span>
       </div>
       <ResponsiveContainer width="100%" height={240}>
@@ -82,7 +93,7 @@ export default function CAPDBarChart({ data }: Props) {
           <XAxis dataKey="agent" tick={{ fill: '#94a3b8', fontSize: 12 }} axisLine={false} tickLine={false} />
           <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(184, 33, 5, 0.06)' }} />
-          <ReferenceLine y={40} stroke="rgba(184, 33, 5, 0.5)" strokeDasharray="6 3" label={{ value: '40', position: 'right', fill: '#b82105', fontSize: 11 }} />
+          <ReferenceLine y={target} stroke="rgba(184, 33, 5, 0.5)" strokeDasharray="6 3" label={{ value: `${target}`, position: 'right', fill: '#b82105', fontSize: 11 }} />
           <Bar dataKey="avg_capd" radius={[6, 6, 0, 0]}>
             {chartData.map((entry, i) => (
               <Cell

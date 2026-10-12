@@ -1,5 +1,7 @@
 'use client'
 
+import { GoalSettings } from './PersonalDashboard'
+
 interface Row {
   date: string
   agent_name: string
@@ -19,6 +21,7 @@ interface Row {
 interface Props {
   data: Row[]
   lob?: string
+  goals?: GoalSettings
 }
 
 interface Card {
@@ -31,13 +34,22 @@ interface Card {
   trend?: 'up' | 'down' | 'neutral'
 }
 
-export default function SummaryCards({ data, lob = 'VA' }: Props) {
+export default function SummaryCards({ data, lob = 'VA', goals }: Props) {
   const totalSigned = data.reduce((s, r) => s + (r.signed_retainers || 0), 0)
   const totalUnsigned = data.reduce((s, r) => s + (r.unsigned_retainers || 0), 0)
   const totalConverted = data.reduce((s, r) => s + (r.converted_cases || 0), 0)
   const totalRfc = data.reduce((s, r) => s + (r.rfc_sent || 0), 0)
   const totalCrh = data.reduce((s, r) => s + (r.crh || 0), 0)
   const totalRejected = data.reduce((s, r) => s + (r.case_rejected || 0), 0)
+
+  // Targets from settings
+  const targetCapd = lob === 'SSD'
+    ? (goals?.goal_avg_capd_ssd ?? goals?.goal_avg_capd ?? 40)
+    : (goals?.goal_avg_capd_va ?? goals?.goal_avg_capd ?? 40)
+
+  const targetConv = lob === 'SSD'
+    ? (goals?.goal_conversion_rate_ssd ?? goals?.goal_conversion_rate ?? 65)
+    : (goals?.goal_conversion_rate_va ?? goals?.goal_conversion_rate ?? 65)
 
   // CAPD avg (only present days)
   const presentRows = data.filter((r) => {
@@ -83,7 +95,7 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
         sub: `${totalSigned} signed / ${totalCases} retainers`,
         color: '#6366f1',
         icon: '📝',
-        trend: signedRate >= 65 ? 'up' : signedRate >= 50 ? 'neutral' : 'down',
+        trend: signedRate >= targetConv ? 'up' : signedRate >= (targetConv - 15) ? 'neutral' : 'down',
       },
       {
         id: 'card-conversion',
@@ -92,7 +104,7 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
         sub: `${totalConverted} converted / ${totalSigned} signed`,
         color: '#b82105',
         icon: '📈',
-        trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
+        trend: convRate >= targetConv ? 'up' : convRate >= (targetConv - 15) ? 'neutral' : 'down',
       },
       {
         id: 'card-rfc',
@@ -122,7 +134,7 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
         sub: `${totalSigned} signed / ${totalCases} total`,
         color: '#b82105',
         icon: '📈',
-        trend: convRate >= 65 ? 'up' : convRate >= 50 ? 'neutral' : 'down',
+        trend: convRate >= targetConv ? 'up' : convRate >= (targetConv - 15) ? 'neutral' : 'down',
       },
       {
         id: 'card-unsigned',
@@ -177,10 +189,10 @@ export default function SummaryCards({ data, lob = 'VA' }: Props) {
       id: 'card-capd',
       label: 'Avg CAPD',
       value: avgCapd,
-      sub: `Target: 40 calls/day`,
-      color: avgCapd >= 40 ? '#10b981' : '#f59e0b',
+      sub: `Target: ${targetCapd} calls/day`,
+      color: avgCapd >= targetCapd ? '#10b981' : '#f59e0b',
       icon: '📞',
-      trend: avgCapd >= 40 ? 'up' : 'down',
+      trend: avgCapd >= targetCapd ? 'up' : 'down',
     },
     {
       id: 'card-crh',
