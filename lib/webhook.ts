@@ -1,7 +1,15 @@
 import getDb from './db'
 
 export interface WebhookPayload {
-  event_type: 'time_off_requested' | 'time_off_updated' | 'coaching_requested' | 'coaching_updated' | 'test'
+  event_type:
+    | 'time_off_requested'
+    | 'time_off_updated'
+    | 'coaching_requested'
+    | 'coaching_updated'
+    | 'document_issued'
+    | 'document_reminder'
+    | 'document_voided'
+    | 'test'
   title: string
   recipients: string
   agent_name: string
@@ -503,3 +511,275 @@ export async function sendQAReminderWebhookNotification(params: {
     html_body: htmlBody,
   })
 }
+
+/**
+ * Resolves work emails for a list of specialists (usernames or display names), plus management CC
+ */
+export function getSpecialistsEmails(usernamesOrNames: string[], lob: string = 'VA'): string[] {
+  const recipients = new Set<string>()
+  const db = getDb()
+
+  for (const identifier of usernamesOrNames) {
+    if (!identifier) continue
+    const trimmed = identifier.trim()
+    if (trimmed.includes('@')) {
+      recipients.add(trimmed)
+    }
+
+    const user = db
+      .prepare('SELECT email, username FROM users WHERE username = ? OR display_name = ? OR email = ?')
+      .get(trimmed, trimmed, trimmed) as { email?: string | null; username: string } | undefined
+
+    if (user?.email && user.email.trim().includes('@')) {
+      recipients.add(user.email.trim())
+    } else if (user?.username && user.username.trim().includes('@')) {
+      recipients.add(user.username.trim())
+    }
+  }
+
+  // Also include Super Admins / Managers on CC
+  const adminList = getAdminNotificationEmails(lob || 'VA', 'canManageUsers')
+  adminList.forEach(e => recipients.add(e))
+
+  return Array.from(recipients)
+}
+
+/**
+ * Send Webhook for Official Communication / Signable Document Issued (Management -> Specialists)
+ */
+export async function sendDocumentIssuedWebhookNotification(params: {
+  documentTitle: string
+  category: string
+  issuedBy: string
+  issuingEntity?: string
+  issueDate: string
+  deadlineDate?: string | null
+  isUrgent?: boolean
+  targetType: string
+  targetLob?: string | null
+  recipientUsernames: string[]
+  recipientDisplayNames: string[]
+}) {
+  const {
+    documentTitle,
+    category,
+    issuedBy,
+    issuingEntity = 'Andes Workforce, LLC (for Tabak Law, LLC)',
+    issueDate,
+    deadlineDate,
+    isUrgent = false,
+    targetType,
+    targetLob,
+    recipientUsernames,
+    recipientDisplayNames,
+  } = params
+
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/dashboard`
+
+  const accentColor = isUrgent ? '#dc2626' : '#2563eb'
+  const badgeText = isUrgent
+    ? '🚨 URGENT · Electronic Signature Required'
+    : `📜 ${category || 'Official Communication'} · Signature Required`
+
+  const title = isUrgent
+    ? `🚨 URGENT Communication to Sign: ${documentTitle}`
+    : `📜 Action Required — Sign Communication: ${documentTitle}`
+
+  const targetScopeLabel =
+    targetType === 'ALL'
+      ? `All Active Specialists (${recipientDisplayNames.length})`
+      : targetType === 'LOB'
+      ? `${targetLob || 'VA'} Division (${recipientDisplayNames.length} Specialists)`
+      : recipientDisplayNames.join(', ')
+
+  const recipientsList = getSpecialistsEmails(
+    [...recipientUsernames, ...recipientDisplayNames],
+    targetLob || 'VA'
+  )
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor,
+    badgeText,
+    title,
+    subtitle: `Issued by ${issuedBy} · Electronic Review & Signature Required`,
+    agentName: targetScopeLabel,
+    fields: [
+      { label: 'Document Title', value: documentTitle, isBold: true, color: isUrgent ? '#dc2626' : '#0f172a' },
+      { label: 'Category', value: category || 'Operational Policy', isBold: true },
+      { label: 'Issuing Authority', value: `${issuedBy} — ${issuingEntity}` },
+      { label: 'Assigned Recipients', value: targetScopeLabel, isBold: true },
+      { label: 'Issue Date', value: issueDate },
+      {
+        label: 'Signature Deadline',
+        value: deadlineDate || 'Immediate / Upon Receipt',
+        isBold: true,
+        color: isUrgent ? '#dc2626' : '#2563eb',
+      },
+      {
+        label: 'Required Action',
+        value: 'Log in to the Tabak Dashboard, review the full communication in your Pending Signatures banner, and submit your electronic signature.',
+      },
+    ],
+    ctaLabel: '✍️ Review & Sign Document',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'document_issued',
+    title,
+    recipients: recipientsStr,
+    agent_name: targetScopeLabel,
+    lob: targetLob || 'All Divisions',
+    details: `Document: ${documentTitle}\nCategory: ${category}\nIssued By: ${issuedBy}\nIssue Date: ${issueDate}\nDeadline: ${deadlineDate || 'Immediate'}\nRecipients: ${recipientDisplayNames.join(', ')}`,
+    link: ctaUrl,
+    cta_label: '✍️ Review & Sign Document',
+    html_body: htmlBody,
+  })
+}
+
+/**
+ * Send Webhook for Pending Document Signature Reminder (Management -> Specialist(s))
+ */
+export async function sendDocumentReminderWebhookNotification(params: {
+  documentTitle: string
+  category: string
+  remindedBy: string
+  deadlineDate?: string | null
+  isUrgent?: boolean
+  recipientUsernames: string[]
+  recipientDisplayNames: string[]
+  targetLob?: string | null
+}) {
+  const {
+    documentTitle,
+    category,
+    remindedBy,
+    deadlineDate,
+    isUrgent = false,
+    recipientUsernames,
+    recipientDisplayNames,
+    targetLob,
+  } = params
+
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/dashboard`
+  const accentColor = isUrgent ? '#dc2626' : '#f59e0b'
+
+  const recipientLabel =
+    recipientDisplayNames.length === 1
+      ? recipientDisplayNames[0]
+      : `${recipientDisplayNames.length} Specialists (${recipientDisplayNames.join(', ')})`
+
+  const title = `⏰ Signature Reminder: "${documentTitle}"`
+
+  const recipientsList = getSpecialistsEmails(
+    [...recipientUsernames, ...recipientDisplayNames],
+    targetLob || 'VA'
+  )
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor,
+    badgeText: '⏰ Pending Signature Reminder',
+    title,
+    subtitle: `${remindedBy} sent a reminder to complete your required electronic signature.`,
+    agentName: recipientLabel,
+    fields: [
+      { label: 'Pending Specialist(s)', value: recipientLabel, isBold: true },
+      { label: 'Document Title', value: documentTitle, isBold: true },
+      { label: 'Category', value: category || 'Operational Policy' },
+      {
+        label: 'Signature Status',
+        value: '⏳ Pending Electronic Signature',
+        isBold: true,
+        color: '#b45309',
+      },
+      {
+        label: 'Signature Deadline',
+        value: deadlineDate || 'Immediate Action Required',
+        isBold: true,
+        color: accentColor,
+      },
+      { label: 'Reminder Sent By', value: remindedBy },
+    ],
+    ctaLabel: '✍️ Open Dashboard & Sign Now',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'document_reminder',
+    title,
+    recipients: recipientsStr,
+    agent_name: recipientLabel,
+    lob: targetLob || 'Intake Division',
+    details: `Reminder for "${documentTitle}" sent by ${remindedBy} to: ${recipientDisplayNames.join(', ')}`,
+    link: ctaUrl,
+    cta_label: '✍️ Open Dashboard & Sign Now',
+    html_body: htmlBody,
+  })
+}
+
+/**
+ * Send Webhook when an Official Communication is Voided (Management -> Assigned Specialists)
+ */
+export async function sendDocumentVoidedWebhookNotification(params: {
+  documentTitle: string
+  category: string
+  voidedBy: string
+  voidReason: string
+  recipientUsernames: string[]
+  recipientDisplayNames: string[]
+  targetLob?: string | null
+}) {
+  const {
+    documentTitle,
+    category,
+    voidedBy,
+    voidReason,
+    recipientUsernames,
+    recipientDisplayNames,
+    targetLob,
+  } = params
+
+  const baseUrl = getAppBaseUrl()
+  const ctaUrl = `${baseUrl}/dashboard`
+  const title = `🚫 Communication Voided: "${documentTitle}"`
+
+  const recipientsList = getSpecialistsEmails(
+    [...recipientUsernames, ...recipientDisplayNames],
+    targetLob || 'VA'
+  )
+  const recipientsStr = recipientsList.join(', ')
+
+  const htmlBody = buildHtmlEmail({
+    accentColor: '#64748b',
+    badgeText: '🚫 Document Officially Voided',
+    title,
+    subtitle: `This document was officially revoked by ${voidedBy} and no longer requires your signature.`,
+    agentName: recipientDisplayNames.join(', '),
+    fields: [
+      { label: 'Document Title', value: documentTitle, isBold: true },
+      { label: 'Category', value: category || 'Operational Policy' },
+      { label: 'Voided By', value: voidedBy, isBold: true },
+      { label: 'Reason for Voiding', value: voidReason, isBold: true, color: '#dc2626' },
+      { label: 'Status', value: 'VOIDED — Removed from active signature queue', isBold: true, color: '#64748b' },
+    ],
+    ctaLabel: '📂 Open Dashboard',
+    ctaUrl,
+  })
+
+  return sendPowerAutomateWebhook({
+    event_type: 'document_voided',
+    title,
+    recipients: recipientsStr,
+    agent_name: recipientDisplayNames.join(', '),
+    lob: targetLob || 'All Divisions',
+    details: `Document "${documentTitle}" voided by ${voidedBy}. Reason: ${voidReason}`,
+    link: ctaUrl,
+    cta_label: '📂 Open Dashboard',
+    html_body: htmlBody,
+  })
+}
+

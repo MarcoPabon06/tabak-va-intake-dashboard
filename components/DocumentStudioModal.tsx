@@ -94,12 +94,15 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [deadlineDate, setDeadlineDate] = useState('')
   const [isUrgent, setIsUrgent] = useState(false)
+  const [sendEmail, setSendEmail] = useState(true)
   const [content, setContent] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishSuccessMsg, setPublishSuccessMsg] = useState('')
   const [formError, setFormError] = useState('')
+  const [remindingTarget, setRemindingTarget] = useState<string | null>(null)
+  const [remindFeedbackMsg, setRemindFeedbackMsg] = useState('')
 
   // Editor mode & preview states
   const [editorMode, setEditorMode] = useState<'write' | 'preview'>('write')
@@ -279,10 +282,17 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
           deadline_date: deadlineDate || null,
           is_urgent: isUrgent,
           require_signature: true,
+          send_email: sendEmail,
         }),
       })
 
-      setPublishSuccessMsg(`🚀 Communication "${title.trim()}" published successfully! ${res.assigned_count} specialist(s) received signature requests.`)
+      const emailBadge = res.email_sent
+        ? ' · 📧 M365 Email Notification Sent!'
+        : sendEmail
+        ? ` · (In-app sent${res.email_error ? `; Email note: ${res.email_error}` : ''})`
+        : ''
+
+      setPublishSuccessMsg(`🚀 Communication "${title.trim()}" published successfully! ${res.assigned_count} specialist(s) received signature requests.${emailBadge}`)
       setTitle('')
       setContent('')
       setAiPrompt('')
@@ -293,11 +303,39 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
       setShowPreIssuancePreview(false)
       fetchDocumentsData()
       setActiveTab('roster')
-      setTimeout(() => setPublishSuccessMsg(''), 5000)
+      setTimeout(() => setPublishSuccessMsg(''), 6000)
     } catch (err: any) {
       setFormError(err.message || 'Failed to publish communication')
     } finally {
       setPublishing(false)
+    }
+  }
+
+  // Send Email & In-App Reminder for Pending Signatures
+  const handleSendReminder = async (docId: number, targetUsername?: string, targetLabel?: string) => {
+    const key = targetUsername || 'ALL_PENDING'
+    setRemindingTarget(key)
+    setRemindFeedbackMsg('')
+    try {
+      const res = await safeFetchJson('/api/documents/remind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          document_id: docId,
+          username: key,
+        }),
+      })
+      const label = targetLabel || `${res.reminded_count} pending specialist(s)`
+      if (res.email_sent) {
+        setRemindFeedbackMsg(`📧 Email & in-app reminder dispatched to ${label}!`)
+      } else {
+        setRemindFeedbackMsg(`🔔 In-app reminder sent to ${label}${res.email_error ? ` (Email note: ${res.email_error})` : ''}.`)
+      }
+      setTimeout(() => setRemindFeedbackMsg(''), 5000)
+    } catch (err: any) {
+      alert(err.message || 'Failed to send reminder')
+    } finally {
+      setRemindingTarget(null)
     }
   }
 
@@ -720,13 +758,24 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', paddingTop: 20 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 14 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#fff' }}>
+                      <input
+                        type="checkbox"
+                        checked={sendEmail}
+                        onChange={(e) => setSendEmail(e.target.checked)}
+                        style={{ accentColor: '#3b82f6', width: 15, height: 15 }}
+                      />
+                      <span style={{ color: sendEmail ? '#60a5fa' : '#94a3b8', fontWeight: sendEmail ? 700 : 500 }}>
+                        📧 Notify via Email (M365)
+                      </span>
+                    </label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#fff' }}>
                       <input
                         type="checkbox"
                         checked={isUrgent}
                         onChange={(e) => setIsUrgent(e.target.checked)}
-                        style={{ accentColor: '#ef4444', width: 16, height: 16 }}
+                        style={{ accentColor: '#ef4444', width: 15, height: 15 }}
                       />
                       <span style={{ color: isUrgent ? '#f87171' : '#cbd5e1', fontWeight: isUrgent ? 800 : 500 }}>
                         🚨 Mark as URGENT Priority
@@ -1144,7 +1193,17 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                     >
                       ◀ Back to All Documents
                     </button>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {selectedDocForRoster.status !== 'VOIDED' && rosterList.some((a) => a.status === 'PENDING') && (
+                        <button
+                          onClick={() => handleSendReminder(selectedDocForRoster.id, 'ALL_PENDING')}
+                          disabled={remindingTarget !== null}
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: '6px 14px', color: '#fbbf24', borderColor: 'rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)' }}
+                        >
+                          {remindingTarget === 'ALL_PENDING' ? '⏳ Sending...' : '📧 Remind All Pending'}
+                        </button>
+                      )}
                       <button
                         onClick={() => setViewingDoc(selectedDocForRoster)}
                         className="btn-secondary"
@@ -1170,6 +1229,23 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                       )}
                     </div>
                   </div>
+
+                  {remindFeedbackMsg && (
+                    <div
+                      style={{
+                        background: 'rgba(59,130,246,0.12)',
+                        border: '1px solid rgba(59,130,246,0.35)',
+                        color: '#93c5fd',
+                        padding: '10px 14px',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        marginBottom: 14,
+                      }}
+                    >
+                      {remindFeedbackMsg}
+                    </div>
+                  )}
 
                   {selectedDocForRoster.status === 'VOIDED' && (
                     <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8, padding: '14px 18px', marginBottom: 16 }}>
@@ -1273,8 +1349,18 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                                     >
                                       📥 Download Signed PDF
                                     </button>
+                                  ) : selectedDocForRoster.status !== 'VOIDED' ? (
+                                    <button
+                                      onClick={() => handleSendReminder(selectedDocForRoster.id, ack.username, ack.user_display_name)}
+                                      disabled={remindingTarget !== null}
+                                      className="btn-secondary"
+                                      style={{ fontSize: 11, padding: '4px 10px', color: '#fbbf24', borderColor: 'rgba(245,158,11,0.35)', background: 'rgba(245,158,11,0.08)' }}
+                                      title={`Send email & in-app signature reminder to ${ack.user_display_name}`}
+                                    >
+                                      {remindingTarget === ack.username ? '⏳ Sending...' : '📧 Send Reminder'}
+                                    </button>
                                   ) : (
-                                    <span style={{ fontSize: 11, color: '#f59e0b', fontStyle: 'italic' }}>Pending Signature</span>
+                                    <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Voided</span>
                                   )}
                                 </td>
                               </tr>

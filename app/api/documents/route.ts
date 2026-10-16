@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
 import { formatIssueDate, syncMemoHeaderDate } from '@/lib/documentHelpers'
+import { sendDocumentIssuedWebhookNotification } from '@/lib/webhook'
 
 export async function GET(req: NextRequest) {
   try {
@@ -160,6 +161,7 @@ export async function POST(req: NextRequest) {
       deadline_date,
       is_urgent = false,
       require_signature = true,
+      send_email = true,
     } = body
 
     if (!title?.trim() || !content?.trim()) {
@@ -247,10 +249,38 @@ export async function POST(req: NextRequest) {
 
     insertMany(targetSpecialists)
 
+    // 4. Send M365 Outlook Email Notification via Power Automate Webhook
+    let emailSent = false
+    let emailError: string | undefined
+    if (send_email && targetSpecialists.length > 0) {
+      try {
+        const webhookRes = await sendDocumentIssuedWebhookNotification({
+          documentTitle: title.trim(),
+          category: category || 'Operational Policy',
+          issuedBy: user.name || user.email || 'Management',
+          issuingEntity: issuing_entity,
+          issueDate: longDate,
+          deadlineDate: deadline_date || null,
+          isUrgent: Boolean(is_urgent),
+          targetType: target_type,
+          targetLob: target_lob || null,
+          recipientUsernames: targetSpecialists.map((s) => s.username),
+          recipientDisplayNames: targetSpecialists.map((s) => s.display_name || s.username),
+        })
+        emailSent = webhookRes.success
+        emailError = webhookRes.error
+      } catch (e: any) {
+        console.warn('[POST /api/documents] Email webhook error:', e.message)
+        emailError = e.message
+      }
+    }
+
     return NextResponse.json({
       success: true,
       document_id: documentId,
       assigned_count: targetSpecialists.length,
+      email_sent: emailSent,
+      email_error: emailError,
     })
   } catch (err: any) {
     console.error('[POST /api/documents error]:', err)

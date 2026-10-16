@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import { sendNotification } from '@/lib/notifications'
+import { sendDocumentVoidedWebhookNotification } from '@/lib/webhook'
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,7 +68,8 @@ export async function POST(req: NextRequest) {
 
     voidTransaction()
 
-    // 3. Dispatch real-time in-app notifications to all assigned specialists
+    // 3. Dispatch real-time in-app and email notifications to all assigned specialists
+    let emailSent = false
     try {
       const recipients = db.prepare(`
         SELECT DISTINCT username, user_display_name
@@ -83,6 +85,19 @@ export async function POST(req: NextRequest) {
           link: '/dashboard',
         })
       }
+
+      if (recipients.length > 0) {
+        const webhookRes = await sendDocumentVoidedWebhookNotification({
+          documentTitle: doc.title,
+          category: doc.category || 'Operational Policy',
+          voidedBy: voidedByName,
+          voidReason: void_reason.trim(),
+          recipientUsernames: recipients.map((r) => r.username),
+          recipientDisplayNames: recipients.map((r) => r.user_display_name || r.username),
+          targetLob: doc.target_lob || null,
+        })
+        emailSent = webhookRes.success
+      }
     } catch (notifErr) {
       console.warn('[void route] Failed to dispatch notifications:', notifErr)
     }
@@ -93,6 +108,7 @@ export async function POST(req: NextRequest) {
       voided_at: now,
       voided_by: voidedByName,
       void_reason: void_reason.trim(),
+      email_sent: emailSent,
     })
   } catch (err: any) {
     console.error('[POST /api/documents/void error]:', err)
