@@ -1024,7 +1024,7 @@ export default function VaTrackerPage() {
                               >
                                 ✏️
                               </button>
-                              {(isMaster || e.rep_username === (session?.user as any)?.email) && (
+                              {(isMaster || canManageTeam || (e.rep_username || '').trim().toLowerCase() === ((session?.user as any)?.email || '').trim().toLowerCase() || (e.rep_name || '').trim().toLowerCase() === (session?.user?.name || '').trim().toLowerCase()) && (
                                 <button
                                   onClick={() => handleDeleteRecord(e.id, e.veteran_name)}
                                   style={{

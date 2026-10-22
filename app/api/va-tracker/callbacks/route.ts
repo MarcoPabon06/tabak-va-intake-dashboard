@@ -490,6 +490,7 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
+    db.prepare('UPDATE va_lead_records SET scheduled_callback_id = NULL WHERE scheduled_callback_id = ?').run(id)
     db.prepare('DELETE FROM va_scheduled_callbacks WHERE id = ?').run(id)
 
     return NextResponse.json({ success: true, message: 'Callback removed successfully' })

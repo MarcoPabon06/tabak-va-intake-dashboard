@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
-import { isAuthorizedForSsdTracker } from '../route'
+import { isAuthorizedForSsdTracker, isAuthorizedSsdTeamLead } from '../route'
 
 // GET /api/ssd-tracker/converted-cases
 export async function GET(req: NextRequest) {
@@ -147,35 +147,79 @@ export async function DELETE(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const userRole = (session.user as any)?.role || 'regular'
-    const isSuper = userRole === 'master' || userRole === 'superadmin'
-    const isAdmin = userRole === 'admin'
 
-    if (!isSuper && !isAdmin) {
+    if (!isAuthorizedSsdTeamLead(session)) {
       return NextResponse.json({ error: 'Forbidden: Only Team Leads and Admins can delete converted records' }, { status: 403 })
     }
 
     const { searchParams } = new URL(req.url)
     const singleId = searchParams.get('id')
-    const db = getDb()
+    const queryIds = searchParams.get('ids')
 
+    let targetIds: number[] = []
     if (singleId) {
-      db.prepare(`DELETE FROM ssd_converted_records WHERE id = ?`).run(singleId)
-      return NextResponse.json({ success: true, message: 'Converted record deleted.' })
+      targetIds = [parseInt(singleId, 10)].filter(n => !isNaN(n))
+    } else if (queryIds) {
+      targetIds = queryIds.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+    } else {
+      try {
+        const body = await req.json()
+        if (Array.isArray(body?.ids)) {
+          targetIds = body.ids.map((n: any) => parseInt(n, 10)).filter((n: any) => !isNaN(n))
+        }
+      } catch {
+        // No JSON body
+      }
     }
 
-    const body = await req.json()
-    const { ids } = body
-    if (!Array.isArray(ids) || ids.length === 0) {
+    if (targetIds.length === 0) {
       return NextResponse.json({ error: 'No IDs provided' }, { status: 400 })
     }
 
-    const placeholders = ids.map(() => '?').join(',')
-    const delRes = db.prepare(`DELETE FROM ssd_converted_records WHERE id IN (${placeholders})`).run(...ids)
+    const db = getDb()
+    const placeholders = targetIds.map(() => '?').join(',')
+
+    let deletedCount = 0
+    const deleteConvertedTx = db.transaction(() => {
+      // Find affected (date_converted, rep_name) pairs before deletion so daily_performance stays synced
+      const affectedRows = db.prepare(`
+        SELECT DISTINCT SUBSTR(date_converted, 1, 10) as clean_date, rep_name
+        FROM ssd_converted_records
+        WHERE id IN (${placeholders})
+      `).all(...targetIds) as { clean_date: string; rep_name: string }[]
+
+      const delRes = db.prepare(`DELETE FROM ssd_converted_records WHERE id IN (${placeholders})`).run(...targetIds)
+      deletedCount = delRes.changes
+
+      // Re-sync daily_performance.converted_cases for each affected date & specialist
+      const countRemainingStmt = db.prepare(`
+        SELECT COUNT(*) as cnt
+        FROM ssd_converted_records
+        WHERE SUBSTR(date_converted, 1, 10) = ? AND LOWER(TRIM(rep_name)) = LOWER(TRIM(?))
+      `)
+      const updateDailyPerfStmt = db.prepare(`
+        UPDATE daily_performance
+        SET converted_cases = ?
+        WHERE date = ? AND LOWER(TRIM(agent_name)) = LOWER(TRIM(?))
+      `)
+
+      for (const pair of affectedRows) {
+        if (!pair.clean_date || !pair.rep_name) continue
+        const remaining = countRemainingStmt.get(pair.clean_date, pair.rep_name) as { cnt: number } | undefined
+        updateDailyPerfStmt.run(remaining?.cnt || 0, pair.clean_date, pair.rep_name)
+      }
+    })
+
+    deleteConvertedTx()
+
+    if (deletedCount === 0) {
+      return NextResponse.json({ error: 'Converted record(s) not found or already deleted' }, { status: 404 })
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Successfully deleted ${delRes.changes} converted case records.`,
+      deletedCount,
+      message: `Successfully deleted ${deletedCount} converted case record${deletedCount === 1 ? '' : 's'}.`,
     })
   } catch (err: any) {
     console.error('[ssd-tracker/converted-cases DELETE error]:', err)

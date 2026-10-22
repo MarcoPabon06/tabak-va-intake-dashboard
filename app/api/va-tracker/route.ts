@@ -384,7 +384,10 @@ export async function PUT(req: NextRequest) {
     const sessionDisplayName = session.user?.name || ''
 
     // Specialist can only edit their own records; Managers can edit any
-    if (userRole === 'regular' && userLob === 'VA' && existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
+    const isOwner =
+      (existing.rep_username || '').trim().toLowerCase() === sessionUsername.trim().toLowerCase() ||
+      (existing.rep_name || '').trim().toLowerCase() === sessionDisplayName.trim().toLowerCase()
+    if (userRole === 'regular' && userLob === 'VA' && !isOwner) {
       return NextResponse.json({ error: 'Forbidden: You can only edit your own lead records' }, { status: 403 })
     }
 
@@ -486,6 +489,10 @@ export async function DELETE(req: NextRequest) {
     const canManageAll = userRole === 'master' || userRole === 'superadmin' || userRole === 'admin'
 
     let deletedCount = 0
+    let skippedForbidden = 0
+
+    const unlinkCallbacksStmt = db.prepare(`UPDATE va_scheduled_callbacks SET linked_lead_record_id = NULL WHERE linked_lead_record_id = ?`)
+    const deleteLeadStmt = db.prepare(`DELETE FROM va_lead_records WHERE id = ?`)
 
     const deleteTx = db.transaction(() => {
       for (const id of targetIds) {
@@ -493,17 +500,29 @@ export async function DELETE(req: NextRequest) {
         if (!existing) continue
 
         if (!canManageAll && userRole === 'regular' && userLob === 'VA') {
-          if (existing.rep_username !== sessionUsername && existing.rep_name !== sessionDisplayName) {
+          const isOwner =
+            (existing.rep_username || '').trim().toLowerCase() === sessionUsername.trim().toLowerCase() ||
+            (existing.rep_name || '').trim().toLowerCase() === sessionDisplayName.trim().toLowerCase()
+          if (!isOwner) {
+            skippedForbidden++
             continue // Skip records regular user doesn't own
           }
         }
 
-        db.prepare(`DELETE FROM va_lead_records WHERE id = ?`).run(id)
+        unlinkCallbacksStmt.run(id)
+        deleteLeadStmt.run(id)
         deletedCount++
       }
     })
 
     deleteTx()
+
+    if (deletedCount === 0 && skippedForbidden > 0) {
+      return NextResponse.json({ error: 'Forbidden: You can only delete your own lead records' }, { status: 403 })
+    }
+    if (deletedCount === 0) {
+      return NextResponse.json({ error: 'Lead record(s) not found or already deleted' }, { status: 404 })
+    }
 
     return NextResponse.json({
       success: true,

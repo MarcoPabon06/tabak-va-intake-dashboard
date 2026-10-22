@@ -452,6 +452,8 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
     const db = getDb()
+    db.prepare('UPDATE coaching_sessions SET linked_evaluation_id = NULL WHERE linked_evaluation_id = ?').run(id)
+    db.prepare('UPDATE coaching_requests SET linked_evaluation_id = NULL WHERE linked_evaluation_id = ?').run(id)
     db.prepare('DELETE FROM qa_evaluations WHERE id = ?').run(id)
     return NextResponse.json({ success: true })
   } catch (err: any) {

@@ -380,7 +380,7 @@ function initSchema(db: Database.Database) {
       linked_lead_record_id INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id)
+      FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS idx_va_cb_rep_status ON va_scheduled_callbacks(rep_username, status);
     CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
@@ -705,6 +705,64 @@ function initSchema(db: Database.Database) {
     }
   } catch (e: any) {
     console.error('Failed to migrate users schema:', e.message)
+  }
+
+  // Migrate va_scheduled_callbacks schema to ensure ON DELETE SET NULL on linked_lead_record_id
+  try {
+    const cbTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='va_scheduled_callbacks'").get() as { sql: string } | undefined
+    if (cbTableInfo && cbTableInfo.sql && !cbTableInfo.sql.includes('ON DELETE SET NULL')) {
+      db.pragma('foreign_keys = OFF')
+      db.exec(`
+        CREATE TABLE va_scheduled_callbacks_tmp (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          lead_id TEXT,
+          veteran_name TEXT NOT NULL,
+          phone_number TEXT,
+          rep_name TEXT NOT NULL,
+          rep_username TEXT NOT NULL,
+          callback_date TEXT NOT NULL,
+          callback_time TEXT NOT NULL,
+          scheduled_datetime TEXT NOT NULL,
+          timezone TEXT DEFAULT 'America/Chicago',
+          notes TEXT,
+          status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'COMPLETED', 'RESCHEDULED', 'CANCELLED')),
+          outcome_status TEXT,
+          outcome_reason TEXT,
+          other_reason_notes TEXT,
+          resolved_at TEXT,
+          resolved_by TEXT,
+          created_by TEXT,
+          linked_lead_record_id INTEGER,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id) ON DELETE SET NULL
+        );
+        INSERT INTO va_scheduled_callbacks_tmp (
+          id, lead_id, veteran_name, phone_number, rep_name, rep_username,
+          callback_date, callback_time, scheduled_datetime, timezone, notes,
+          status, outcome_status, outcome_reason, other_reason_notes,
+          resolved_at, resolved_by, created_by, linked_lead_record_id,
+          created_at, updated_at
+        )
+        SELECT
+          id, lead_id, veteran_name, phone_number, rep_name, rep_username,
+          callback_date, callback_time, scheduled_datetime, timezone, notes,
+          status, outcome_status, outcome_reason, other_reason_notes,
+          resolved_at, resolved_by, created_by, linked_lead_record_id,
+          created_at, updated_at
+        FROM va_scheduled_callbacks;
+        DROP TABLE va_scheduled_callbacks;
+        ALTER TABLE va_scheduled_callbacks_tmp RENAME TO va_scheduled_callbacks;
+        CREATE INDEX IF NOT EXISTS idx_va_cb_rep_status ON va_scheduled_callbacks(rep_username, status);
+        CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
+        CREATE INDEX IF NOT EXISTS idx_va_cb_date ON va_scheduled_callbacks(callback_date);
+        CREATE INDEX IF NOT EXISTS idx_va_cb_status ON va_scheduled_callbacks(status);
+      `)
+      db.pragma('foreign_keys = ON')
+      console.log('[db] Migrated va_scheduled_callbacks table to include ON DELETE SET NULL on linked_lead_record_id')
+    }
+  } catch (e: any) {
+    console.error('Failed to migrate va_scheduled_callbacks schema:', e.message)
   }
 
   // Seed default settings
