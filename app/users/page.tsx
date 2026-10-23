@@ -254,7 +254,7 @@ export default function UsersPage() {
       <Navigation />
       <main style={{ marginLeft: 'var(--sidebar-width)', flex: 1, padding: '32px 28px', background: 'var(--bg-primary)' }}>
         <div style={{ maxWidth: 1000 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>User Management & Role Permissions</h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Assign Super Admin, Admin (Team Lead), and Regular Specialist roles with granular LOB & feature access</p>
@@ -481,7 +481,7 @@ export default function UsersPage() {
           {loading ? (
             <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>Loading…</div>
           ) : (
-            <div className="glass-card" style={{ padding: '20px 0' }}>
+            <div className="glass-card" style={{ padding: '20px 0', overflowX: 'auto' }}>
               <table className="data-table">
                 <thead>
                   <tr>

@@ -26,6 +26,8 @@
   --warning: #f59e0b;
   --danger: #ef4444;
   --sidebar-width: 240px;
+  --drawer-width: 260px;
+  --mobile-header-height: 60px;
 }
 
 * {
@@ -39,8 +41,25 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: 'Roboto', -apple-system, sans-serif;
-  height: 100%;
+  min-height: 100%;
+  max-width: 100vw;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Ensure main content containers never overflow flex parents */
+main {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 /* Heading Typography */
@@ -220,3 +239,283 @@ h1, h2, h3, h4, h5, h6, button, select, input, textarea, .nav-link {
 }
 .nav-link:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
 .nav-link.active { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   International Responsive Design & Accessibility System (WCAG 2.1 AA)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Keyboard Focus Accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Responsive App Shell & Sidebar Drawer */
+.mobile-top-bar {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+.app-sidebar {
+  width: var(--drawer-width);
+  max-width: 240px;
+  height: 100vh;
+  height: 100dvh;
+  background: #0a1628;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1050;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: left 0.26s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.26s ease;
+}
+
+.sidebar-close-btn {
+  display: none;
+}
+
+/* Semantic Responsive Grid Utilities */
+.responsive-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.responsive-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.responsive-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.responsive-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Smooth horizontal touch scrolling on all scrollable containers */
+div[style*="overflow-x: auto"],
+div[style*="overflowX"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Large Laptop / Small Desktop Breakpoint (<= 1280px) ── */
+@media (max-width: 1280px) {
+  .responsive-grid-5,
+  div[style*="grid-template-columns: repeat(5, 1fr)"] {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
+  }
+
+  .responsive-grid-4,
+  div[style*="grid-template-columns: repeat(4, 1fr)"],
+  div[style*="grid-template-columns: 1fr 1fr 1fr 1fr"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ── Tablet & Mobile Navigation Drawer Breakpoint (<= 1023px) ── */
+@media (max-width: 1023px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+
+  .mobile-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--mobile-header-height);
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+    background: rgba(7, 9, 45, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    z-index: 1030;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  }
+
+  .app-sidebar {
+    max-width: 270px;
+    width: min(270px, 84vw);
+    left: -285px;
+    box-shadow: none;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+
+  .app-sidebar.open {
+    left: 0;
+    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.75);
+  }
+
+  .sidebar-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 1040;
+    animation: fadeIn 0.2s ease forwards;
+  }
+
+  .sidebar-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Automatically adapt all page <main> containers to full-width below the sticky mobile top bar */
+  main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: calc(var(--mobile-header-height) + 20px) 20px 32px !important;
+  }
+
+  /* Collapse wide asymmetric split panes on tablets */
+  div[style*="grid-template-columns: 1fr 340px"],
+  div[style*="grid-template-columns: 360px 1fr"],
+  div[style*="grid-template-columns: 340px 1fr"],
+  div[style*="grid-template-columns: 1fr 1.8fr"],
+  div[style*="grid-template-columns: 1.2fr 1fr"],
+  div[style*="grid-template-columns: 2fr 1fr"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ── Tablet Portrait & Large Phone Breakpoint (<= 820px) ── */
+@media (max-width: 820px) {
+  .responsive-grid-2,
+  .responsive-grid-3,
+  .responsive-grid-4,
+  .responsive-grid-5,
+  div[style*="grid-template-columns: 1fr 1fr"],
+  div[style*="grid-template-columns: repeat(2, 1fr)"],
+  div[style*="grid-template-columns: repeat(3, 1fr)"],
+  div[style*="grid-template-columns: repeat(4, 1fr)"],
+  div[style*="grid-template-columns: repeat(5, 1fr)"],
+  div[style*="grid-template-columns: 1fr 1fr 1fr"],
+  form[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Ensure auto-fit grids with 420px minimum don't overflow narrow screens */
+  div[style*="minmax(420px"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ── Mobile Phone Breakpoint (<= 640px) ── */
+@media (max-width: 640px) {
+  main {
+    padding: calc(var(--mobile-header-height) + 14px) 12px 24px !important;
+  }
+
+  .glass-card {
+    border-radius: 12px;
+  }
+
+  /* Prevent iOS Safari auto-zoom on form field focus by ensuring >= 16px font size */
+  input,
+  select,
+  textarea,
+  .input-field {
+    font-size: 16px !important;
+  }
+
+  /* Compact table cells while preserving horizontal scroll */
+  .data-table th,
+  .data-table td,
+  table th,
+  table td {
+    padding: 8px 10px !important;
+  }
+
+  /* Constrain fixed modal overlays and inner cards nicely on mobile screens */
+  div[style*="position: fixed"][style*="inset: 0"],
+  div[style*="position: fixed"][style*="top: 0"] {
+    padding: 10px !important;
+  }
+
+  div[style*="position: fixed"] > .glass-card {
+    max-height: calc(100dvh - 20px) !important;
+    overflow-y: auto !important;
+    padding: 18px 16px !important;
+  }
+
+  div[style*="position: fixed"] > .fade-in:not(.glass-card) {
+    max-height: calc(100dvh - 20px) !important;
+  }
+
+  /* Make 7-column calendar grids horizontally scrollable if needed on very small phones */
+  div[style*="grid-template-columns: repeat(7, 1fr)"] {
+    gap: 3px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* ── Small Mobile Breakpoint (<= 380px) ── */
+@media (max-width: 380px) {
+  main {
+    padding: calc(var(--mobile-header-height) + 10px) 10px 20px !important;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Respect user OS Reduced Motion preference (WCAG 2.1 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

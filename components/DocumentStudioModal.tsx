@@ -522,7 +522,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
             alignItems: 'center',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: 8 }}>
               <img src="/logos/logo-andes.webp" alt="Andes Workforce" style={{ height: 24, objectFit: 'contain' }} />
               <span style={{ color: 'rgba(255,255,255,0.2)' }}>|</span>
@@ -560,6 +560,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
             borderBottom: '1px solid rgba(255,255,255,0.08)',
             background: 'rgba(255,255,255,0.02)',
             padding: '0 24px',
+            overflowX: 'auto',
           }}
         >
           {[
@@ -583,6 +584,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                 borderBottom: activeTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
               }}
             >
               {tab.label}
@@ -680,7 +682,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                     <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6 }}>
                       Target Scope
                     </label>
-                    <div style={{ display: 'flex', gap: 10 }}>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {[
                         { id: 'ALL', label: '👥 Company-Wide' },
                         { id: 'LOB', label: '🏛️ By Division' },
@@ -875,14 +877,14 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                 </div>
 
                 {/* AI Prompt Bar */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     placeholder="✨ Ask Gemini AI to draft this policy (e.g. 'Write a clear policy reminding the VA team about callback adherence...')"
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     className="input-field"
-                    style={{ margin: 0, fontSize: 12, flex: 1 }}
+                    style={{ margin: 0, fontSize: 12, flex: 1, minWidth: 200 }}
                   />
                   <button
                     type="button"
@@ -1120,7 +1122,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
               </div>
 
               {/* Submit & Preview Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', gap: 10 }}>
                 <button
                   type="button"
                   onClick={onClose}
@@ -1130,7 +1132,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                   Cancel
                 </button>
 
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -1185,7 +1187,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
               {selectedDocForRoster ? (
                 <div>
                   {/* Header of selected document */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                     <button
                       onClick={() => setSelectedDocForRoster(null)}
                       className="btn-secondary"
@@ -1276,7 +1278,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', gap: 16, marginTop: 6 }}>
+                    <div style={{ fontSize: 12, color: '#94a3b8', display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
                       <span><strong>Issued By:</strong> {selectedDocForRoster.created_by_name}</span>
                       <span><strong>Date:</strong> {selectedDocForRoster.created_at?.slice(0, 10)}</span>
                       <span><strong>Signed:</strong> {selectedDocForRoster.total_signed || 0} of {selectedDocForRoster.total_assigned || 0}</span>
@@ -1284,7 +1286,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                   </div>
 
                   {/* Recipient Roster Table */}
-                  <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className="glass-card" style={{ padding: 0, overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>
@@ -1389,7 +1391,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
 
                     return (
                       <div>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
                           {[
                             { id: 'ALL', label: `All (${documents.length})` },
                             { id: 'ACTIVE', label: `Active (${activeDocs.length})` },
@@ -1416,7 +1418,7 @@ export default function DocumentStudioModal({ isOpen, onClose }: Props) {
                           ))}
                         </div>
 
-                        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div className="glass-card" style={{ padding: 0, overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                             <thead>
                               <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>

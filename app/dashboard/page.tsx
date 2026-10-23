@@ -235,7 +235,7 @@ export default function DashboardPage() {
               {preset.label}
             </button>
           ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
             <input
               id="date-from"
               type="date"
@@ -358,7 +358,7 @@ export default function DashboardPage() {
                 <SummaryCards data={data} lob={selectedLob} goals={goals} />
 
                 {/* Charts Row 1 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 20 }}>
                   <PerformanceLineChart
                     data={data}
                     metric={selectedLob === 'SSD' ? 'converted_cases' : 'signed_retainers'}
@@ -368,7 +368,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Charts Row 2 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
                   <CAPDBarChart data={data} lob={selectedLob} goals={goals} />
                   <WeekdayHeatmap data={data} />
                 </div>

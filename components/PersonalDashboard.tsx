@@ -1070,13 +1070,12 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
       {/* Personal KPI Cards Row */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${kpiCards.length}, 1fr)`,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))',
         gap: 14,
         marginBottom: 16,
-        overflowX: 'auto',
       }}>
         {kpiCards.map((c) => (
-          <div key={c.label} className="glass-card fade-in" style={{ padding: '14px 16px', position: 'relative', overflow: 'hidden', minWidth: 120 }}>
+          <div key={c.label} className="glass-card fade-in" style={{ padding: '14px 16px', position: 'relative', overflow: 'hidden', minWidth: 0 }}>
             <div style={{ position: 'absolute', top: -15, right: -15, width: 60, height: 60, borderRadius: '50%', background: `radial-gradient(circle, ${c.color}15 0%, transparent 70%)`, pointerEvents: 'none' }} />
             <span style={{ fontSize: 18, display: 'block', marginBottom: 8 }}>{c.icon}</span>
             <div style={{ fontSize: 24, fontWeight: 800, color: c.color, lineHeight: 1, marginBottom: 4 }}>{c.value}</div>
@@ -1086,7 +1085,7 @@ export default function PersonalDashboard({ allData, agentName, goals, lob = 'VA
       </div>
 
       {/* Personal Signed Trend + CAPD chart */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div className="glass-card" style={{ padding: '20px 16px' }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 16 }}>
             My {lob === 'SSD' ? 'Converted Cases' : 'Signed Retainers'} Trend

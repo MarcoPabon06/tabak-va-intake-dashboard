@@ -524,8 +524,8 @@ export default function CoachingPage() {
       <main style={{ flex: 1, marginLeft: 'var(--sidebar-width)', padding: '32px 36px', maxWidth: 1200 }}>
         
         {/* Navigation Tabs at Top */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 10, flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <button
               onClick={() => setHubTab('coaching')}
               style={{

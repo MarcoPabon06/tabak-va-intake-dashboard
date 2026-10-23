@@ -1463,7 +1463,7 @@ export default function SSDTrackerPage() {
         )}
 
         {/* Converted Table */}
-        <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="glass-card" style={{ padding: 0, overflowX: 'auto' }}>
           {convertedLoading ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
               <div className="spinner" style={{ margin: '0 auto 12px' }} />

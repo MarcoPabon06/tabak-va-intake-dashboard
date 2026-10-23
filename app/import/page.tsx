@@ -408,7 +408,7 @@ export default function ImportPage() {
                         ⚡ Successfully Processed {callResult.total_calls_processed} Calls!
                       </div>
                       {callResult.agent_summaries && callResult.agent_summaries.length > 0 && (
-                        <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto' }}>
+                        <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto', overflowX: 'auto' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                             <thead>
                               <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
