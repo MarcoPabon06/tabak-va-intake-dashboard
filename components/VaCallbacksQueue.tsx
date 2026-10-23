@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { safeFetchJson } from '@/lib/apiClient'
-import { format, parseISO } from 'date-fns'
 import { getCentralDiffMinutes, getBusinessDate } from '@/lib/dateUtils'
-import { VA_OUTCOME_REASONS } from '@/app/va-tracker/page'
+import { VA_OUTCOME_REASONS } from '@/lib/vaTrackerConstants'
 
 export interface ScheduledCallback {
   id: number
@@ -111,6 +110,8 @@ export default function VaCallbacksQueue({
   const [resolvingCallback, setResolvingCallback] = useState<ScheduledCallback | null>(null)
   const [reschedulingCallback, setReschedulingCallback] = useState<ScheduledCallback | null>(null)
   const [bannerMsg, setBannerMsg] = useState('')
+  const onCountsUpdatedRef = useRef(onCountsUpdated)
+  onCountsUpdatedRef.current = onCountsUpdated
 
   const fetchCallbacks = useCallback(async () => {
     setLoading(true)
@@ -120,15 +121,15 @@ export default function VaCallbacksQueue({
       if (searchQuery.trim()) url += `&search=${encodeURIComponent(searchQuery.trim())}`
 
       const res = await safeFetchJson(url)
-      setCallbacks(res.callbacks || [])
-      if (res.counts) onCountsUpdated(res.counts)
-      if (res.currentDateTime) setCurrentDateTime(res.currentDateTime)
+      setCallbacks(Array.isArray(res?.callbacks) ? res.callbacks : [])
+      if (res?.counts && onCountsUpdatedRef.current) onCountsUpdatedRef.current(res.counts)
+      if (res?.currentDateTime) setCurrentDateTime(res.currentDateTime)
     } catch (err: any) {
       console.error('Failed to fetch callbacks:', err)
     } finally {
       setLoading(false)
     }
-  }, [subView, selectedRep, searchQuery, onCountsUpdated])
+  }, [subView, selectedRep, searchQuery])
 
   useEffect(() => {
     fetchCallbacks()
@@ -331,12 +332,14 @@ export default function VaCallbacksQueue({
                   </td>
                 </tr>
               ) : (
-                callbacks.map((cb) => (
+                callbacks.map((cb) => {
+                  const isOverdue = cb.status === 'PENDING' && getCentralDiffMinutes(cb.callback_date, cb.callback_time) < 0
+                  return (
                   <tr
                     key={cb.id}
                     style={{
                       borderBottom: '1px solid rgba(255,255,255,0.04)',
-                      background: cb.status === 'PENDING' && renderTimeStatus(cb).props.children?.[1]?.includes('overdue')
+                      background: isOverdue
                         ? 'rgba(239, 68, 68, 0.05)'
                         : 'transparent',
                     }}
@@ -468,7 +471,8 @@ export default function VaCallbacksQueue({
                       </div>
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>

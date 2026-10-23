@@ -67,14 +67,19 @@ export function getBusinessTime(date: Date = new Date(), timeZone: string = FIRM
  * Negative number = minutes in the past (e.g. -20 = 20 mins overdue).
  * 0 = due right now.
  */
-export function getCentralDiffMinutes(dateStr: string, timeStr: string): number {
-  if (!dateStr || !timeStr) return 0
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const [hour, minute] = timeStr.split(':').map(Number)
-  const targetDate = new Date(year, month - 1, day, hour, minute, 0)
+export function getCentralDiffMinutes(dateStr?: string | null, timeStr?: string | null): number {
+  if (!dateStr || !timeStr || typeof dateStr !== 'string' || typeof timeStr !== 'string') return 0
+  try {
+    const [year, month, day] = dateStr.slice(0, 10).split('-').map(Number)
+    const [hour, minute] = timeStr.split(':').map(Number)
+    if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hour) || isNaN(minute)) return 0
+    const targetDate = new Date(year, month - 1, day, hour, minute, 0)
 
-  // Current time in America/Chicago
-  const nowCentral = new Date(new Date().toLocaleString('en-US', { timeZone: FIRM_TIMEZONE }))
-  return Math.round((targetDate.getTime() - nowCentral.getTime()) / 60000)
+    // Current time in America/Chicago
+    const nowCentral = new Date(new Date().toLocaleString('en-US', { timeZone: FIRM_TIMEZONE }))
+    const diff = Math.round((targetDate.getTime() - nowCentral.getTime()) / 60000)
+    return isNaN(diff) ? 0 : diff
+  } catch {
+    return 0
+  }
 }
-

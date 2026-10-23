@@ -713,6 +713,7 @@ function initSchema(db: Database.Database) {
     if (cbTableInfo && cbTableInfo.sql && !cbTableInfo.sql.includes('ON DELETE SET NULL')) {
       db.pragma('foreign_keys = OFF')
       db.exec(`
+        DROP TABLE IF EXISTS va_scheduled_callbacks_tmp;
         CREATE TABLE va_scheduled_callbacks_tmp (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           lead_id TEXT,

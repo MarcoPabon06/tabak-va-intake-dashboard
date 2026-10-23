@@ -6,24 +6,11 @@ import Navigation from '@/components/Navigation'
 import ImportHistoryModal from '@/components/ImportHistoryModal'
 import { format, subDays, startOfMonth, endOfMonth, differenceInCalendarDays } from 'date-fns'
 import * as XLSX from 'xlsx'
-
-export const VA_STATUS_OPTIONS = [
-  'Sent E-Sign',
-  'Sign Follow Up',
-  'Signed E-Sign',
-  'Client Refused Help',
-  'Case Rejected',
-] as const
-
-export const VA_OUTCOME_REASONS = [
-  'Already Represented',
-  'Not interested',
-  'Fee is too high',
-  'Say they will call back',
-  'Second Hang Up',
-  'Client will review FA',
-  'Other',
-] as const
+import { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '@/lib/vaTrackerConstants'
+import { safeFetchJson } from '@/lib/apiClient'
+import VaCallbacksQueue, { ScheduleCallbackModal } from '@/components/VaCallbacksQueue'
+import VaEfficiencyQueue from '@/components/VaEfficiencyQueue'
+export { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS }
 
 interface VaLeadRecord {
   id: number
@@ -61,10 +48,6 @@ const PRESETS = [
   { label: 'Last 30 days', getValue: () => ({ from: format(subDays(new Date(), 30), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd') }) },
   { label: 'All time', getValue: () => ({ from: '2024-01-01', to: '2099-12-31' }) },
 ]
-
-import { safeFetchJson } from '@/lib/apiClient'
-import VaCallbacksQueue, { ScheduleCallbackModal } from '@/components/VaCallbacksQueue'
-import VaEfficiencyQueue from '@/components/VaEfficiencyQueue'
 
 export default function VaTrackerPage() {
   const { data: session } = useSession()

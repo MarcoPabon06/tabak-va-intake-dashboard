@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { safeFetchJson } from '@/lib/apiClient'
-import { VA_OUTCOME_REASONS } from '@/app/va-tracker/page'
+import { VA_OUTCOME_REASONS } from '@/lib/vaTrackerConstants'
 
 interface ScheduledCallback {
   id: number
