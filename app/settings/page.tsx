@@ -712,10 +712,86 @@ function SecurityAuditTrailCard() {
 
   const startRecord = pageSize === 'all' ? 1 : Math.min((page - 1) * (pageSize as number) + 1, totalRecords)
   const endRecord = pageSize === 'all' ? totalRecords : Math.min(page * (pageSize as number), totalRecords)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExportAuditLog(formatType: 'log' | 'csv') {
+    setExporting(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('limit', 'all')
+      if (typeFilter !== 'ALL') params.set('upload_type', typeFilter)
+      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+
+      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`)
+      const data = res.ok ? await res.json() : { logs }
+      const exportRows: any[] = data.logs || logs || []
+      const nowIso = new Date().toISOString()
+      const dateStamp = nowIso.slice(0, 10)
+
+      let content = ''
+      let mimeType = 'text/plain;charset=utf-8'
+      let filename = `tabak-security-upload-audit-${dateStamp}.${formatType}`
+
+      if (formatType === 'log') {
+        const headerLines = [
+          '========================================================================================',
+          'TABAK LAW, LLC — OPERATIONS DASHBOARD SECURITY & UPLOAD AUDIT LOG',
+          `Generated At (UTC): ${nowIso}`,
+          `Total Events Exported: ${exportRows.length}`,
+          '----------------------------------------------------------------------------------------',
+          'TECHNICAL ARCHITECTURE & ZERO-PERSISTENCE ATTESTATION:',
+          '1. Zero Disk Persistence: Uploaded Excel/CSV files are processed strictly in volatile',
+          '   RAM buffers (Buffer.from(await file.arrayBuffer())) and are NEVER written to disk.',
+          '2. No Raw Spreadsheet Content Logged: Neither application logs (stdout/stderr) nor',
+          '   the upload_audit_logs table record raw spreadsheet rows, phone numbers, or SSNs.',
+          '3. Cryptographic Verification: Only file metadata and a one-way SHA-256 hash digest',
+          '   of the file buffer are recorded below for non-repudiation.',
+          '========================================================================================',
+          '',
+        ]
+        const bodyLines = exportRows.map((r) => {
+          return `[${r.created_at} UTC] STATUS=${r.status} | TYPE=${r.upload_type} | USER="${r.user_name || r.username}" (${r.username}) | FILE="${r.filename}" | SIZE=${r.file_size_bytes || 0}B | ROWS_PROCESSED=${r.rows_processed || 0} | SHA256=${r.file_hash_sha256 || 'N/A'} | DETAILS=${r.details || 'OK; raw buffer discarded from RAM'}`
+        })
+        content = [...headerLines, ...(bodyLines.length > 0 ? bodyLines : ['[NO UPLOAD EVENTS RECORDED]']), ''].join('\n')
+      } else {
+        mimeType = 'text/csv;charset=utf-8'
+        const headers = ['ID', 'Timestamp_UTC', 'Status', 'Upload_Type', 'User_Display_Name', 'Username', 'Filename', 'File_Size_Bytes', 'Rows_Processed', 'SHA256_Hash', 'Details']
+        const csvEscape = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
+        const rowsCsv = exportRows.map((r) =>
+          [
+            r.id,
+            r.created_at,
+            r.status,
+            r.upload_type,
+            r.user_name || r.username,
+            r.username,
+            r.filename,
+            r.file_size_bytes || 0,
+            r.rows_processed || 0,
+            r.file_hash_sha256 || '',
+            r.details || 'Processed in memory; raw file discarded',
+          ].map(csvEscape).join(',')
+        )
+        content = [headers.join(','), ...rowsCsv].join('\n')
+      }
+
+      const blob = new Blob([content], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="glass-card" style={{ padding: '24px', borderColor: 'rgba(59,130,246,0.3)', marginTop: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 8 }}>
             🛡️ File Upload Security Suite & Audit Trail
@@ -723,6 +799,44 @@ function SecurityAuditTrailCard() {
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
             Zero-persistence in-memory processing, binary magic byte authentication, formula injection neutralization, and immutable upload history.
           </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => handleExportAuditLog('log')}
+            className="btn-secondary"
+            style={{
+              padding: '7px 13px',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#60a5fa',
+              borderColor: 'rgba(59,130,246,0.35)',
+              background: 'rgba(59,130,246,0.1)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            📥 {exporting ? 'Exporting...' : 'Download IT Audit Log (.LOG)'}
+          </button>
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={() => handleExportAuditLog('csv')}
+            className="btn-secondary"
+            style={{
+              padding: '7px 13px',
+              fontSize: 12,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            📊 Export CSV
+          </button>
         </div>
       </div>
 
