@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import NotificationBell from '@/components/NotificationBell'
-import ScheduledCallbackReminder from '@/components/ScheduledCallbackReminder'
 
 const AGENT_COLORS: Record<string, string> = {
   'Daniel Castillo': '#b82105',
@@ -326,9 +325,6 @@ export default function Navigation() {
           </button>
         </div>
       </aside>
-
-      {/* Global VA Scheduled Callback Proactive Reminder Modal */}
-      <ScheduledCallbackReminder />
     </>
   )
 }
