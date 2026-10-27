@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
-import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
+import { sanitizeCellText, maskSensitivePII, maskClientName } from '@/lib/security'
 import { getBusinessTimestamp } from '@/lib/dateUtils'
 import { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '@/lib/ssdTrackerConstants'
 export { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS }
@@ -357,8 +357,8 @@ export async function POST(req: NextRequest) {
     const signedAt = status === 'Signed E-Sign'
       ? (body.signed_at ? body.signed_at.trim() : getBusinessTimestamp())
       : null
-    const sanitizedClientName = sanitizeCellText(client_name.trim())
     const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
+    const sanitizedClientName = maskClientName(client_name, sanitizedLeadId)
     const sanitizedNotes = other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null
     const cleanDate = date.trim().slice(0, 10)
 
@@ -453,8 +453,8 @@ export async function PUT(req: NextRequest) {
     const repName = customRepName ? customRepName.trim() : existing.rep_name
     const repUsername = customRepName ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '') : existing.rep_username
 
-    const sanitizedClientName = client_name ? sanitizeCellText(client_name.trim()) : existing.client_name
     const sanitizedLeadId = lead_id !== undefined ? (lead_id ? sanitizeCellText(lead_id.trim()) : null) : existing.lead_id
+    const sanitizedClientName = client_name ? maskClientName(client_name, sanitizedLeadId) : maskClientName(existing.client_name, sanitizedLeadId)
     const sanitizedNotes = other_reason_notes !== undefined ? (other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null) : existing.other_reason_notes
     const cleanDate = date ? date.trim().slice(0, 10) : existing.date
     const newConverted = is_converted !== undefined ? (is_converted ? 1 : 0) : existing.is_converted

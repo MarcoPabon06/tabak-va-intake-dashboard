@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
+import { maskClientName, maskSensitivePII, sanitizeCellText } from '@/lib/security'
 
 // Helper: Normalize Rep Name & Username (case-insensitive & Title Case)
 export function normalizeRepInfo(rawName: string): { rep_name: string; rep_username: string } {
@@ -206,13 +207,17 @@ export async function POST(req: NextRequest) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
+    const cleanLeadId = sanitizeCellText(String(lead_id).trim())
+    const maskedClientName = maskClientName(client_name, cleanLeadId)
+    const sanitizedOtherReason = other_reason ? maskSensitivePII(String(other_reason).trim()) : ''
+
     const result = stmt.run(
-      String(lead_id).trim(),
-      String(client_name).trim(),
+      cleanLeadId,
+      maskedClientName,
       date_completed,
       isConverted,
       isConverted === 'NO' ? (reason_not_converted || 'Other') : null,
-      isConverted === 'NO' ? (other_reason || '') : null,
+      isConverted === 'NO' ? sanitizedOtherReason : null,
       repUsername,
       finalRepName,
       isConverted === 'YES' ? nowStr : null
@@ -252,6 +257,10 @@ export async function PUT(req: NextRequest) {
     const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ')
     const convertedAt = isConverted === 'YES' ? (entry.converted_at || nowStr) : null
 
+    const finalLeadId = lead_id ? sanitizeCellText(String(lead_id).trim()) : entry.lead_id
+    const finalClientName = client_name ? maskClientName(client_name, finalLeadId) : maskClientName(entry.client_name, finalLeadId)
+    const finalOtherReason = other_reason !== undefined ? (other_reason ? maskSensitivePII(String(other_reason)) : '') : entry.other_reason
+
     db.prepare(`
       UPDATE apps_team_entries
       SET lead_id = ?,
@@ -264,12 +273,12 @@ export async function PUT(req: NextRequest) {
           updated_at = datetime('now')
       WHERE id = ?
     `).run(
-      lead_id || entry.lead_id,
-      client_name || entry.client_name,
+      finalLeadId,
+      finalClientName,
       date_completed || entry.date_completed,
       isConverted,
       isConverted === 'NO' ? (reason_not_converted || entry.reason_not_converted || 'Other') : null,
-      isConverted === 'NO' ? (other_reason !== undefined ? other_reason : entry.other_reason) : null,
+      isConverted === 'NO' ? finalOtherReason : null,
       convertedAt,
       id
     )

@@ -59,11 +59,6 @@ export async function POST(req: NextRequest) {
         }
       } else if (batch.lob === 'VA' || batch.upload_type.startsWith('va_')) {
         try {
-          db.prepare(`
-            UPDATE va_scheduled_callbacks
-            SET linked_lead_record_id = NULL
-            WHERE linked_lead_record_id IN (SELECT id FROM va_lead_records WHERE import_batch_id = ?)
-          `).run(batch.batch_id)
           const delRes = db.prepare(`DELETE FROM va_lead_records WHERE import_batch_id = ?`).run(batch.batch_id)
           recordsDeleted += delRes.changes
         } catch (e: any) {

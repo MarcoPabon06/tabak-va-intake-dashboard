@@ -358,34 +358,8 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_ai_reports_date ON saved_ai_reports(created_at);
     CREATE INDEX IF NOT EXISTS idx_ai_reports_lob ON saved_ai_reports(lob);
 
-    CREATE TABLE IF NOT EXISTS va_scheduled_callbacks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      lead_id TEXT,
-      veteran_name TEXT NOT NULL,
-      phone_number TEXT,
-      rep_name TEXT NOT NULL,
-      rep_username TEXT NOT NULL,
-      callback_date TEXT NOT NULL,
-      callback_time TEXT NOT NULL,
-      scheduled_datetime TEXT NOT NULL,
-      timezone TEXT DEFAULT 'America/Chicago',
-      notes TEXT,
-      status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'COMPLETED', 'RESCHEDULED', 'CANCELLED')),
-      outcome_status TEXT,
-      outcome_reason TEXT,
-      other_reason_notes TEXT,
-      resolved_at TEXT,
-      resolved_by TEXT,
-      created_by TEXT,
-      linked_lead_record_id INTEGER,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id) ON DELETE SET NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_va_cb_rep_status ON va_scheduled_callbacks(rep_username, status);
-    CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
-    CREATE INDEX IF NOT EXISTS idx_va_cb_date ON va_scheduled_callbacks(callback_date);
-    CREATE INDEX IF NOT EXISTS idx_va_cb_status ON va_scheduled_callbacks(status);
+    DROP TABLE IF EXISTS va_scheduled_callbacks;
+    DROP TABLE IF EXISTS va_scheduled_callbacks_tmp;
 
     CREATE TABLE IF NOT EXISTS communication_documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -522,9 +496,6 @@ function initSchema(db: Database.Database) {
     { table: 'va_lead_records', column: 'import_batch_id', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'signed_at', definition: 'TEXT' },
     { table: 'va_lead_records', column: 'last_edited_by', definition: 'TEXT' },
-    { table: 'va_lead_records', column: 'phone_number', definition: 'TEXT' },
-    { table: 'va_lead_records', column: 'scheduled_callback_id', definition: 'INTEGER' },
-    { table: 'va_scheduled_callbacks', column: 'created_by', definition: 'TEXT' },
   ]
 
   for (const alter of alterColumns) {
@@ -707,63 +678,158 @@ function initSchema(db: Database.Database) {
     console.error('Failed to migrate users schema:', e.message)
   }
 
-  // Migrate va_scheduled_callbacks schema to ensure ON DELETE SET NULL on linked_lead_record_id
+  // Retroactive PII Anonymization & Scheduled Callbacks Table Purge
   try {
-    const cbTableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='va_scheduled_callbacks'").get() as { sql: string } | undefined
-    if (cbTableInfo && cbTableInfo.sql && !cbTableInfo.sql.includes('ON DELETE SET NULL')) {
-      db.pragma('foreign_keys = OFF')
-      db.exec(`
-        DROP TABLE IF EXISTS va_scheduled_callbacks_tmp;
-        CREATE TABLE va_scheduled_callbacks_tmp (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          lead_id TEXT,
-          veteran_name TEXT NOT NULL,
-          phone_number TEXT,
-          rep_name TEXT NOT NULL,
-          rep_username TEXT NOT NULL,
-          callback_date TEXT NOT NULL,
-          callback_time TEXT NOT NULL,
-          scheduled_datetime TEXT NOT NULL,
-          timezone TEXT DEFAULT 'America/Chicago',
-          notes TEXT,
-          status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'COMPLETED', 'RESCHEDULED', 'CANCELLED')),
-          outcome_status TEXT,
-          outcome_reason TEXT,
-          other_reason_notes TEXT,
-          resolved_at TEXT,
-          resolved_by TEXT,
-          created_by TEXT,
-          linked_lead_record_id INTEGER,
-          created_at TEXT DEFAULT (datetime('now')),
-          updated_at TEXT DEFAULT (datetime('now')),
-          FOREIGN KEY(linked_lead_record_id) REFERENCES va_lead_records(id) ON DELETE SET NULL
-        );
-        INSERT INTO va_scheduled_callbacks_tmp (
-          id, lead_id, veteran_name, phone_number, rep_name, rep_username,
-          callback_date, callback_time, scheduled_datetime, timezone, notes,
-          status, outcome_status, outcome_reason, other_reason_notes,
-          resolved_at, resolved_by, created_by, linked_lead_record_id,
-          created_at, updated_at
-        )
-        SELECT
-          id, lead_id, veteran_name, phone_number, rep_name, rep_username,
-          callback_date, callback_time, scheduled_datetime, timezone, notes,
-          status, outcome_status, outcome_reason, other_reason_notes,
-          resolved_at, resolved_by, created_by, linked_lead_record_id,
-          created_at, updated_at
-        FROM va_scheduled_callbacks;
-        DROP TABLE va_scheduled_callbacks;
-        ALTER TABLE va_scheduled_callbacks_tmp RENAME TO va_scheduled_callbacks;
-        CREATE INDEX IF NOT EXISTS idx_va_cb_rep_status ON va_scheduled_callbacks(rep_username, status);
-        CREATE INDEX IF NOT EXISTS idx_va_cb_scheduled ON va_scheduled_callbacks(scheduled_datetime);
-        CREATE INDEX IF NOT EXISTS idx_va_cb_date ON va_scheduled_callbacks(callback_date);
-        CREATE INDEX IF NOT EXISTS idx_va_cb_status ON va_scheduled_callbacks(status);
-      `)
-      db.pragma('foreign_keys = ON')
-      console.log('[db] Migrated va_scheduled_callbacks table to include ON DELETE SET NULL on linked_lead_record_id')
+    const maskNameForDb = (rawName: any, leadId?: any): string => {
+      const cleanLeadId =
+        leadId !== null && leadId !== undefined && String(leadId).trim() !== '' && String(leadId).trim() !== '—'
+          ? String(leadId).trim()
+          : ''
+      if (rawName === null || rawName === undefined) {
+        return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+      }
+      const sanitized = String(rawName).replace(/^'+/, '').trim()
+      if (!sanitized || /^unknown(\s+client)?$/i.test(sanitized) || /^unnamed(\s+client)?$/i.test(sanitized)) {
+        return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+      }
+      if (/^lead\s*#/i.test(sanitized)) return sanitized
+      if (/^[A-Za-zÀ-ÿ0-9]\*{3}(\s+[A-Za-zÀ-ÿ0-9]\*{3})*$/.test(sanitized)) {
+        return sanitized
+          .split(/\s+/)
+          .map((t) => `${t.charAt(0).toUpperCase()}***`)
+          .join(' ')
+      }
+      const tokens = sanitized
+        .replace(/[,.;:()[\]/\\_-]+/g, ' ')
+        .split(/\s+/)
+        .map((w) => w.replace(/[^A-Za-zÀ-ÿ0-9*]/g, ''))
+        .filter(Boolean)
+      if (tokens.length === 0) {
+        return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+      }
+      return tokens
+        .slice(0, 4)
+        .map((token) => `${token.charAt(0).toUpperCase()}***`)
+        .join(' ')
+    }
+
+    let totalMaskedCount = 0
+
+    // 1. Ensure va_scheduled_callbacks is completely dropped
+    const cbTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='va_scheduled_callbacks'").get()
+    if (cbTableExists) {
+      db.exec('DROP TABLE IF EXISTS va_scheduled_callbacks; DROP TABLE IF EXISTS va_scheduled_callbacks_tmp;')
+      totalMaskedCount++
+      console.log('[db] Dropped legacy va_scheduled_callbacks table')
+    }
+
+    // Clear any legacy phone_number or scheduled_callback_id values in va_lead_records if those columns exist
+    try {
+      const vaCols = db.prepare('PRAGMA table_info(va_lead_records)').all() as { name: string }[]
+      if (vaCols.some((c) => c.name === 'phone_number')) {
+        db.exec('UPDATE va_lead_records SET phone_number = NULL WHERE phone_number IS NOT NULL')
+      }
+      if (vaCols.some((c) => c.name === 'scheduled_callback_id')) {
+        db.exec('UPDATE va_lead_records SET scheduled_callback_id = NULL WHERE scheduled_callback_id IS NOT NULL')
+      }
+    } catch {}
+
+    // 2. Retroactively mask va_lead_records.veteran_name
+    const vaRows = db.prepare('SELECT id, veteran_name, lead_id FROM va_lead_records').all() as { id: number; veteran_name: string; lead_id: string | null }[]
+    const updVaStmt = db.prepare('UPDATE va_lead_records SET veteran_name = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const r of vaRows) {
+        const masked = maskNameForDb(r.veteran_name, r.lead_id)
+        if (r.veteran_name !== masked) {
+          updVaStmt.run(masked, r.id)
+          totalMaskedCount++
+        }
+      }
+    })()
+
+    // 3. Retroactively mask ssd_lead_records.client_name
+    const ssdRows = db.prepare('SELECT id, client_name, lead_id FROM ssd_lead_records').all() as { id: number; client_name: string; lead_id: string | null }[]
+    const updSsdStmt = db.prepare('UPDATE ssd_lead_records SET client_name = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const r of ssdRows) {
+        const masked = maskNameForDb(r.client_name, r.lead_id)
+        if (r.client_name !== masked) {
+          updSsdStmt.run(masked, r.id)
+          totalMaskedCount++
+        }
+      }
+    })()
+
+    // 4. Retroactively mask ssd_converted_records.client_name
+    const ssdConvRows = db.prepare('SELECT id, client_name, lead_id FROM ssd_converted_records').all() as { id: number; client_name: string; lead_id: string | null }[]
+    const updSsdConvStmt = db.prepare('UPDATE ssd_converted_records SET client_name = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const r of ssdConvRows) {
+        const masked = maskNameForDb(r.client_name, r.lead_id)
+        if (r.client_name !== masked) {
+          updSsdConvStmt.run(masked, r.id)
+          totalMaskedCount++
+        }
+      }
+    })()
+
+    // 5. Retroactively mask apps_team_entries.client_name
+    const appsRows = db.prepare('SELECT id, client_name, lead_id FROM apps_team_entries').all() as { id: number; client_name: string; lead_id: string | null }[]
+    const updAppsStmt = db.prepare('UPDATE apps_team_entries SET client_name = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const r of appsRows) {
+        const masked = maskNameForDb(r.client_name, r.lead_id)
+        if (r.client_name !== masked) {
+          updAppsStmt.run(masked, r.id)
+          totalMaskedCount++
+        }
+      }
+    })()
+
+    // 6. Retroactively mask any client_name / veteran_name stored inside import_batches.snapshot_data
+    const batchRows = db.prepare('SELECT id, snapshot_data FROM import_batches WHERE snapshot_data IS NOT NULL').all() as { id: number; snapshot_data: string }[]
+    const updBatchStmt = db.prepare('UPDATE import_batches SET snapshot_data = ? WHERE id = ?')
+    db.transaction(() => {
+      for (const b of batchRows) {
+        try {
+          const parsed = JSON.parse(b.snapshot_data)
+          if (Array.isArray(parsed)) {
+            let changed = false
+            for (const item of parsed) {
+              if (item && typeof item === 'object') {
+                if (item.client_name) {
+                  const m = maskNameForDb(item.client_name, item.lead_id)
+                  if (item.client_name !== m) {
+                    item.client_name = m
+                    changed = true
+                  }
+                }
+                if (item.veteran_name) {
+                  const m = maskNameForDb(item.veteran_name, item.lead_id)
+                  if (item.veteran_name !== m) {
+                    item.veteran_name = m
+                    changed = true
+                  }
+                }
+              }
+            }
+            if (changed) {
+              updBatchStmt.run(JSON.stringify(parsed), b.id)
+              totalMaskedCount++
+            }
+          }
+        } catch {}
+      }
+    })()
+
+    // If any historical records were masked or tables dropped, checkpoint WAL and VACUUM to purge old unreferenced pages on disk
+    if (totalMaskedCount > 0) {
+      db.pragma('wal_checkpoint(TRUNCATE)')
+      db.exec('VACUUM')
+      console.log(`[db] Retroactively anonymized ${totalMaskedCount} historical client/veteran name records and compacted SQLite database`)
     }
   } catch (e: any) {
-    console.error('Failed to migrate va_scheduled_callbacks schema:', e.message)
+    console.error('[db] Error during retroactive PII anonymization:', e.message)
   }
 
   // Seed default settings

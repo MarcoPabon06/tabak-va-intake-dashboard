@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedVaTeamLead, VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '../route'
-import { validateFileUpload, sanitizeCellText, maskSensitivePII, recordUploadAudit } from '@/lib/security'
+import { validateFileUpload, sanitizeCellText, maskSensitivePII, maskClientName, recordUploadAudit } from '@/lib/security'
 import { getBusinessDate } from '@/lib/dateUtils'
 
 function parseDateString(str: string): string {
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
       const signedAt = status === 'Signed E-Sign' ? `${dateStr} 12:00:00` : null
 
       otherNotes = otherNotes ? maskSensitivePII(otherNotes) : null
-      veteranName = sanitizeCellText(veteranName)
+      veteranName = maskClientName(veteranName, leadId)
 
       // Check if duplicate exists with same lead_id or veteran_name + date + rep
       let existing: any

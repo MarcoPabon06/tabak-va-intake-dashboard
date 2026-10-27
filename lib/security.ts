@@ -101,7 +101,60 @@ export function sanitizeCellText(val: any): string {
 }
 
 /**
- * Automatically masks accidental PII (phone numbers and SSN patterns) in free-hand notes as defense-in-depth.
+ * Masks any client or veteran name into anonymized initials ("J*** S***")
+ * so no real client names are ever stored in the database.
+ * Idempotent: already-masked names ("J*** S***" or "Lead #12345") are preserved.
+ */
+export function maskClientName(rawName: any, leadId?: any): string {
+  const cleanLeadId =
+    leadId !== null && leadId !== undefined && String(leadId).trim() !== '' && String(leadId).trim() !== '—'
+      ? sanitizeCellText(String(leadId).trim())
+      : ''
+
+  if (rawName === null || rawName === undefined) {
+    return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+  }
+
+  const sanitized = sanitizeCellText(String(rawName)).replace(/^'+/, '').trim()
+  if (!sanitized || /^unknown(\s+client)?$/i.test(sanitized) || /^unnamed(\s+client)?$/i.test(sanitized)) {
+    return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+  }
+
+  // Preserve "Lead #12345" style identifiers
+  if (/^lead\s*#/i.test(sanitized)) {
+    return sanitized
+  }
+
+  // If already masked in "X*** Y***" format, normalize uppercase and return as-is
+  if (/^[A-Za-zÀ-ÿ0-9]\*{3}(\s+[A-Za-zÀ-ÿ0-9]\*{3})*$/.test(sanitized)) {
+    return sanitized
+      .split(/\s+/)
+      .map((t) => `${t.charAt(0).toUpperCase()}***`)
+      .join(' ')
+  }
+
+  // Split name into word tokens (stripping commas, periods, parentheses, etc.)
+  const tokens = sanitized
+    .replace(/[,.;:()[\]/\\_-]+/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.replace(/[^A-Za-zÀ-ÿ0-9*]/g, ''))
+    .filter(Boolean)
+
+  if (tokens.length === 0) {
+    return cleanLeadId ? `Lead #${cleanLeadId}` : 'C***'
+  }
+
+  // Convert each name token (up to 4 tokens) to its uppercase initial + "***"
+  const maskedTokens = tokens.slice(0, 4).map((token) => {
+    const firstChar = token.charAt(0).toUpperCase()
+    return `${firstChar}***`
+  })
+
+  return maskedTokens.join(' ')
+}
+
+/**
+ * Automatically masks accidental PII (phone numbers, SSN patterns, and emails) in free-hand notes as defense-in-depth.
  */
 export function maskSensitivePII(text: string): string {
   if (!text) return ''
@@ -117,6 +170,12 @@ export function maskSensitivePII(text: string): string {
   sanitized = sanitized.replace(
     /\b\d{3}[-\s]?\d{2}[-\s]?(\d{4})\b/g,
     '***-**-$1'
+  )
+
+  // Mask email addresses: jdoe@example.com -> j***@example.com
+  sanitized = sanitized.replace(
+    /\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g,
+    '$1***@$2'
   )
 
   return sanitized

@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { isAuthorizedSsdTeamLead } from '../route'
-import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
+import { validateFileUpload, sanitizeCellText, maskClientName, recordUploadAudit } from '@/lib/security'
 import { getBusinessDate } from '@/lib/dateUtils'
 
 function parseIdleTimeDate(dateVal: any): string {
@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
 
     parsedConvertedList.push({
       leadId: leadId || '—',
-      clientName: sanitizeCellText(clientName),
+      clientName: maskClientName(clientName, leadId),
       convertDate,
       repName,
       repUsername,

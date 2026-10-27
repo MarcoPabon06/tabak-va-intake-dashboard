@@ -744,7 +744,9 @@ function SecurityAuditTrailCard() {
           '   RAM buffers (Buffer.from(await file.arrayBuffer())) and are NEVER written to disk.',
           '2. No Raw Spreadsheet Content Logged: Neither application logs (stdout/stderr) nor',
           '   the upload_audit_logs table record raw spreadsheet rows, phone numbers, or SSNs.',
-          '3. Cryptographic Verification: Only file metadata and a one-way SHA-256 hash digest',
+          '3. Client/Veteran Name Anonymization: All client and veteran names across manual entries',
+          '   and Excel imports are automatically masked to initials (e.g., "J*** S***") with Lead ID.',
+          '4. Cryptographic Verification: Only file metadata and a one-way SHA-256 hash digest',
           '   of the file buffer are recorded below for non-repudiation.',
           '========================================================================================',
           '',
@@ -855,8 +857,8 @@ function SecurityAuditTrailCard() {
           <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Parsed in RAM; no files saved</div>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.03)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Phone & PII Auto-Mask</div>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Redacts phone numbers in notes</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>✅ Name & PII Auto-Mask</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Masks names (J*** S***), phones & SSNs</div>
         </div>
       </div>
 

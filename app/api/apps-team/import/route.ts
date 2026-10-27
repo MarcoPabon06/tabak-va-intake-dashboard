@@ -58,7 +58,7 @@ function standardizeReason(rawReason: any): { category: string; other: string } 
 }
 
 import { isAuthorizedForAppsTeam } from '../route'
-import { validateFileUpload, sanitizeCellText, recordUploadAudit } from '@/lib/security'
+import { validateFileUpload, sanitizeCellText, maskClientName, maskSensitivePII, recordUploadAudit } from '@/lib/security'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
         if (!leadIdRaw) continue
 
         const leadId = sanitizeCellText(String(leadIdRaw))
-        const clientName = sanitizeCellText(String(r["Lead's Name"] || 'Unknown Client'))
+        const clientName = maskClientName(r["Lead's Name"], leadId)
         const rawRepName = sanitizeCellText(String(r['Apps Representative'] || 'Apps Rep'))
         const { rep_name: repName, rep_username: repUsername } = normalizeRepInfo(rawRepName)
         const dateCompleted = parseExcelDate(r['Date'])
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
           dateCompleted,
           converted,
           converted === 'NO' ? category : null,
-          converted === 'NO' ? (other ? sanitizeCellText(other) : null) : null,
+          converted === 'NO' ? (other ? maskSensitivePII(other) : null) : null,
           repUsername,
           repName
         )

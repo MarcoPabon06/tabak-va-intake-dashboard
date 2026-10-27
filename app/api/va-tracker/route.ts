@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import getDb from '@/lib/db'
-import { sanitizeCellText, maskSensitivePII } from '@/lib/security'
+import { sanitizeCellText, maskSensitivePII, maskClientName } from '@/lib/security'
 import { getBusinessTimestamp } from '@/lib/dateUtils'
 import { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '@/lib/vaTrackerConstants'
 export { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS }
@@ -293,8 +293,8 @@ export async function POST(req: NextRequest) {
       ? (body.signed_at ? body.signed_at.trim() : getBusinessTimestamp())
       : null
 
-    const sanitizedVeteranName = sanitizeCellText(veteran_name.trim())
     const sanitizedLeadId = lead_id ? sanitizeCellText(lead_id.trim()) : null
+    const sanitizedVeteranName = maskClientName(veteran_name, sanitizedLeadId)
     const sanitizedNotes = other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null
     const cleanDate = date.trim().slice(0, 10)
 
@@ -387,8 +387,8 @@ export async function PUT(req: NextRequest) {
     const repName = customRepName ? customRepName.trim() : existing.rep_name
     const repUsername = customRepName ? customRepName.toLowerCase().replace(/[^a-z0-9]/g, '') : existing.rep_username
 
-    const sanitizedVeteranName = veteran_name ? sanitizeCellText(veteran_name.trim()) : existing.veteran_name
     const sanitizedLeadId = lead_id !== undefined ? (lead_id ? sanitizeCellText(lead_id.trim()) : null) : existing.lead_id
+    const sanitizedVeteranName = veteran_name ? maskClientName(veteran_name, sanitizedLeadId) : maskClientName(existing.veteran_name, sanitizedLeadId)
     const sanitizedNotes = other_reason_notes !== undefined ? (other_reason_notes ? maskSensitivePII(other_reason_notes.trim()) : null) : existing.other_reason_notes
     const cleanDate = date ? date.trim().slice(0, 10) : existing.date
 
@@ -474,7 +474,6 @@ export async function DELETE(req: NextRequest) {
     let deletedCount = 0
     let skippedForbidden = 0
 
-    const unlinkCallbacksStmt = db.prepare(`UPDATE va_scheduled_callbacks SET linked_lead_record_id = NULL WHERE linked_lead_record_id = ?`)
     const deleteLeadStmt = db.prepare(`DELETE FROM va_lead_records WHERE id = ?`)
 
     const deleteTx = db.transaction(() => {
@@ -492,7 +491,6 @@ export async function DELETE(req: NextRequest) {
           }
         }
 
-        unlinkCallbacksStmt.run(id)
         deleteLeadStmt.run(id)
         deletedCount++
       }
