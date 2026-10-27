@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react'
 import { format, startOfMonth, subDays } from 'date-fns'
 import { generateEODReportHtml } from '@/lib/eodReport'
 import { safeFetchJson } from '@/lib/apiClient'
+import { maskNameClientSide, scrubExcelFileClientSide } from '@/lib/clientPrivacy'
 
 interface AppEntry {
   id: number
@@ -156,7 +157,7 @@ export default function AppsTeamPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lead_id: leadId,
-          client_name: clientName,
+          client_name: maskNameClientSide(clientName, leadId),
           date_completed: dateCompleted,
           converted,
           reason_not_converted: converted === 'NO' ? reasonCategory : null,
@@ -215,7 +216,7 @@ export default function AppsTeamPage() {
         body: JSON.stringify({
           id: editingEntry.id,
           lead_id: editingEntry.lead_id,
-          client_name: editingEntry.client_name,
+          client_name: maskNameClientSide(editingEntry.client_name, editingEntry.lead_id),
           date_completed: editingEntry.date_completed,
           converted: editingEntry.converted,
           reason_not_converted: editingEntry.reason_not_converted,
@@ -245,8 +246,9 @@ export default function AppsTeamPage() {
     setImporting(true)
 
     try {
+      const cleanFile = await scrubExcelFileClientSide(importFile)
       const formData = new FormData()
-      formData.append('file', importFile)
+      formData.append('file', cleanFile)
 
       const res = await fetch('/api/apps-team/import', {
         method: 'POST',

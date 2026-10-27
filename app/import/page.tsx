@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Navigation from '@/components/Navigation'
+import { scrubExcelFileClientSide } from '@/lib/clientPrivacy'
 
 export default function ImportPage() {
   const { data: session, status } = useSession()
@@ -117,10 +118,11 @@ export default function ImportPage() {
     setCallLoading(true)
     setCallResult(null)
 
-    const formData = new FormData()
-    formData.append('file', callFile)
-
     try {
+      const cleanFile = await scrubExcelFileClientSide(callFile)
+      const formData = new FormData()
+      formData.append('file', cleanFile)
+
       const res = await fetch('/api/call-report/import', { method: 'POST', body: formData })
       const json = await res.json()
       setCallResult(json)
@@ -137,10 +139,11 @@ export default function ImportPage() {
     setConvertedLoading(true)
     setConvertedResult(null)
 
-    const formData = new FormData()
-    formData.append('file', convertedFile)
-
     try {
+      const cleanFile = await scrubExcelFileClientSide(convertedFile)
+      const formData = new FormData()
+      formData.append('file', cleanFile)
+
       const res = await fetch('/api/ssd-tracker/import-converted', { method: 'POST', body: formData })
       const json = await res.json()
       setConvertedResult(json)
@@ -157,10 +160,11 @@ export default function ImportPage() {
     setSsdLoading(true)
     setSsdResult(null)
 
-    const formData = new FormData()
-    formData.append('file', ssdFile)
-
     try {
+      const cleanFile = await scrubExcelFileClientSide(ssdFile)
+      const formData = new FormData()
+      formData.append('file', cleanFile)
+
       const res = await fetch('/api/ssd-tracker/import', { method: 'POST', body: formData })
       const json = await res.json()
       setSsdResult(json)
@@ -177,10 +181,11 @@ export default function ImportPage() {
     setVaLoading(true)
     setVaResult(null)
 
-    const formData = new FormData()
-    formData.append('file', vaFile)
-
     try {
+      const cleanFile = await scrubExcelFileClientSide(vaFile)
+      const formData = new FormData()
+      formData.append('file', cleanFile)
+
       const res = await fetch('/api/va-tracker/import', { method: 'POST', body: formData })
       const json = await res.json()
       setVaResult(json)
@@ -197,10 +202,11 @@ export default function ImportPage() {
     setEodLoading(true)
     setEodResult(null)
 
-    const formData = new FormData()
-    formData.append('file', eodFile)
-
     try {
+      const cleanFile = await scrubExcelFileClientSide(eodFile)
+      const formData = new FormData()
+      formData.append('file', cleanFile)
+
       const res = await fetch('/api/import', { method: 'POST', body: formData })
       const json = await res.json()
       setEodResult(json)

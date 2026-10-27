@@ -8,6 +8,7 @@ import { format, subDays, startOfMonth, endOfMonth, differenceInDays } from 'dat
 import * as XLSX from 'xlsx'
 import { SSD_STATUS_OPTIONS, SSD_CLAIM_TYPES, SSD_OUTCOME_REASONS } from '@/lib/ssdTrackerConstants'
 import { safeFetchJson } from '@/lib/apiClient'
+import { maskNameClientSide, scrubExcelFileClientSide } from '@/lib/clientPrivacy'
 
 interface SSDLeadRecord {
   id: number
@@ -277,13 +278,14 @@ export default function SSDTrackerPage() {
     setSubmitting(true)
     setError('')
     try {
+      const maskedClientName = maskNameClientSide(formClientName, formLeadId)
       if (editingRecord) {
         await safeFetchJson('/api/ssd-tracker', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: editingRecord.id,
-            client_name: formClientName,
+            client_name: maskedClientName,
             lead_id: formLeadId || null,
             date: formDate,
             status: formStatus,
@@ -294,14 +296,14 @@ export default function SSDTrackerPage() {
             rep_name: (isSuper || isAdmin) ? formRepName : undefined,
           }),
         })
-        setSuccess(`Lead record for "${formClientName}" updated successfully!`)
+        setSuccess(`Lead record for "${maskedClientName}" updated successfully!`)
         setShowEditModal(false)
       } else {
         await safeFetchJson('/api/ssd-tracker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            client_name: formClientName,
+            client_name: maskedClientName,
             lead_id: formLeadId || null,
             date: formDate,
             status: formStatus,
@@ -312,7 +314,7 @@ export default function SSDTrackerPage() {
             rep_name: (isSuper || isAdmin) ? formRepName : undefined,
           }),
         })
-        setSuccess(`Lead record for "${formClientName}" logged successfully!`)
+        setSuccess(`Lead record for "${maskedClientName}" logged successfully!`)
         setShowLogModal(false)
       }
       resetForm()
@@ -414,8 +416,9 @@ export default function SSDTrackerPage() {
     setImporting(true)
     setError('')
     try {
+      const cleanFile = await scrubExcelFileClientSide(importFile)
       const formData = new FormData()
-      formData.append('file', importFile)
+      formData.append('file', cleanFile)
       const res = await safeFetchJson('/api/ssd-tracker/import', {
         method: 'POST',
         body: formData,
@@ -499,8 +502,9 @@ export default function SSDTrackerPage() {
     setConvertedSyncing(true)
     setError('')
     try {
+      const cleanFile = await scrubExcelFileClientSide(convertedSyncFile)
       const formData = new FormData()
-      formData.append('file', convertedSyncFile)
+      formData.append('file', cleanFile)
       const res = await safeFetchJson('/api/ssd-tracker/import-converted', {
         method: 'POST',
         body: formData,

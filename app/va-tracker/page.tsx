@@ -8,6 +8,7 @@ import { format, subDays, startOfMonth, endOfMonth, differenceInCalendarDays } f
 import * as XLSX from 'xlsx'
 import { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS } from '@/lib/vaTrackerConstants'
 import { safeFetchJson } from '@/lib/apiClient'
+import { maskNameClientSide, scrubExcelFileClientSide } from '@/lib/clientPrivacy'
 import VaEfficiencyQueue from '@/components/VaEfficiencyQueue'
 export { VA_STATUS_OPTIONS, VA_OUTCOME_REASONS }
 
@@ -1112,7 +1113,7 @@ function LogLeadModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          veteran_name: veteranName.trim(),
+          veteran_name: maskNameClientSide(veteranName.trim(), leadId.trim()),
           lead_id: leadId.trim() || null,
           date,
           status,
@@ -1301,7 +1302,7 @@ function EditLeadModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: record.id,
-          veteran_name: veteranName.trim(),
+          veteran_name: maskNameClientSide(veteranName.trim(), leadId.trim()),
           lead_id: leadId.trim() || null,
           date,
           status,
@@ -1481,8 +1482,9 @@ function ImportExcelModal({
     setLoading(true)
     setError('')
     try {
+      const cleanFile = await scrubExcelFileClientSide(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', cleanFile)
       const json = await safeFetchJson('/api/va-tracker/import', { method: 'POST', body: formData })
       onImported(json.imported || 0)
     } catch (err: any) {
